@@ -15,7 +15,15 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { QrModule } from './modules/qr/qr.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { OrdersModule } from './modules/orders/orders.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { SmsModule } from './modules/sms/sms.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { TablesModule } from './modules/tables/tables.module';
 import { HealthController } from './health.controller';
 
 /**
@@ -46,6 +54,14 @@ import { HealthController } from './health.controller';
     RestaurantsModule,
     MenuModule,
     QrModule,
+    SmsModule,
+    NotificationsModule,
+    TablesModule,
+    OrdersModule,
+    PaymentsModule,
+    ReportsModule,
+    StaffModule,
+    RealtimeModule,
   ],
   controllers: [HealthController],
   providers: [

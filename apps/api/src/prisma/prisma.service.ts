@@ -52,6 +52,14 @@ export function createPrismaClient(config: Pick<AppConfig, 'databaseUrl'>) {
 /** The injectable database client type used throughout the application. */
 export type PrismaService = ReturnType<typeof createPrismaClient>;
 
+/**
+ * The client handed to an interactive `$transaction` callback. It carries the
+ * same tenant guard as the root client, so isolation holds inside transactions.
+ */
+export type PrismaTransaction = Parameters<
+  Parameters<PrismaService['$transaction']>[0]
+>[0];
+
 /** Injection token: `@Inject(PRISMA) private readonly prisma: PrismaService`. */
 export const PRISMA = Symbol('PRISMA');
 

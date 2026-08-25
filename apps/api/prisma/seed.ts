@@ -248,6 +248,13 @@ async function main() {
     customers,
   });
 
+  // The branch counter must continue where the generated history stopped, or
+  // the first live order would collide with a seeded order number.
+  await prisma.branch.update({
+    where: { id: branch.id },
+    data: { orderSequence: history.lastOrderNumber },
+  });
+
   console.log('');
   console.log('Seed complete.');
   console.log(`  tenant      : ${tenant.name} (/r/${restaurant.slug})`);
@@ -529,7 +536,7 @@ async function seedOrders(args: SeedOrdersArgs) {
     });
   }
 
-  return { orderCount, openCount };
+  return { orderCount, openCount, lastOrderNumber: sequence };
 }
 
 main()
