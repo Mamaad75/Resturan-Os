@@ -124,7 +124,7 @@ export function loadConfiguration(): AppConfig {
     },
     throttle: {
       ttl: int('THROTTLE_TTL', 60),
-      limit: int('THROTTLE_LIMIT', 120),
+      limit: int('THROTTLE_LIMIT', 300),
       authLimit: int('THROTTLE_AUTH_LIMIT', 10),
     },
     sms: {

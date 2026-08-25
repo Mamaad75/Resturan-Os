@@ -1,0 +1,246 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design tokens.
+ *
+ * Dark-first: charcoal canvas, restrained gold reserved for primary actions,
+ * active navigation and the numbers that matter. Values are raw RGB channels
+ * so Tailwind can apply opacity modifiers to any of them.
+ */
+:root {
+  --canvas: 11 11 13;
+  --surface: 19 19 22;
+  --surface-raised: 26 26 31;
+  --surface-sunken: 8 8 10;
+  --line: 38 38 44;
+  --line-strong: 56 56 64;
+
+  --ink: 245 245 244;
+  --ink-muted: 161 161 170;
+  --ink-subtle: 113 113 122;
+  --ink-inverse: 11 11 13;
+
+  --gold: 201 162 75;
+  --gold-bright: 227 193 113;
+  --gold-dim: 138 111 51;
+
+  --positive: 52 211 153;
+  --caution: 251 191 36;
+  --critical: 248 113 113;
+  --info: 96 165 250;
+
+  color-scheme: dark;
+}
+
+/*
+ * Light theme, used when a restaurant sets its customer menu to light. The
+ * gold is darkened so it still passes contrast on a pale surface.
+ */
+[data-theme='light'] {
+  --canvas: 250 250 249;
+  --surface: 255 255 255;
+  --surface-raised: 255 255 255;
+  --surface-sunken: 244 244 245;
+  --line: 228 228 231;
+  --line-strong: 212 212 216;
+
+  --ink: 24 24 27;
+  --ink-muted: 82 82 91;
+  --ink-subtle: 113 113 122;
+  --ink-inverse: 255 255 255;
+
+  --gold: 161 124 42;
+  --gold-bright: 133 101 30;
+  --gold-dim: 214 189 133;
+
+  color-scheme: light;
+}
+
+@layer base {
+  * {
+    @apply border-line;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-canvas text-ink antialiased;
+    font-feature-settings: 'ss01', 'ss02';
+    /* Persian text renders noticeably better with a little extra leading. */
+    line-height: 1.75;
+  }
+
+  /* Latin numerals inside Persian text should stay left-to-right. */
+  .ltr-nums {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-gold ring-offset-2 ring-offset-canvas;
+  }
+
+  /* Remove the number spinners; prices are typed, not stepped. */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: rgb(var(--surface-sunken));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--line-strong));
+    border-radius: 999px;
+    border: 2px solid rgb(var(--surface-sunken));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--ink-subtle));
+  }
+}
+
+@layer components {
+  /* Soft glass panel used across dashboard cards and modals. */
+  .glass {
+    background:
+      linear-gradient(
+        180deg,
+        rgb(var(--surface-raised) / 0.92),
+        rgb(var(--surface) / 0.92)
+      );
+    backdrop-filter: blur(12px);
+    border: 1px solid rgb(var(--line) / 0.9);
+  }
+
+  .gold-gradient-text {
+    background: linear-gradient(
+      100deg,
+      rgb(var(--gold-bright)),
+      rgb(var(--gold)) 55%,
+      rgb(var(--gold-dim))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Hairline gold rule used under section headings. */
+  .gold-rule::after {
+    content: '';
+    display: block;
+    height: 2px;
+    width: 2.5rem;
+    margin-top: 0.5rem;
+    border-radius: 999px;
+    background: linear-gradient(
+      to left,
+      rgb(var(--gold)),
+      rgb(var(--gold) / 0)
+    );
+  }
+
+  .skeleton {
+    @apply relative overflow-hidden rounded-lg bg-surface-raised;
+  }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgb(var(--ink) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+  }
+
+  /* Hides horizontal scrollbars on the category chip rails. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/*
+ * Print styles.
+ *
+ * Everything chrome-like is hidden and the receipt is laid out for a 58mm or
+ * 80mm thermal roll, falling back to A4.
+ */
+@media print {
+  @page {
+    margin: 0;
+  }
+
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .no-print,
+  nav,
+  aside,
+  header.app-header,
+  button:not(.print-keep) {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  .receipt {
+    width: 80mm;
+    margin: 0 auto;
+    padding: 4mm;
+    color: #000;
+    background: #fff;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .receipt--58 {
+    width: 58mm;
+    font-size: 10px;
+  }
+
+  .receipt--a4 {
+    width: 190mm;
+    padding: 12mm;
+    font-size: 13px;
+  }
+
+  .receipt * {
+    color: #000 !important;
+    background: transparent !important;
+    border-color: #999 !important;
+  }
+}
+
+.print-only {
+  display: none;
+}
