@@ -12,6 +12,10 @@ import { APP_CONFIG, type AppConfig } from './config/configuration';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { MenuModule } from './modules/menu/menu.module';
+import { QrModule } from './modules/qr/qr.module';
+import { RestaurantsModule } from './modules/restaurants/restaurants.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { HealthController } from './health.controller';
 
 /**
@@ -38,6 +42,10 @@ import { HealthController } from './health.controller';
     }),
     AuditModule,
     AuthModule,
+    StorageModule,
+    RestaurantsModule,
+    MenuModule,
+    QrModule,
   ],
   controllers: [HealthController],
   providers: [
