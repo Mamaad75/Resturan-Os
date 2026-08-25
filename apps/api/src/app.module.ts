@@ -42,9 +42,12 @@ import { HealthController } from './health.controller';
     ThrottlerModule.forRootAsync({
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig) => ({
+        // Exactly one global throttler. Named throttlers apply to every route
+        // unless skipped, so a second strict tier here would rate limit the
+        // whole API at the login rate. Sensitive routes tighten the budget
+        // per-handler with @Throttle(AUTH_THROTTLE) instead.
         throttlers: [
           { name: 'default', ttl: config.throttle.ttl * 1000, limit: config.throttle.limit },
-          { name: 'auth', ttl: 60_000, limit: config.throttle.authLimit },
         ],
       }),
     }),

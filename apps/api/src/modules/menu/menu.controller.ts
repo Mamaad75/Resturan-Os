@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { PUBLIC_MENU_THROTTLE } from '../../common/throttle';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@restaurant-os/types';
 import { slugSchema } from '@restaurant-os/validation';
@@ -16,7 +17,7 @@ export class PublicMenuController {
 
   @Public()
   @Get(':slug/menu')
-  @Throttle({ default: { limit: 240, ttl: 60_000 } })
+  @Throttle(PUBLIC_MENU_THROTTLE)
   @ApiOperation({
     summary: 'Live menu for a restaurant slug, optionally scoped to a table',
   })

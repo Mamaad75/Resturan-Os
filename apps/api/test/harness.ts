@@ -1,0 +1,239 @@
+import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { PrismaClient } from '@prisma/client';
+import * as argon2 from 'argon2';
+import cookieParser from 'cookie-parser';
+import { randomBytes, randomUUID } from 'node:crypto';
+import request from 'supertest';
+import { AppModule } from '../src/app.module';
+import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { APP_CONFIG, type AppConfig } from '../src/config/configuration';
+
+/**
+ * Integration harness.
+ *
+ * Boots the real application against the real test database - no mocks. The
+ * behaviour worth covering here (transactions, tenant isolation, the state
+ * machine, money arithmetic) only exists when the whole stack is wired up.
+ */
+export interface TestTenant {
+  tenantId: string;
+  restaurantId: string;
+  restaurantSlug: string;
+  branchId: string;
+  menuId: string;
+  categoryId: string;
+  productId: string;
+  /** Product with a required single-select modifier group. */
+  modifierProductId: string;
+  modifierOptionId: string;
+  tableIds: string[];
+  users: Record<string, { id: string; email: string; password: string }>;
+}
+
+export interface TestContext {
+  app: INestApplication;
+  prisma: PrismaClient;
+  http: () => request.SuperTest<request.Test>;
+}
+
+const PASSWORD = 'TestPass12345';
+
+export async function createTestApp(): Promise<TestContext> {
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+
+  const app = moduleRef.createNestApplication();
+  const config = app.get<AppConfig>(APP_CONFIG);
+  app.setGlobalPrefix(config.apiPrefix, { exclude: ['health'] });
+  app.use(cookieParser(config.auth.cookieSecret));
+  app.useGlobalFilters(new AllExceptionsFilter(config));
+  await app.init();
+
+  const prisma = new PrismaClient({
+    datasources: { db: { url: process.env.TEST_DATABASE_URL } },
+  });
+  await prisma.$connect();
+
+  return {
+    app,
+    prisma,
+    http: () => request(app.getHttpServer()) as unknown as request.SuperTest<request.Test>,
+  };
+}
+
+export async function closeTestApp(ctx: TestContext): Promise<void> {
+  await ctx.prisma.$disconnect();
+  await ctx.app.close();
+}
+
+/** Wipes every table between suites so tests never depend on each other. */
+export async function resetDatabase(prisma: PrismaClient): Promise<void> {
+  const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
+    SELECT tablename FROM pg_tables
+    WHERE schemaname = 'public' AND tablename <> '_prisma_migrations'
+  `;
+  if (tables.length === 0) return;
+  const list = tables.map((t) => `"public"."${t.tablename}"`).join(', ');
+  await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`);
+}
+
+/**
+ * Builds a complete, independent tenant: restaurant, branch, menu, products
+ * with modifiers, tables and one user per role.
+ */
+export async function seedTenant(
+  prisma: PrismaClient,
+  label: string,
+): Promise<TestTenant> {
+  const slug = `${label}-${randomBytes(3).toString('hex')}`;
+
+  const tenant = await prisma.tenant.create({
+    data: { name: `مجموعه ${label}`, slug },
+  });
+
+  const restaurant = await prisma.restaurant.create({
+    data: {
+      tenantId: tenant.id,
+      name: `رستوران ${label}`,
+      slug,
+      serviceModes: ['DINE_IN', 'TAKEAWAY'],
+      taxEnabled: true,
+      taxRateBps: 900,
+      serviceChargeEnabled: true,
+      serviceChargeBps: 1000,
+      estimatedPrepMinutes: 20,
+      autoConfirmOrders: true,
+      smsNotificationsEnabled: true,
+    },
+  });
+
+  const branch = await prisma.branch.create({
+    data: {
+      tenantId: tenant.id,
+      restaurantId: restaurant.id,
+      name: 'شعبه اصلی',
+      slug: 'main',
+      phone: '02100000000',
+    },
+  });
+
+  const menu = await prisma.menu.create({
+    data: { tenantId: tenant.id, branchId: branch.id },
+  });
+
+  const category = await prisma.category.create({
+    data: { tenantId: tenant.id, menuId: menu.id, name: 'Main', nameFa: 'اصلی' },
+  });
+
+  const product = await prisma.product.create({
+    data: {
+      tenantId: tenant.id,
+      categoryId: category.id,
+      name: 'Test Burger',
+      nameFa: 'برگر تست',
+      price: 200_000,
+    },
+  });
+
+  const modifierProduct = await prisma.product.create({
+    data: {
+      tenantId: tenant.id,
+      categoryId: category.id,
+      name: 'Test Coffee',
+      nameFa: 'قهوه تست',
+      price: 100_000,
+      modifierGroups: {
+        create: {
+          tenantId: tenant.id,
+          name: 'Size',
+          nameFa: 'اندازه',
+          type: 'SINGLE',
+          isRequired: true,
+          minSelect: 1,
+          maxSelect: 1,
+          options: {
+            create: [
+              { tenantId: tenant.id, name: 'Small', nameFa: 'کوچک', priceDelta: 0 },
+              { tenantId: tenant.id, name: 'Large', nameFa: 'بزرگ', priceDelta: 50_000 },
+            ],
+          },
+        },
+      },
+    },
+    include: { modifierGroups: { include: { options: true } } },
+  });
+
+  const largeOption = modifierProduct.modifierGroups[0].options.find(
+    (option) => option.nameFa === 'بزرگ',
+  )!;
+
+  await prisma.restaurantTable.createMany({
+    data: [1, 2, 3].map((number) => ({
+      tenantId: tenant.id,
+      branchId: branch.id,
+      number,
+      capacity: 4,
+    })),
+  });
+  const tables = await prisma.restaurantTable.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { number: 'asc' },
+  });
+
+  const passwordHash = await argon2.hash(PASSWORD, {
+    type: argon2.argon2id,
+    // Deliberately weak parameters: the suite hashes many passwords and the
+    // production cost would dominate the runtime without testing anything.
+    memoryCost: 2 ** 12,
+    timeCost: 2,
+    parallelism: 1,
+  });
+
+  const roles = ['OWNER', 'MANAGER', 'CASHIER', 'KITCHEN', 'WAITER', 'ACCOUNTANT'] as const;
+  const users: TestTenant['users'] = {};
+  for (const role of roles) {
+    const email = `${role.toLowerCase()}@${slug}.test`;
+    const user = await prisma.user.create({
+      data: {
+        tenantId: tenant.id,
+        branchId: role === 'OWNER' ? null : branch.id,
+        email,
+        fullName: `${role} ${label}`,
+        role,
+        passwordHash,
+      },
+    });
+    users[role] = { id: user.id, email, password: PASSWORD };
+  }
+
+  return {
+    tenantId: tenant.id,
+    restaurantId: restaurant.id,
+    restaurantSlug: slug,
+    branchId: branch.id,
+    menuId: menu.id,
+    categoryId: category.id,
+    productId: product.id,
+    modifierProductId: modifierProduct.id,
+    modifierOptionId: largeOption.id,
+    tableIds: tables.map((table) => table.id),
+    users,
+  };
+}
+
+/** Signs in and returns the bearer token for a seeded role. */
+export async function login(
+  ctx: TestContext,
+  tenant: TestTenant,
+  role: keyof TestTenant['users'],
+): Promise<string> {
+  const account = tenant.users[role];
+  const response = await ctx
+    .http()
+    .post('/api/auth/login')
+    .send({ email: account.email, password: account.password })
+    .expect(200);
+  return response.body.data.accessToken as string;
+}
+
+export const uuid = () => randomUUID();

@@ -10,6 +10,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { AUTH_THROTTLE } from '../../common/throttle';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   changePasswordSchema,
@@ -42,7 +43,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   // Deliberately tighter than the global bucket: this is the endpoint an
   // attacker would brute-force.
-  @Throttle({ auth: { limit: 10, ttl: 60_000 } })
+  @Throttle(AUTH_THROTTLE)
   @ApiOperation({ summary: 'Authenticate a staff user and start a session' })
   async login(
     @ZodBody(loginSchema) dto: LoginInput,

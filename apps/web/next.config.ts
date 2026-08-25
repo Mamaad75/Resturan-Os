@@ -2,6 +2,9 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Emits a self-contained server bundle so the runtime image needs no
+  // node_modules and stays small.
+  output: 'standalone',
   poweredByHeader: false,
   // The shared packages ship compiled CommonJS, but transpiling them keeps
   // tree-shaking effective in the client bundles.

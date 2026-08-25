@@ -6,6 +6,7 @@
     "baseUrl": "./",
     "declaration": false,
     "incremental": true,
+    "isolatedModules": true,
     "paths": {
       "@/*": ["src/*"]
     }

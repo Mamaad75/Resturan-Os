@@ -1,0 +1,131 @@
+# Restaurant OS - local development stack.
+#
+#   docker compose up -d          start postgres, redis and minio
+#   docker compose --profile app up -d   also build and run the api and web apps
+#
+# The default profile runs infrastructure only, which is what you want while
+# developing with `pnpm dev` on the host.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: restaurant-os-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: restaurant
+      POSTGRES_PASSWORD: restaurant
+      POSTGRES_DB: restaurant_os
+      # Business day boundaries are Asia/Tehran; keep the server aligned.
+      TZ: Asia/Tehran
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U restaurant -d restaurant_os']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: restaurant-os-redis
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # S3-compatible object storage, for exercising STORAGE_DRIVER=s3 locally.
+  minio:
+    image: minio/minio:latest
+    container_name: restaurant-os-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: restaurant
+      MINIO_ROOT_PASSWORD: restaurant-secret
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: restaurant-os-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tehran
+      DATABASE_URL: postgresql://restaurant:restaurant@postgres:5432/restaurant_os?schema=public
+      REDIS_URL: redis://redis:6379
+      API_PORT: '4000'
+      API_URL: http://localhost:4000
+      APP_URL: http://localhost:3000
+      CORS_ORIGINS: http://localhost:3000
+      # Override every secret before exposing this to anything but localhost.
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-in-production-at-least-32-characters}
+      COOKIE_SECRET: ${COOKIE_SECRET:-change-me-too-in-production-at-least-32-chars}
+      COOKIE_SECURE: 'false'
+      SMS_PROVIDER: ${SMS_PROVIDER:-console}
+      PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-manual}
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /app/storage/uploads
+      STORAGE_PUBLIC_URL: http://localhost:4000/uploads
+    ports:
+      - '4000:4000'
+    volumes:
+      - api-uploads:/app/storage/uploads
+    healthcheck:
+      test: ['CMD', 'node', '-e', "require('http').get('http://127.0.0.1:4000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    profiles: ['app']
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:4000/api
+        NEXT_PUBLIC_WS_URL: http://localhost:4000
+        NEXT_PUBLIC_APP_URL: http://localhost:3000
+    container_name: restaurant-os-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tehran
+      PORT: '3000'
+    ports:
+      - '3000:3000'
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  api-uploads:

@@ -1,5 +1,6 @@
 import { Controller, Get, Inject, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { PUBLIC_ORDER_THROTTLE } from '../../common/throttle';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   createPublicOrderSchema,
@@ -30,7 +31,7 @@ export class PublicOrdersController {
   @Public()
   @Post('restaurants/:slug/orders')
   // Anonymous write endpoint: keep the bucket tight.
-  @Throttle({ auth: { limit: 12, ttl: 60_000 } })
+  @Throttle(PUBLIC_ORDER_THROTTLE)
   @ApiOperation({
     summary: 'Submit an order from the QR menu',
     description:
