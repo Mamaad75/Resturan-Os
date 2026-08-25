@@ -1,0 +1,9 @@
+{
+  "name": "@restaurant-os/config",
+  "version": "1.0.0",
+  "private": true,
+  "files": ["tsconfig.base.json", "tsconfig.node.json"],
+  "scripts": {
+    "build": "echo \"config package ships JSON only\""
+  }
+}

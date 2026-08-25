@@ -1,0 +1,36 @@
+{
+  "name": "restaurant-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Restaurant & Cafe Operating System - multi-tenant SaaS for the Iranian market",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "pnpm build:packages && pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:api": "pnpm --filter @restaurant-os/api dev",
+    "dev:web": "pnpm --filter @restaurant-os/web dev",
+    "build": "pnpm build:packages && pnpm --filter \"./apps/*\" build",
+    "start": "pnpm --parallel --filter \"./apps/*\" start",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @restaurant-os/api test",
+    "test:e2e": "pnpm --filter @restaurant-os/api test:e2e",
+    "db:generate": "pnpm --filter @restaurant-os/api db:generate",
+    "db:migrate": "pnpm --filter @restaurant-os/api db:migrate",
+    "db:migrate:deploy": "pnpm --filter @restaurant-os/api db:migrate:deploy",
+    "db:seed": "pnpm --filter @restaurant-os/api db:seed",
+    "db:reset": "pnpm --filter @restaurant-os/api db:reset",
+    "db:studio": "pnpm --filter @restaurant-os/api db:studio",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "setup": "pnpm install && pnpm build:packages && pnpm db:generate && pnpm db:migrate && pnpm db:seed",
+    "build:packages": "pnpm --filter \"./packages/*\" build"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "rimraf": "^6.0.1"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
