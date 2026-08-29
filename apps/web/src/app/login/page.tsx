@@ -2,6 +2,7 @@
 
 import { loginSchema } from '@restaurant-os/validation';
 import { AlertCircle, ChefHat, Lock, Mail } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button, Input } from '@/components/ui';
@@ -137,6 +138,13 @@ export default function LoginPage() {
           >
             ورود
           </Button>
+
+          <p className="text-center text-sm text-ink-muted">
+            هنوز رستورانی ندارید؟{' '}
+            <Link href="/signup" className="font-medium text-gold hover:text-gold-bright">
+              رایگان بسازید
+            </Link>
+          </p>
         </form>
 
         {/* Development convenience; the seeded accounts are public by design. */}

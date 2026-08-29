@@ -51,6 +51,7 @@ import {
   toOrderSummaryDto,
   toTrackingDto,
 } from './order.mappers';
+import { CouponsService } from '../coupons/coupons.service';
 import { OrderPricingService, type ResolvedLine } from './order-pricing.service';
 
 @Injectable()
@@ -62,6 +63,7 @@ export class OrdersService {
     private readonly restaurants: RestaurantsService,
     private readonly tables: TablesService,
     private readonly pricing: OrderPricingService,
+    private readonly coupons: CouponsService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
   ) {}
@@ -99,7 +101,7 @@ export class OrdersService {
       this.createOrder({
         tenantId: resolved.tenantId,
         branchId: resolved.branchId,
-        input: { ...input, discountAmount: 0, sendToKitchen: false },
+        input: { ...input, discountAmount: 0, sendToKitchen: false, couponCode: input.couponCode },
         actor: 'customer',
         actorUserId: null,
       }),
@@ -139,7 +141,11 @@ export class OrdersService {
   private async createOrder(args: {
     tenantId: string;
     branchId: string;
-    input: CreatePublicOrderInput & { discountAmount?: number; sendToKitchen?: boolean };
+    input: CreatePublicOrderInput & {
+      discountAmount?: number;
+      sendToKitchen?: boolean;
+      couponCode?: string | null;
+    };
     actor: 'customer' | 'staff';
     actorUserId: string | null;
   }): Promise<{ order: OrderDto; trackingToken: string }> {
@@ -176,8 +182,36 @@ export class OrdersService {
 
       const lines = await this.pricing.resolveLines(tx, tenantId, menuId, input.items);
 
+      /*
+       * Coupons are evaluated inside the transaction on purpose: the usage
+       * count checked here is the same row incremented on redemption below, so
+       * two customers racing for the last redemption cannot both win.
+       */
+      // Reuse the pricing service's own line totals rather than re-deriving
+      // them, so the coupon sees exactly the subtotal the order will carry.
+      const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+      let couponDiscount = 0;
+      let appliedCouponId: string | null = null;
+
+      if (input.couponCode) {
+        const evaluation = await this.coupons.evaluate(
+          tx,
+          tenantId,
+          input.couponCode,
+          subtotal,
+          input.customerPhone ?? null,
+        );
+        if (!evaluation.valid) {
+          throw AppException.validation(evaluation.reason ?? 'کد تخفیف معتبر نیست.', {
+            couponCode: [evaluation.reason ?? 'کد تخفیف معتبر نیست.'],
+          });
+        }
+        couponDiscount = evaluation.discount;
+        appliedCouponId = evaluation.couponId;
+      }
+
       const totals = computeOrderTotals(lines, {
-        discountAmount: input.discountAmount ?? 0,
+        discountAmount: (input.discountAmount ?? 0) + couponDiscount,
         taxEnabled: restaurant.taxEnabled,
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
@@ -259,6 +293,17 @@ export class OrdersService {
         },
         include: ORDER_DETAIL_INCLUDE,
       });
+
+      if (appliedCouponId) {
+        await this.coupons.redeem(tx, {
+          tenantId,
+          couponId: appliedCouponId,
+          orderId: order.id,
+          customerId: customer?.id ?? null,
+          customerPhone: input.customerPhone ?? null,
+          amount: couponDiscount,
+        });
+      }
 
       if (tableRow) {
         await tx.restaurantTable.update({

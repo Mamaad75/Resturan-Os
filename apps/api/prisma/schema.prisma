@@ -115,6 +115,13 @@ enum ModifierGroupType {
   MULTIPLE
 }
 
+enum CouponType {
+  /// Value is basis points: 1500 = 15% off.
+  PERCENTAGE
+  /// Value is a flat amount in the branch currency unit.
+  FIXED
+}
+
 enum Currency {
   IRT
   IRR
@@ -148,6 +155,7 @@ model Tenant {
   notifications Notification[]
   smsMessages   SmsMessage[]
   auditLogs     AuditLog[]
+  coupons       Coupon[]
 
   @@index([slug])
   @@map("tenants")
@@ -528,6 +536,7 @@ model Order {
   payments      Payment[]
   notifications Notification[]
   smsMessages   SmsMessage[]
+  couponRedemption CouponRedemption?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -718,6 +727,71 @@ model SmsMessage {
   @@index([status, nextAttemptAt])
   @@index([orderId])
   @@map("sms_messages")
+}
+
+/* ------------------------------------------------------------------ */
+/* Promotions                                                          */
+/* ------------------------------------------------------------------ */
+
+model Coupon {
+  id       String     @id @default(uuid()) @db.Uuid
+  tenantId String     @db.Uuid
+  /// Uppercased on write so lookup is case-insensitive for the customer.
+  code     String     @db.VarChar(32)
+  type     CouponType
+  /// Basis points for PERCENTAGE, a flat amount for FIXED.
+  value    Int
+
+  description String? @db.VarChar(200)
+
+  /// Order must reach this subtotal before the coupon applies.
+  minOrderTotal Int  @default(0)
+  /// Ceiling on a percentage discount; null means uncapped.
+  maxDiscount   Int?
+
+  startsAt DateTime?
+  endsAt   DateTime?
+
+  /// Total redemptions allowed across all customers; null means unlimited.
+  usageLimit  Int?
+  usageCount  Int  @default(0)
+  /// Redemptions allowed per customer phone; null means unlimited.
+  perCustomerLimit Int?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  redemptions CouponRedemption[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@map("coupons")
+}
+
+model CouponRedemption {
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @db.Uuid
+  couponId   String  @db.Uuid
+  orderId    String  @db.Uuid
+  customerId String? @db.Uuid
+  /// Phone captured even for guests, so per-customer limits still apply.
+  customerPhone String? @db.VarChar(20)
+  /// The discount actually granted, for reporting on campaign cost.
+  amount     Int
+
+  createdAt DateTime @default(now())
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// One redemption per order: re-applying a coupon must not stack.
+  @@unique([orderId])
+  @@index([tenantId])
+  @@index([couponId])
+  @@index([customerPhone])
+  @@map("coupon_redemptions")
 }
 
 /* ------------------------------------------------------------------ */

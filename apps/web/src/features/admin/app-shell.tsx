@@ -14,6 +14,7 @@ import {
   Settings,
   ShoppingCart,
   Table2,
+  Tag,
   UserCog,
   UtensilsCrossed,
   X,
@@ -75,6 +76,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'آشپزخانه',
     icon: ChefHat,
     permissions: [Permission.KITCHEN_READ],
+  },
+  {
+    href: '/admin/coupons',
+    label: 'کدهای تخفیف',
+    icon: Tag,
+    permissions: [Permission.SETTINGS_MANAGE],
   },
   {
     href: '/admin/reports',

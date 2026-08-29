@@ -122,6 +122,14 @@ export const ModifierGroupType = {
 export type ModifierGroupType =
   (typeof ModifierGroupType)[keyof typeof ModifierGroupType];
 
+export const CouponType = {
+  /** `value` is basis points: 1500 = 15% off. */
+  PERCENTAGE: 'PERCENTAGE',
+  /** `value` is a flat amount in the branch currency unit. */
+  FIXED: 'FIXED',
+} as const;
+export type CouponType = (typeof CouponType)[keyof typeof CouponType];
+
 export const Currency = {
   /** Iranian Toman - the unit people actually quote prices in. */
   IRT: 'IRT',

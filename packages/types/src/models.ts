@@ -441,3 +441,39 @@ export interface DashboardSummary {
   orderTypeBreakdown: SalesBreakdown['byOrderType'];
   unavailableProducts: Array<{ id: string; nameFa: string }>;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Promotions                                                              */
+/* ---------------------------------------------------------------------- */
+
+export interface CouponDto {
+  id: string;
+  code: string;
+  type: import('./enums').CouponType;
+  value: number;
+  description: string | null;
+  minOrderTotal: Money;
+  maxDiscount: Money | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  usageLimit: number | null;
+  usageCount: number;
+  perCustomerLimit: number | null;
+  isActive: boolean;
+  /** Derived: active, in-window and not exhausted right now. */
+  isRedeemable: boolean;
+  /** Total discount this campaign has given away, for cost reporting. */
+  totalDiscountGiven: Money;
+  createdAt: string;
+}
+
+/** Result of previewing a coupon against a cart, before the order exists. */
+export interface CouponPreview {
+  valid: boolean;
+  code: string;
+  /** Discount that would apply to the supplied subtotal. */
+  discount: Money;
+  description: string | null;
+  /** Persian reason the code was rejected; null when valid. */
+  reason: string | null;
+}

@@ -1,5 +1,7 @@
 import type {
   AuditLogDto,
+  CouponDto,
+  CouponPreview,
   AuthSession,
   DashboardSummary,
   NotificationDto,
@@ -38,6 +40,45 @@ export const authService = {
     newPassword: string;
     confirmPassword: string;
   }) => api.post<{ changed: boolean }>('/auth/change-password', body),
+};
+
+/* ------------------------------------------------------------------ */
+/* Signup                                                              */
+/* ------------------------------------------------------------------ */
+
+export const couponService = {
+  list: () => api.get<CouponDto[]>('/coupons'),
+  create: (body: Record<string, unknown>) => api.post<CouponDto>('/coupons', body),
+  update: (id: string, body: Record<string, unknown>) =>
+    api.patch<CouponDto>(`/coupons/${id}`, body),
+  remove: (id: string) =>
+    api.delete<{ deleted: boolean; deactivated: boolean }>(`/coupons/${id}`),
+
+  /** Customer-facing check before the order is submitted. */
+  preview: (slug: string, body: { code: string; subtotal: number; phone?: string | null }) =>
+    api.post<CouponPreview>(`/public/restaurants/${slug}/coupons/preview`, body, {
+      retryOnAuthFailure: false,
+    }),
+};
+
+export const signupService = {
+  /** Live availability check as the owner types their public address. */
+  checkSlug: (slug: string) =>
+    api.get<{ slug: string; available: boolean; reason?: string }>(
+      '/public/signup/slug-available',
+      { query: { slug }, retryOnAuthFailure: false },
+    ),
+  create: (body: {
+    restaurantName: string;
+    slug: string;
+    ownerName: string;
+    email: string;
+    phone: string;
+    password: string;
+    confirmPassword: string;
+    businessType: 'cafe' | 'restaurant' | 'fastfood';
+    acceptedTerms: boolean;
+  }) => api.post<AuthSession>('/public/signup', body, { retryOnAuthFailure: false }),
 };
 
 /* ------------------------------------------------------------------ */

@@ -5,14 +5,14 @@ import {
   type PublicRestaurant,
 } from '@restaurant-os/types';
 import { createPublicOrderSchema } from '@restaurant-os/validation';
-import { Minus, Plus, ShoppingBag, Trash2, UtensilsCrossed } from 'lucide-react';
+import { Check, Minus, Plus, ShoppingBag, Tag, Trash2, UtensilsCrossed, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { publicService } from '@/services';
+import { couponService, publicService } from '@/services';
 import { useCart } from './cart';
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY';
@@ -46,6 +46,49 @@ export function CheckoutSheet({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Coupon state. The preview is a convenience only - the server re-evaluates
+  // the code when the order is submitted, so a stale preview cannot overcharge
+  // or undercharge anyone.
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    discount: number;
+    description: string | null;
+  } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [checkingCoupon, setCheckingCoupon] = useState(false);
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCheckingCoupon(true);
+    setCouponError(null);
+    try {
+      const result = await couponService.preview(slug, {
+        code,
+        subtotal: cart.estimatedSubtotal,
+        phone: customerPhone.trim() || null,
+      });
+      if (result.valid) {
+        setAppliedCoupon({
+          code: result.code,
+          discount: result.discount,
+          description: result.description,
+        });
+        setCouponInput('');
+      } else {
+        setAppliedCoupon(null);
+        setCouponError(result.reason ?? 'کد تخفیف معتبر نیست.');
+      }
+    } catch (error) {
+      setCouponError(
+        error instanceof ApiError ? error.message : 'بررسی کد تخفیف انجام نشد.',
+      );
+    } finally {
+      setCheckingCoupon(false);
+    }
+  }
+
   async function submit() {
     setErrors({});
 
@@ -55,6 +98,7 @@ export function CheckoutSheet({
       customerName: customerName.trim() || null,
       customerPhone: customerPhone.trim() || null,
       notes: notes.trim() || null,
+      couponCode: appliedCoupon?.code ?? null,
       items: cart.lines.map((line) => ({
         productId: line.productId,
         quantity: line.quantity,
@@ -85,6 +129,12 @@ export function CheckoutSheet({
       if (error instanceof ApiError) {
         toast.error('ثبت سفارش انجام نشد', error.message);
         if (error.details) {
+          // The server is the authority: if it rejects the code at submit
+          // time, drop the optimistic preview and show why.
+          if (error.details.couponCode) {
+            setAppliedCoupon(null);
+            setCouponError(error.details.couponCode[0]);
+          }
           setErrors(
             Object.fromEntries(
               Object.entries(error.details).map(([key, list]) => [
@@ -122,6 +172,14 @@ export function CheckoutSheet({
                 {formatMoney(cart.estimatedSubtotal)}
               </span>
             </div>
+            {appliedCoupon ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-positive">تخفیف ({appliedCoupon.code})</span>
+                <span className="font-semibold text-positive">
+                  - {formatMoney(appliedCoupon.discount)}
+                </span>
+              </div>
+            ) : null}
             <p className="text-[0.7rem] leading-relaxed text-ink-subtle">
               مالیات و حق سرویس در فاکتور نهایی توسط سیستم محاسبه و اعمال می‌شود.
             </p>
@@ -252,6 +310,67 @@ export function CheckoutSheet({
               error={errors.customerName}
             />
           )}
+
+          {/* Discount code */}
+          <div>
+            <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-ink-muted">
+              <Tag className="size-3.5" />
+              کد تخفیف
+            </p>
+
+            {appliedCoupon ? (
+              <div className="flex items-center gap-2 rounded-xl border border-positive/40 bg-positive/[0.08] p-3">
+                <Check className="size-4 shrink-0 text-positive" />
+                <div className="min-w-0 flex-1">
+                  <p className="ltr-nums font-mono text-sm font-semibold text-positive">
+                    {appliedCoupon.code}
+                  </p>
+                  <p className="text-xs text-ink-muted">
+                    {appliedCoupon.description ??
+                      `${formatMoney(appliedCoupon.discount)} تخفیف`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppliedCoupon(null);
+                    setCouponError(null);
+                  }}
+                  aria-label="حذف کد تخفیف"
+                  className="rounded-lg p-1.5 text-ink-subtle hover:bg-surface-raised hover:text-critical"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  dir="ltr"
+                  placeholder="WELCOME15"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void applyCoupon();
+                    }
+                  }}
+                  error={couponError ?? undefined}
+                  containerClassName="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => void applyCoupon()}
+                  loading={checkingCoupon}
+                  disabled={!couponInput.trim()}
+                  className="h-11 shrink-0"
+                >
+                  اعمال
+                </Button>
+              </div>
+            )}
+          </div>
 
           <Textarea
             label="توضیحات سفارش (اختیاری)"

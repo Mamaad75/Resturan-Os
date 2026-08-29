@@ -37,6 +37,8 @@ export const createPublicOrderSchema = z
     customerPhone: optionalIranianMobileSchema,
     notes: optionalText(500, 'توضیحات سفارش'),
     pickupAt: dateInputSchema.nullable().optional(),
+    /** Discount code; the server re-evaluates it and ignores any client total. */
+    couponCode: optionalText(32, 'کد تخفیف'),
     items: z
       .array(cartItemSchema)
       .min(1, 'سبد خرید خالی است.')
@@ -82,6 +84,8 @@ export const createStaffOrderSchema = z
     notes: optionalText(500, 'توضیحات سفارش'),
     pickupAt: dateInputSchema.nullable().optional(),
     discountAmount: moneySchema.default(0),
+    /** Discount code applied at the counter, on top of any manual discount. */
+    couponCode: optionalText(32, 'کد تخفیف'),
     items: z.array(cartItemSchema).min(1, 'سبد خرید خالی است.').max(60),
     /** Skip PENDING and go straight to the kitchen from the counter. */
     sendToKitchen: z.boolean().default(false),
