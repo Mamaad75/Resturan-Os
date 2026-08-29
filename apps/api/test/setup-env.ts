@@ -12,3 +12,8 @@ process.env.COOKIE_SECRET ??= 'test-only-cookie-secret-value-0123456789abcdef';
 process.env.THROTTLE_LIMIT = '100000';
 process.env.THROTTLE_AUTH_LIMIT = '100000';
 process.env.THROTTLE_PUBLIC_ORDER_LIMIT = '100000';
+// Uploads land in a throwaway directory so a test run never pollutes the
+// development storage folder.
+process.env.STORAGE_DRIVER = 'local';
+process.env.STORAGE_LOCAL_DIR = './storage/test-uploads';
+process.env.STORAGE_PUBLIC_URL = 'http://localhost:4000/uploads';

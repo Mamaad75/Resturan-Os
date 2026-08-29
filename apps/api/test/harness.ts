@@ -1,12 +1,12 @@
 import { INestApplication } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
-import cookieParser from 'cookie-parser';
 import { randomBytes, randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
-import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
+import { configureApp } from '../src/bootstrap';
 import { APP_CONFIG, type AppConfig } from '../src/config/configuration';
 
 /**
@@ -42,11 +42,11 @@ const PASSWORD = 'TestPass12345';
 export async function createTestApp(): Promise<TestContext> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
 
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
   const config = app.get<AppConfig>(APP_CONFIG);
-  app.setGlobalPrefix(config.apiPrefix, { exclude: ['health'] });
-  app.use(cookieParser(config.auth.cookieSecret));
-  app.useGlobalFilters(new AllExceptionsFilter(config));
+  // Same wiring as production, so a test request cannot pass through a
+  // middleware chain the real server does not have.
+  configureApp(app, config);
   await app.init();
 
   const prisma = new PrismaClient({

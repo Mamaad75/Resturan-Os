@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import {
   Button,
+  ImageUpload,
   Input,
   Modal,
   Select,
@@ -12,6 +13,12 @@ import {
   Textarea,
   useToast,
 } from '@/components/ui';
+import {
+  ModifierEditor,
+  toDraftGroups,
+  toModifierPayload,
+  type DraftGroup,
+} from '@/features/admin/modifier-editor';
 import { ApiError } from '@/lib/api-client';
 import { menuService, type AdminCategory, type AdminProduct } from '@/services';
 
@@ -20,6 +27,7 @@ interface FormState {
   name: string;
   nameFa: string;
   descriptionFa: string;
+  imageUrl: string | null;
   price: string;
   discountPrice: string;
   preparationMinutes: string;
@@ -33,6 +41,7 @@ const EMPTY: FormState = {
   name: '',
   nameFa: '',
   descriptionFa: '',
+  imageUrl: null,
   price: '',
   discountPrice: '',
   preparationMinutes: '',
@@ -63,11 +72,13 @@ export function ProductFormModal({
 }) {
   const toast = useToast();
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [groups, setGroups] = useState<DraftGroup[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     setErrors({});
+    setGroups(product ? toDraftGroups(product.modifierGroups) : []);
     setForm(
       product
         ? {
@@ -75,6 +86,7 @@ export function ProductFormModal({
             name: product.name,
             nameFa: product.nameFa,
             descriptionFa: product.descriptionFa ?? '',
+            imageUrl: product.imageUrl,
             price: String(product.price),
             discountPrice:
               product.discountPrice != null ? String(product.discountPrice) : '',
@@ -101,6 +113,7 @@ export function ProductFormModal({
         name: form.name.trim() || form.nameFa.trim(),
         nameFa: form.nameFa.trim(),
         descriptionFa: form.descriptionFa.trim() || null,
+        imageUrl: form.imageUrl,
         price: Number(form.price.replace(/\D/g, '')) || 0,
         discountPrice: form.discountPrice.trim()
           ? Number(form.discountPrice.replace(/\D/g, ''))
@@ -113,13 +126,26 @@ export function ProductFormModal({
           : null,
         isAvailable: form.isAvailable,
         isFeatured: form.isFeatured,
+        // Always sent, so clearing every group on an existing product actually
+        // removes them rather than silently keeping the old ones.
+        modifierGroups: toModifierPayload(groups),
       };
 
       const parsed = createProductSchema.safeParse(payload);
       if (!parsed.success) {
         const fieldErrors: Record<string, string> = {};
         for (const issue of parsed.error.issues) {
-          fieldErrors[String(issue.path[0])] = issue.message;
+          // Group and option problems are reported against one banner rather
+          // than a path the editor cannot address field-by-field.
+          const key =
+            issue.path[0] === 'modifierGroups'
+              ? 'modifierGroups'
+              : String(issue.path[0]);
+          const prefix =
+            key === 'modifierGroups' && typeof issue.path[1] === 'number'
+              ? `گروه ${issue.path[1] + 1}: `
+              : '';
+          fieldErrors[key] ??= `${prefix}${issue.message}`;
         }
         setErrors(fieldErrors);
         throw new Error('validation');
@@ -164,6 +190,7 @@ export function ProductFormModal({
           <Button
             variant="primary"
             fullWidth
+            disabled={categories.length === 0}
             loading={save.isPending}
             onClick={() => save.mutate()}
           >
@@ -173,6 +200,13 @@ export function ProductFormModal({
       }
     >
       <div className="space-y-4 pt-1">
+        {categories.length === 0 ? (
+          <p className="rounded-xl border border-caution/30 bg-caution/10 p-3 text-xs leading-relaxed text-caution">
+            هنوز دسته‌بندی نساخته‌اید. هر محصول باید در یک دسته قرار بگیرد — ابتدا از
+            دکمه «دسته‌بندی‌ها» یک دسته بسازید.
+          </p>
+        ) : null}
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="نام فارسی"
@@ -190,6 +224,14 @@ export function ProductFormModal({
             error={errors.name}
           />
         </div>
+
+        <ImageUpload
+          value={form.imageUrl}
+          onChange={(url) => set('imageUrl', url)}
+          folder="products"
+          label="تصویر محصول"
+          hint="تصویر مربعی بهترین نتیجه را در منوی مشتری می‌دهد."
+        />
 
         <Select
           label="دسته‌بندی"
@@ -267,13 +309,9 @@ export function ProductFormModal({
           />
         </div>
 
-        {product && product.modifierGroups.length > 0 ? (
-          <p className="rounded-xl border border-line bg-surface-sunken p-3 text-xs leading-relaxed text-ink-muted">
-            این محصول {product.modifierGroups.length} گروه گزینه دارد (
-            {product.modifierGroups.map((group) => group.nameFa).join('، ')}). ویرایش
-            گزینه‌ها از طریق API در دسترس است و در نسخه بعدی به این فرم اضافه می‌شود.
-          </p>
-        ) : null}
+        <div className="border-t border-line pt-4">
+          <ModifierEditor groups={groups} onChange={setGroups} errors={errors} />
+        </div>
       </div>
     </Modal>
   );

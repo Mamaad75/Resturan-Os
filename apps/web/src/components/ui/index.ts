@@ -10,6 +10,7 @@ export {
   ErrorState,
 } from './feedback';
 export { Input, Textarea, Select, Switch } from './input';
+export { ImageUpload } from './image-upload';
 export { Modal, ConfirmDialog } from './modal';
 export { ToastProvider, useToast } from './toast';
 export { Tabs, SegmentedControl, type TabItem } from './tabs';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Plus, Search, Trash2, UtensilsCrossed } from 'lucide-react';
+import { FolderCog, Pencil, Plus, Search, Trash2, UtensilsCrossed } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
   Badge,
@@ -18,6 +18,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
+import { CategoryManagerModal } from '@/features/admin/category-manager';
 import { ProductFormModal } from '@/features/admin/product-form';
 import { ApiError } from '@/lib/api-client';
 import { formatMoney, toPersianDigits } from '@/lib/format';
@@ -33,6 +34,7 @@ export default function MenuPage() {
   const [editing, setEditing] = useState<AdminProduct | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<AdminProduct | null>(null);
+  const [managingCategories, setManagingCategories] = useState(false);
 
   const categoriesQuery = useQuery({
     queryKey: ['categories'],
@@ -116,6 +118,16 @@ export default function MenuPage() {
             leftAddon={<Search className="size-4" />}
             containerClassName="flex-1 lg:w-64"
           />
+          {can('category:manage') ? (
+            <Button
+              variant="ghost"
+              leftIcon={<FolderCog className="size-4" />}
+              onClick={() => setManagingCategories(true)}
+              className="shrink-0"
+            >
+              دسته‌بندی‌ها
+            </Button>
+          ) : null}
           {editable ? (
             <Button
               variant="primary"
@@ -239,6 +251,12 @@ export default function MenuPage() {
           )}
         </CardBody>
       </Card>
+
+      <CategoryManagerModal
+        open={managingCategories}
+        categories={categories}
+        onClose={() => setManagingCategories(false)}
+      />
 
       <ProductFormModal
         open={creating || editing !== null}

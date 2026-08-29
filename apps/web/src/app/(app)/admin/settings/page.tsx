@@ -15,6 +15,7 @@ import {
   CardFooter,
   CardHeader,
   ErrorState,
+  ImageUpload,
   Input,
   Skeleton,
   Switch,
@@ -40,6 +41,8 @@ export default function SettingsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [tagline, setTagline] = useState('');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [accentColor, setAccentColor] = useState('#C9A24B');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
@@ -50,6 +53,8 @@ export default function SettingsPage() {
     setName(data.name);
     setDescription(data.description ?? '');
     setTagline(data.branding.tagline ?? '');
+    setLogoUrl(data.branding.logoUrl);
+    setCoverUrl(data.branding.coverUrl);
     setAccentColor(data.branding.accentColor);
     setTheme(data.branding.theme);
     setSettings(data.settings);
@@ -77,6 +82,8 @@ export default function SettingsPage() {
     mutationFn: () =>
       restaurantService.updateBranding({
         tagline: tagline.trim() || null,
+        logoUrl,
+        coverUrl,
         accentColor,
         theme,
       }),
@@ -203,6 +210,25 @@ export default function SettingsPage() {
             onChange={(e) => setTagline(e.target.value)}
             disabled={!editable}
           />
+
+          {editable ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ImageUpload
+                value={logoUrl}
+                onChange={setLogoUrl}
+                folder="branding"
+                label="لوگو"
+                hint="مربعی، روی هدر منو و رسید چاپی می‌نشیند."
+              />
+              <ImageUpload
+                value={coverUrl}
+                onChange={setCoverUrl}
+                folder="branding"
+                label="تصویر کاور"
+                hint="پس‌زمینه بالای منوی مشتری."
+              />
+            </div>
+          ) : null}
 
           <div>
             <p className="mb-2 text-sm font-medium text-ink-muted">رنگ شاخص</p>

@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AuditAction } from '@restaurant-os/types';
 import type {
   CreateCategoryInput,
@@ -9,6 +10,26 @@ import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+
+const CATEGORY_INCLUDE = Prisma.validator<Prisma.CategoryInclude>()({
+  _count: { select: { products: true } },
+});
+
+type CategoryRow = Prisma.CategoryGetPayload<{ include: typeof CATEGORY_INCLUDE }>;
+
+/** One shape for every category response, list or write. */
+function toCategoryDto(row: CategoryRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    nameFa: row.nameFa,
+    description: row.description,
+    imageUrl: row.imageUrl,
+    displayOrder: row.displayOrder,
+    isActive: row.isActive,
+    productCount: row._count.products,
+  };
+}
 
 @Injectable()
 export class CategoriesService {
@@ -27,18 +48,9 @@ export class CategoriesService {
     const rows = await this.prisma.category.findMany({
       where: { tenantId: ctx.tenantId, menuId },
       orderBy: [{ displayOrder: 'asc' }, { nameFa: 'asc' }],
-      include: { _count: { select: { products: true } } },
+      include: CATEGORY_INCLUDE,
     });
-    return rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      nameFa: row.nameFa,
-      description: row.description,
-      imageUrl: row.imageUrl,
-      displayOrder: row.displayOrder,
-      isActive: row.isActive,
-      productCount: row._count.products,
-    }));
+    return rows.map(toCategoryDto);
   }
 
   async create(ctx: RequestContext, input: CreateCategoryInput, branchId?: string) {
@@ -62,6 +74,7 @@ export class CategoriesService {
         displayOrder,
         isActive: input.isActive ?? true,
       },
+      include: CATEGORY_INCLUDE,
     });
 
     this.audit.record({
@@ -72,7 +85,7 @@ export class CategoriesService {
       entityId: created.id,
       metadata: { nameFa: created.nameFa },
     });
-    return created;
+    return toCategoryDto(created);
   }
 
   async update(ctx: RequestContext, id: string, input: UpdateCategoryInput) {
@@ -87,6 +100,7 @@ export class CategoriesService {
         ...(input.displayOrder !== undefined ? { displayOrder: input.displayOrder } : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       },
+      include: CATEGORY_INCLUDE,
     });
     this.audit.record({
       tenantId: ctx.tenantId,
@@ -96,13 +110,13 @@ export class CategoriesService {
       entityId: id,
       metadata: { fields: Object.keys(input) },
     });
-    return updated;
+    return toCategoryDto(updated);
   }
 
   async remove(ctx: RequestContext, id: string) {
     const category = await this.prisma.category.findFirst({
       where: { id, tenantId: ctx.tenantId },
-      include: { _count: { select: { products: true } } },
+      include: CATEGORY_INCLUDE,
     });
     if (!category) throw AppException.notFound('دسته‌بندی');
 
