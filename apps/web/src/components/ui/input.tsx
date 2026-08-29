@@ -66,7 +66,7 @@ export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { label, hint, error, leftAddon, rightAddon, className, containerClassName, id, ...props },
+  { label, hint, error, leftAddon, rightAddon, className, containerClassName, id, dir, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -81,7 +81,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
       htmlFor={inputId}
       className={containerClassName}
     >
-      <div className="relative">
+      {/*
+        `dir` belongs on the wrapper, not just the input: the addons position
+        themselves with logical properties (`start`/`end`) and the input
+        reserves room for them with logical padding. A latin-direction field
+        inside the RTL shell - every price and phone box - would otherwise put
+        the padding on one side and the addon on the other, and the two would
+        overlap.
+      */}
+      <div className="relative" dir={dir}>
         {leftAddon ? (
           <span className="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3.5 text-ink-subtle">
             {leftAddon}
@@ -90,6 +98,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         <input
           ref={ref}
           id={inputId}
+          dir={dir}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${inputId}-error` : undefined}
           className={cn(
