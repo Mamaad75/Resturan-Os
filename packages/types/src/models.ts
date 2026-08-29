@@ -477,3 +477,38 @@ export interface CouponPreview {
   /** Persian reason the code was rejected; null when valid. */
   reason: string | null;
 }
+
+/* ---------------------------------------------------------------------- */
+/* Guest interaction                                                       */
+/* ---------------------------------------------------------------------- */
+
+export interface WaiterCallDto {
+  id: string;
+  tableId: string;
+  tableNumber: number;
+  tableName: string | null;
+  reason: import('./enums').WaiterCallReason;
+  status: import('./enums').WaiterCallStatus;
+  note: string | null;
+  acknowledgedByName: string | null;
+  createdAt: string;
+  /** Whole minutes the guest has been waiting. */
+  waitingMinutes: number;
+}
+
+export interface OrderFeedbackDto {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface FeedbackSummary {
+  averageRating: number;
+  totalCount: number;
+  /** Count per star, indexed 1-5. */
+  distribution: Array<{ rating: number; count: number }>;
+  recent: OrderFeedbackDto[];
+}

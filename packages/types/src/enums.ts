@@ -122,6 +122,22 @@ export const ModifierGroupType = {
 export type ModifierGroupType =
   (typeof ModifierGroupType)[keyof typeof ModifierGroupType];
 
+export const WaiterCallReason = {
+  ASSISTANCE: 'ASSISTANCE',
+  BILL: 'BILL',
+  SUPPLIES: 'SUPPLIES',
+} as const;
+export type WaiterCallReason =
+  (typeof WaiterCallReason)[keyof typeof WaiterCallReason];
+
+export const WaiterCallStatus = {
+  OPEN: 'OPEN',
+  ACKNOWLEDGED: 'ACKNOWLEDGED',
+  RESOLVED: 'RESOLVED',
+} as const;
+export type WaiterCallStatus =
+  (typeof WaiterCallStatus)[keyof typeof WaiterCallStatus];
+
 export const CouponType = {
   /** `value` is basis points: 1500 = 15% off. */
   PERCENTAGE: 'PERCENTAGE',

@@ -201,6 +201,42 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     this.server?.to(RealtimeRoom.branch(event.branchId)).emit(RealtimeEvent.TABLE_UPDATED, payload);
   }
 
+  @OnEvent(RealtimeEvent.WAITER_CALLED)
+  onWaiterCalled(event: {
+    branchId: string;
+    callId: string;
+    tableId: string;
+    tableNumber: number;
+    reason: string;
+    note: string | null;
+    createdAt: string;
+  }): void {
+    // Floor staff only - the kitchen has no use for a table service request.
+    this.server?.to(RealtimeRoom.branch(event.branchId)).emit(RealtimeEvent.WAITER_CALLED, {
+      callId: event.callId,
+      branchId: event.branchId,
+      tableId: event.tableId,
+      tableNumber: event.tableNumber,
+      reason: event.reason,
+      note: event.note,
+      createdAt: event.createdAt,
+    });
+  }
+
+  @OnEvent(RealtimeEvent.WAITER_CALL_RESOLVED)
+  onWaiterCallResolved(event: {
+    branchId: string;
+    callId: string;
+    status: string;
+  }): void {
+    this.server
+      ?.to(RealtimeRoom.branch(event.branchId))
+      .emit(RealtimeEvent.WAITER_CALL_RESOLVED, {
+        callId: event.callId,
+        status: event.status,
+      });
+  }
+
   @OnEvent(RealtimeEvent.NOTIFICATION_CREATED)
   onNotificationCreated(event: {
     userId: string | null;

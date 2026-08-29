@@ -2,6 +2,8 @@ import type {
   AuditLogDto,
   CouponDto,
   CouponPreview,
+  FeedbackSummary,
+  WaiterCallDto,
   AuthSession,
   DashboardSummary,
   NotificationDto,
@@ -19,7 +21,7 @@ import type {
   StaffDto,
   TableDto,
 } from '@restaurant-os/types';
-import { api, type ListResult } from '@/lib/api-client';
+import { api, uploadFile, type ListResult } from '@/lib/api-client';
 
 /* ------------------------------------------------------------------ */
 /* Auth                                                                */
@@ -45,6 +47,44 @@ export const authService = {
 /* ------------------------------------------------------------------ */
 /* Signup                                                              */
 /* ------------------------------------------------------------------ */
+
+export const storageService = {
+  /** Returns an optimised WebP plus a square thumbnail. */
+  uploadImage: (file: File, folder: 'products' | 'branding' = 'products') =>
+    uploadFile<{
+      key: string;
+      url: string;
+      thumbnailUrl: string;
+      size: number;
+      contentType: string;
+    }>('/uploads/image', file, { folder }),
+};
+
+export const guestService = {
+  callWaiter: (
+    slug: string,
+    body: { tableId: string; reason: 'ASSISTANCE' | 'BILL' | 'SUPPLIES'; note?: string | null },
+  ) =>
+    api.post<{ callId: string; alreadyOpen: boolean; tableNumber: number }>(
+      `/public/restaurants/${slug}/waiter-call`,
+      body,
+      { retryOnAuthFailure: false },
+    ),
+  submitFeedback: (token: string, body: { rating: number; comment?: string | null }) =>
+    api.post<{ id: string; rating: number }>(
+      `/public/orders/track/${token}/feedback`,
+      body,
+      { retryOnAuthFailure: false },
+    ),
+
+  // Staff side.
+  openCalls: (branchId?: string) =>
+    api.get<WaiterCallDto[]>('/waiter-calls', { query: { branchId } }),
+  updateCall: (id: string, status: 'ACKNOWLEDGED' | 'RESOLVED') =>
+    api.patch<{ id: string; status: string }>(`/waiter-calls/${id}`, { status }),
+  feedbackSummary: (branchId?: string) =>
+    api.get<FeedbackSummary>('/feedback', { query: { branchId } }),
+};
 
 export const couponService = {
   list: () => api.get<CouponDto[]>('/coupons'),
@@ -155,6 +195,8 @@ export const menuService = {
   updateCategory: (id: string, body: Record<string, unknown>) =>
     api.patch<AdminCategory>(`/categories/${id}`, body),
   deleteCategory: (id: string) => api.delete<{ deleted: boolean }>(`/categories/${id}`),
+  reorderCategories: (items: Array<{ id: string; displayOrder: number }>) =>
+    api.post<{ reordered: number }>('/categories/reorder', { items }),
 
   products: (params: {
     page?: number;
@@ -171,6 +213,8 @@ export const menuService = {
   setAvailability: (id: string, isAvailable: boolean) =>
     api.patch<AdminProduct>(`/products/${id}/availability`, { isAvailable }),
   deleteProduct: (id: string) => api.delete<{ deleted: boolean }>(`/products/${id}`),
+  reorderProducts: (items: Array<{ id: string; displayOrder: number }>) =>
+    api.post<{ reordered: number }>('/products/reorder', { items }),
 };
 
 /* ------------------------------------------------------------------ */

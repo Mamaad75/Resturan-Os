@@ -13,6 +13,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CouponsModule } from './modules/coupons/coupons.module';
+import { GuestModule } from './modules/guest/guest.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { QrModule } from './modules/qr/qr.module';
 import { RestaurantsModule } from './modules/restaurants/restaurants.module';
@@ -59,6 +60,7 @@ import { HealthController } from './health.controller';
     RestaurantsModule,
     MenuModule,
     CouponsModule,
+    GuestModule,
     QrModule,
     SmsModule,
     SignupModule,

@@ -10,6 +10,7 @@ import { formatMoney, toPersianDigits } from '@/lib/format';
 import { CartProvider, useCart } from './cart';
 import { CheckoutSheet } from './checkout-sheet';
 import { ProductSheet } from './product-sheet';
+import { WaiterCallButton } from './waiter-call';
 
 export function MenuView({ menu, slug }: { menu: PublicMenu; slug: string }) {
   return (
@@ -88,7 +89,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
         } as React.CSSProperties
       }
     >
-      <RestaurantHeader restaurant={restaurant} />
+      <RestaurantHeader restaurant={restaurant} slug={slug} />
 
       {/* Sticky category rail */}
       {categories.length > 0 ? (
@@ -234,7 +235,13 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
   );
 }
 
-function RestaurantHeader({ restaurant }: { restaurant: PublicMenu['restaurant'] }) {
+function RestaurantHeader({
+  restaurant,
+  slug,
+}: {
+  restaurant: PublicMenu['restaurant'];
+  slug: string;
+}) {
   return (
     <header className="relative">
       <div className="relative h-44 overflow-hidden bg-surface-sunken sm:h-56">
@@ -302,6 +309,15 @@ function RestaurantHeader({ restaurant }: { restaurant: PublicMenu['restaurant']
               آماده‌سازی حدود {toPersianDigits(restaurant.settings.estimatedPrepMinutes)}{' '}
               دقیقه
             </Badge>
+          ) : null}
+
+          {/* Only meaningful when the guest is actually sitting at a table. */}
+          {restaurant.table ? (
+            <WaiterCallButton
+              slug={slug}
+              tableId={restaurant.table.id}
+              tableNumber={restaurant.table.number}
+            />
           ) : null}
         </div>
 

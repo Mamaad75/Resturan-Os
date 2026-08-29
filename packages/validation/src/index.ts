@@ -5,6 +5,7 @@ export * from './catalog';
 export * from './order';
 export * from './payment';
 export * from './coupon';
+export * from './guest';
 export * from './table';
 export * from './settings';
 export * from './report';

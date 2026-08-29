@@ -115,6 +115,21 @@ enum ModifierGroupType {
   MULTIPLE
 }
 
+enum WaiterCallReason {
+  /// Generic "please come over".
+  ASSISTANCE
+  /// Guest is ready to settle up.
+  BILL
+  /// Water, cutlery, napkins.
+  SUPPLIES
+}
+
+enum WaiterCallStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 enum CouponType {
   /// Value is basis points: 1500 = 15% off.
   PERCENTAGE
@@ -156,6 +171,8 @@ model Tenant {
   smsMessages   SmsMessage[]
   auditLogs     AuditLog[]
   coupons       Coupon[]
+  waiterCalls   WaiterCall[]
+  feedback      OrderFeedback[]
 
   @@index([slug])
   @@map("tenants")
@@ -226,6 +243,8 @@ model Branch {
   orders        Order[]
   qrCodes       QrCode[]
   notifications Notification[]
+  waiterCalls   WaiterCall[]
+  feedback      OrderFeedback[]
 
   @@unique([restaurantId, slug])
   @@index([tenantId])
@@ -428,8 +447,9 @@ model RestaurantTable {
 
   tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   branch  Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  orders  Order[]
-  qrCodes QrCode[]
+  orders      Order[]
+  qrCodes     QrCode[]
+  waiterCalls WaiterCall[]
 
   @@unique([branchId, number])
   @@index([tenantId])
@@ -537,6 +557,7 @@ model Order {
   notifications Notification[]
   smsMessages   SmsMessage[]
   couponRedemption CouponRedemption?
+  feedback         OrderFeedback?
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -792,6 +813,63 @@ model CouponRedemption {
   @@index([couponId])
   @@index([customerPhone])
   @@map("coupon_redemptions")
+}
+
+/* ------------------------------------------------------------------ */
+/* Guest interaction                                                   */
+/* ------------------------------------------------------------------ */
+
+model WaiterCall {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  branchId String @db.Uuid
+  tableId  String @db.Uuid
+
+  reason WaiterCallReason @default(ASSISTANCE)
+  status WaiterCallStatus @default(OPEN)
+  note   String?          @db.VarChar(200)
+
+  acknowledgedById String?   @db.Uuid
+  acknowledgedAt   DateTime?
+  resolvedAt       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  table  RestaurantTable @relation(fields: [tableId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([branchId, status])
+  @@index([tableId, status])
+  @@map("waiter_calls")
+}
+
+model OrderFeedback {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  branchId String @db.Uuid
+  orderId  String @db.Uuid
+
+  /// 1-5 stars.
+  rating  Int
+  comment String? @db.VarChar(500)
+
+  /// Denormalised so retention reporting does not need the order join.
+  customerPhone String? @db.VarChar(20)
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  order  Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// One rating per order; a guest cannot stuff the ballot.
+  @@unique([orderId])
+  @@index([tenantId, createdAt])
+  @@index([branchId, rating])
+  @@map("order_feedback")
 }
 
 /* ------------------------------------------------------------------ */

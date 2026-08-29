@@ -22,6 +22,7 @@ import { useRealtime } from '@/hooks/use-realtime';
 import { cn } from '@/lib/cn';
 import { formatMoney, formatTimeFa, toPersianDigits } from '@/lib/format';
 import { publicService } from '@/services';
+import { FeedbackCard } from './feedback-card';
 
 /**
  * Customer order tracking.
@@ -151,6 +152,8 @@ export function TrackingView({ token }: { token: string }) {
       {!isCancelled ? <Timeline steps={order.steps} /> : null}
 
       <OrderItemsCard order={order} />
+
+      {!isCancelled ? <FeedbackCard token={token} status={order.status} /> : null}
 
       {order.branchPhone ? (
         <a

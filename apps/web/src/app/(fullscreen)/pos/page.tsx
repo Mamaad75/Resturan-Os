@@ -33,6 +33,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
+import { WaiterCallBar } from '@/features/admin/waiter-call-bar';
 import { useRealtime } from '@/hooks/use-realtime';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
@@ -285,6 +286,8 @@ export default function PosPage() {
           />
         </div>
       </header>
+
+      <WaiterCallBar />
 
       <div className="flex min-h-0 flex-1">
         {/* Categories: a rail on desktop, a horizontal strip on mobile. */}

@@ -167,6 +167,42 @@ export async function apiRequest<T>(
   throw new ApiError(code, message, response.status, details);
 }
 
+/**
+ * Multipart upload.
+ *
+ * Kept separate from `apiRequest` because the browser must set its own
+ * `Content-Type` with the multipart boundary - overriding it breaks the parse
+ * on the server.
+ */
+export async function uploadFile<T>(
+  path: string,
+  file: File,
+  query?: QueryParams,
+): Promise<T> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch(buildUrl(path, query), {
+    method: 'POST',
+    credentials: 'include',
+    body: form,
+  });
+
+  let payload: ApiResponse<T> | undefined;
+  try {
+    payload = (await response.json()) as ApiResponse<T>;
+  } catch {
+    payload = undefined;
+  }
+
+  if (response.ok && payload?.success) return payload.data;
+
+  const code = payload && !payload.success ? payload.error.code : 'STORAGE_ERROR';
+  const message =
+    payload && !payload.success ? payload.error.message : 'بارگذاری تصویر انجام نشد.';
+  throw new ApiError(code, message, response.status);
+}
+
 export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: 'GET' }),

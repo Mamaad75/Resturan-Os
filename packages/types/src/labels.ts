@@ -1,5 +1,6 @@
 import {
   NotificationType,
+  WaiterCallReason,
   OrderStatus,
   OrderType,
   PaymentMethod,
@@ -131,3 +132,16 @@ export const SMS_WORTHY_STATUSES: OrderStatus[] = [
   OrderStatus.READY_FOR_PICKUP,
   OrderStatus.CANCELLED,
 ];
+
+export const WAITER_CALL_REASON_LABELS_FA: Record<WaiterCallReason, string> = {
+  [WaiterCallReason.ASSISTANCE]: 'درخواست کمک',
+  [WaiterCallReason.BILL]: 'درخواست صورتحساب',
+  [WaiterCallReason.SUPPLIES]: 'درخواست لوازم',
+};
+
+/** Short label for the guest-facing buttons. */
+export const WAITER_CALL_REASON_SHORT_FA: Record<WaiterCallReason, string> = {
+  [WaiterCallReason.ASSISTANCE]: 'صدا زدن گارسون',
+  [WaiterCallReason.BILL]: 'صورتحساب',
+  [WaiterCallReason.SUPPLIES]: 'آب و لوازم',
+};

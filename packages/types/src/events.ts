@@ -12,6 +12,8 @@ export const RealtimeEvent = {
   PAYMENT_UPDATED: 'payment.updated',
   TABLE_UPDATED: 'table.updated',
   NOTIFICATION_CREATED: 'notification.created',
+  WAITER_CALLED: 'waiter.called',
+  WAITER_CALL_RESOLVED: 'waiter.call_resolved',
 } as const;
 export type RealtimeEvent = (typeof RealtimeEvent)[keyof typeof RealtimeEvent];
 
@@ -63,5 +65,15 @@ export interface NotificationCreatedPayload {
   title: string;
   body: string;
   entityId: string | null;
+  createdAt: string;
+}
+
+export interface WaiterCallPayload {
+  callId: string;
+  branchId: string;
+  tableId: string;
+  tableNumber: number;
+  reason: string;
+  note: string | null;
   createdAt: string;
 }
