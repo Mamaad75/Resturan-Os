@@ -57,6 +57,7 @@ pnpm dev
 | Counter (POS)     | http://localhost:3000/pos                       |
 | Kitchen display   | http://localhost:3000/kds                       |
 | Customer menu     | http://localhost:3000/r/cafe-roz                |
+| Self-service signup | http://localhost:3000/signup                  |
 | Table 7 menu (QR) | http://localhost:3000/r/cafe-roz/t/7            |
 | API               | http://localhost:4000/api                       |
 | API docs (Swagger)| http://localhost:4000/api/docs                  |
@@ -73,13 +74,21 @@ docker compose --profile app up -d --build
 
 **Customer**
 Server-rendered QR menu (fast first paint on mobile), category navigation,
-product detail with modifiers, cart, dine-in and takeaway checkout, and a live
-order-tracking page with in-app notifications.
+product detail with modifiers, cart, dine-in and takeaway checkout, discount
+codes, a call-the-waiter button, a live order-tracking page with in-app
+notifications, and a rating prompt once the order has been served.
 
 **Admin**
 Dashboard with real sales aggregates, order list and detail, table floor plan,
-menu and product management, sales reports, staff and roles, restaurant
-settings and branding, QR code generation and a printable QR sheet.
+full menu editing (categories, products, images, modifier groups), discount
+campaigns, sales reports, staff and roles, restaurant settings and branding,
+QR code generation and a printable QR sheet.
+
+**Onboarding**
+A restaurant signs itself up at `/signup` — tenant, restaurant, branch, menu,
+starter categories, owner account and QR code are created in one transaction —
+and lands on a checklist that tracks first product, first table and first QR
+against live data.
 
 **Counter (POS)**
 Category rail, product grid, live ticket, table picker, modifier picker,
@@ -114,6 +123,7 @@ restaurant-os/
 │   │   │   ├── prisma/          Client factory + tenant isolation guard
 │   │   │   └── modules/
 │   │   │       ├── auth/        Login, refresh rotation, password change
+│   │   │       ├── signup/      Self-service tenant provisioning
 │   │   │       ├── restaurants/ Restaurant, branding, settings, branches
 │   │   │       ├── menu/        Categories, products, modifiers, public menu
 │   │   │       ├── tables/      Floor plan and table state
@@ -121,6 +131,8 @@ restaurant-os/
 │   │   │       ├── payments/    Payment aggregate + gateway adapters
 │   │   │       ├── notifications/ In-app notifications + event listener
 │   │   │       ├── sms/         Transactional outbox + provider adapters
+│   │   │       ├── coupons/     Discount codes and redemption
+│   │   │       ├── guest/       Waiter calls and order feedback
 │   │   │       ├── reports/     SQL sales analytics
 │   │   │       ├── staff/       Staff accounts and roles
 │   │   │       ├── qr/          QR generation (SVG/PNG/print sheet)
@@ -397,7 +409,7 @@ reach the client.
 
 ```bash
 pnpm test        # 67 unit tests — money, time, state machine, RBAC, isolation guard
-pnpm test:e2e    # 63 integration tests against a real PostgreSQL database
+pnpm test:e2e    # 152 integration tests against a real PostgreSQL database
 ```
 
 Integration tests boot the real Nest application and use no mocks, because the
@@ -409,7 +421,10 @@ Coverage includes: authentication and refresh-token rotation, the RBAC matrix,
 tenant isolation across reads/writes/ordering/reporting/tracking, server-side
 pricing and tampering resistance, modifier validation, order-number
 concurrency, transaction atomicity, the full state machine, table coupling,
-split payments and refunds, customer tracking, and reporting correctness.
+split payments and refunds, customer tracking, reporting correctness,
+self-service signup, coupon forgery and usage-limit races under concurrency,
+waiter calls, feedback authorisation, category and modifier-group editing, and
+image uploads (including a renamed non-image).
 
 ---
 

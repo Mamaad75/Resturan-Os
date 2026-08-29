@@ -158,6 +158,24 @@ option from a different product is rejected rather than silently applied.
 Required-group, min-select and max-select rules are enforced identically on
 both sides, from the same shared schema.
 
+A discount code is the same story. The customer app can preview what a code
+would take off, but that preview is advisory: the discount is recomputed
+inside the order transaction from the subtotal the server calculated. The
+redemption itself is claimed with a conditional update:
+
+```sql
+UPDATE "coupons" SET "usageCount" = "usageCount" + 1
+ WHERE "id" = $1 AND "isActive" = true
+   AND ("usageLimit" IS NULL OR "usageCount" < "usageLimit")
+```
+
+A read-then-write would let simultaneous customers overshoot a usage limit
+under `READ COMMITTED` — each transaction reads the pre-increment count and
+each believes it has room. The conditional update cannot: the row lock
+serialises them, and a claim that finds no room affects zero rows and fails
+the order. The integration suite fires ten concurrent orders at a
+three-use coupon and asserts exactly three succeed.
+
 ### The state machine
 
 `packages/types/src/order-state-machine.ts` is the single authority. The API
@@ -272,6 +290,14 @@ re-encoded to WebP, which strips metadata and keeps the customer menu fast on
 mobile networks. Keys are namespaced per tenant, so one restaurant cannot
 overwrite another's asset by guessing a key.
 
+The `local` driver hands out `${STORAGE_PUBLIC_URL}/<key>` links, so the API
+mounts its storage directory at that URL's path. The `s3` driver points at the
+bucket and nothing is mounted. That mount lives in `src/bootstrap.ts` alongside
+the rest of the HTTP wiring, which both `main.ts` and the integration harness
+call — a test request therefore travels the exact middleware chain a real one
+does, and a gap like an unserved upload directory shows up in the suite rather
+than in production.
+
 ---
 
 ## 7. Money and time
@@ -382,7 +408,7 @@ customer menu is designed mobile-first and scaled up.
 rounding, Tehran day boundaries and report ranges, the full state-machine
 transition table, the RBAC matrix, and the tenant guard's accept/reject rules.
 
-**Integration tests (63)** boot the real Nest application against a real
+**Integration tests (152)** boot the real Nest application against a real
 PostgreSQL database with no mocks, because the behaviour worth covering only
 exists end to end — transactions, isolation, the state machine, money. Each
 suite truncates the database, so tests never depend on each other.
@@ -392,7 +418,11 @@ request with client-supplied prices is priced from the menu anyway; a failed
 line rolls back the whole order; eight concurrent submissions get eight
 distinct order numbers; a table stays occupied while a second order is open on
 it; a split bill only flips to `PAID` on the final payment; an unpaid order
-never appears in revenue.
+never appears in revenue; ten simultaneous orders cannot push a three-use
+coupon past three redemptions; a guest cannot rate an order that has not been
+served; a repeat waiter call returns the open one instead of a second; a
+product update replaces its modifier groups without leaving orphaned options;
+and a PHP payload renamed to `.png` is rejected by the upload pipeline.
 
 ---
 
@@ -400,8 +430,6 @@ never appears in revenue.
 
 Honest about what this version does not do:
 
-- **Modifier editing in the admin UI** is read-only; groups are created via
-  API or seed. The data model and validation fully support editing.
 - **The S3 storage driver** has its interface, configuration and validation
   wired, but `put`/`delete` need `@aws-sdk/client-s3` installed. Selecting it
   fails loudly at boot rather than silently dropping uploads.

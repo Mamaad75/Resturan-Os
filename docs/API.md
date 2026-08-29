@@ -201,6 +201,34 @@ no payment references.
 
 In-app notifications raised for that order.
 
+### `POST /public/orders/track/:token/feedback`
+
+One rating (1–5) plus an optional comment per order. The tracking token is the
+credential, so only the person who placed the order can rate it. Rating an
+order that has not been served yet is rejected — it would measure nothing.
+
+### `POST /public/restaurants/:slug/waiter-call`
+
+A seated guest asks for assistance, the bill, or supplies. Repeat taps return
+the existing open call (`alreadyOpen: true`) instead of creating a second one,
+so the floor view cannot be flooded.
+
+### `POST /public/restaurants/:slug/coupons/preview`
+
+Checks a discount code against a subtotal before checkout and returns the
+amount it would take off. Advisory only: the discount is recomputed and
+claimed server-side when the order is actually created.
+
+### `GET /public/signup/slug-available`
+
+Live availability check for a public address while the owner types it.
+
+### `POST /public/signup`
+
+Creates a tenant, restaurant, branch, menu, starter categories, the owner
+account and the restaurant QR code in one transaction, then returns a signed-in
+session. VAT is off by default — an operator turns it on deliberately.
+
 ### `POST /public/payments/verify`
 
 Gateway return path for online payments. Idempotent — gateways retry, and
@@ -297,7 +325,11 @@ supported: the order stays `PENDING` until `paidTotal` reaches `total`.
 
 Deleting a product that has been sold is safe: order items keep their own copy
 of the name and price, so history and reports stay correct. A category with
-products cannot be deleted — hide it instead.
+products cannot be deleted (`409`) — hide it instead.
+
+`modifierGroups` on a product write replaces every group wholesale, options
+included: send the full list to change one option, and send `[]` to remove all
+of them. Omitting the field leaves the existing groups untouched.
 
 ---
 
@@ -332,6 +364,28 @@ already-printed cards stay valid.
 Deleting a staff member soft-disables the account and revokes its sessions —
 orders and audit rows reference it, and that history is worth more than the
 row. The last active owner cannot be removed or demoted.
+
+---
+
+## Coupons, waiter calls, feedback
+
+| Method | Path | Permission |
+| --- | --- | --- |
+| `GET` | `/coupons` | `report:read` / `settings:manage` |
+| `POST` | `/coupons` | `settings:manage` |
+| `PATCH` | `/coupons/:id` | `settings:manage` |
+| `DELETE` | `/coupons/:id` | `settings:manage` |
+| `GET` | `/waiter-calls` | `table:read` / `order:read` |
+| `PATCH` | `/waiter-calls/:id` | `table:manage` / `order:update` |
+| `GET` | `/feedback` | `report:read` |
+
+A coupon that has already been redeemed is deactivated rather than deleted, so
+the discount on a historical order stays explainable.
+
+Redemption is claimed with a conditional `UPDATE … WHERE usageCount <
+usageLimit` inside the order transaction. Under `READ COMMITTED` a
+read-then-write would let simultaneous customers overshoot a usage limit; the
+conditional update cannot.
 
 ---
 
@@ -396,6 +450,8 @@ by a disconnect.
 | `payment.updated` | Branch and that order's room |
 | `table.updated` | Branch room |
 | `notification.created` | The specific user, or that order's room |
+| `waiter.called` | Branch room (floor staff, not the kitchen) |
+| `waiter.call_resolved` | Branch room |
 
 Staff join the kitchen room only if their role carries `kitchen:read`.
 Customers join a single order room and never receive branch traffic.
