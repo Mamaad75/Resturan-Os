@@ -126,9 +126,10 @@ export class SignupService {
             name: input.restaurantName,
             slug: input.slug,
             tagline: preset.tagline,
-            // The business type already tells us which menu style fits; a new
-            // restaurant should look like itself before anyone touches
-            // settings.
+            // A starting point, not a policy: the business type already tells
+            // us which style fits, and a brand-new restaurant has no palette of
+            // its own to preserve yet. From here the colour and logo are the
+            // owner's, and changing template never touches them again.
             menuTemplate: preset.menuTemplate,
             accentColor: MENU_TEMPLATE_SPECS[preset.menuTemplate].defaultAccent,
             theme: MENU_TEMPLATE_SPECS[preset.menuTemplate].defaultTheme,

@@ -70,6 +70,40 @@ describe('Restaurant branding and menu template', () => {
     );
   });
 
+  it('leaves the restaurant s own palette alone when the template changes', async () => {
+    // The colour and logo are the restaurant's identity; the template only
+    // supplies layout. Switching one must never quietly overwrite the other.
+    await ctx
+      .http()
+      .patch('/api/restaurant/branding')
+      .set(auth())
+      .send({
+        accentColor: '#123456',
+        theme: 'dark',
+        logoUrl: 'https://cdn.example.com/our-logo.webp',
+        menuTemplate: MenuTemplate.CLASSIC,
+      })
+      .expect(200);
+
+    const switched = await ctx
+      .http()
+      .patch('/api/restaurant/branding')
+      .set(auth())
+      .send({ menuTemplate: MenuTemplate.CAFE })
+      .expect(200);
+
+    expect(switched.body.data.branding.menuTemplate).toBe(MenuTemplate.CAFE);
+    expect(switched.body.data.branding.accentColor).toBe('#123456');
+    expect(switched.body.data.branding.theme).toBe('dark');
+    expect(switched.body.data.branding.logoUrl).toBe(
+      'https://cdn.example.com/our-logo.webp',
+    );
+    // Notably not the CAFE template's own suggested accent.
+    expect(switched.body.data.branding.accentColor).not.toBe(
+      MENU_TEMPLATE_SPECS.CAFE.defaultAccent,
+    );
+  });
+
   it('rejects a template that does not exist', async () => {
     await ctx
       .http()

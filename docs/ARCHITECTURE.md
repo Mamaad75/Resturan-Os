@@ -393,8 +393,14 @@ the numbers that matter; overusing it would make it mean nothing.
 **Menu templates.** A restaurant chooses how its customer menu is laid out,
 not just what colour it is. A template is a descriptor in
 `packages/types/src/menu-templates.ts` — layout, heading treatment, corner
-radius, density, price weight, default palette — and `templateStyles()` in the
-web app is the single place that turns one into class names. The live menu and
+radius, density, price weight — and `templateStyles()` in the web app is the
+single place that turns one into class names.
+
+Templates carry no colours of their own: every rule they produce paints with
+`--gold`, the restaurant's own accent, so identity stays with the restaurant
+and the template supplies only structure. Switching template therefore never
+overwrites a palette somebody chose on purpose; each template's suggested
+colours are offered as a button instead. The live menu and
 the admin's preview thumbnails both call it, so what an owner sees while
 choosing is what a guest gets; a preview drawn from separate rules would drift
 the first time either changed.

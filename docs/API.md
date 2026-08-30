@@ -343,10 +343,14 @@ without a migration and a template that is later retired does not strand the
 restaurants that chose it — an unrecognised value resolves to `CLASSIC` on
 read. Anything not currently in the list is rejected on write.
 
-Each template carries a recommended accent colour and light/dark setting in
-`MENU_TEMPLATE_SPECS` (`@restaurant-os/types`); the admin applies them when the
-owner picks a template, and the owner can override either afterwards. The
-public menu payload carries the resolved value under
+A template controls layout only. The accent colour, logo, cover image and
+light/dark setting belong to the restaurant and are never changed by switching
+template — each template does carry a suggested palette in
+`MENU_TEMPLATE_SPECS` (`@restaurant-os/types`), but the admin offers it as an
+explicit one-click action rather than applying it. A brand-new restaurant gets
+its business type's palette at signup, when there is no choice yet to preserve.
+
+The public menu payload carries the resolved value under
 `restaurant.branding.menuTemplate`.
 
 ---

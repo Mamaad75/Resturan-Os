@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  MENU_TEMPLATE_SPECS,
   MenuTemplate,
   SERVICE_MODE_LABELS_FA,
   ServiceMode,
@@ -63,6 +64,18 @@ export default function SettingsPage() {
     setMenuTemplate(data.branding.menuTemplate);
     setSettings(data.settings);
   }, [restaurantQuery.data]);
+
+  /*
+   * The template's own palette, offered as a one-click shortcut rather than
+   * applied automatically. Hidden once the restaurant is already using it, so
+   * the button never suggests a change that would do nothing.
+   */
+  const templateSuggestion = MENU_TEMPLATE_SPECS[menuTemplate];
+  const suggestion =
+    templateSuggestion.defaultAccent.toLowerCase() === accentColor.toLowerCase() &&
+    templateSuggestion.defaultTheme === theme
+      ? null
+      : templateSuggestion;
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['restaurant'] });
@@ -238,24 +251,37 @@ export default function SettingsPage() {
           <div>
             <p className="text-sm font-medium text-ink-muted">قالب منو</p>
             <p className="mb-3 text-xs text-ink-subtle">
-              چیدمان منویی که مشتری بعد از اسکن QR می‌بیند. انتخاب یک قالب، رنگ و تم
-              پیشنهادی‌اش را هم اعمال می‌کند — هر دو را بعد می‌توانید تغییر دهید.
-              دسته‌بندی‌هایی که هنوز عکس ندارند، به‌جای قاب خالی به‌صورت فهرست نمایش
-              داده می‌شوند.
+              قالب فقط چیدمان را تعیین می‌کند. رنگ، لوگو و تم را خودتان پایین‌تر
+              انتخاب می‌کنید و با تعویض قالب تغییر نمی‌کنند. دسته‌بندی‌هایی که هنوز
+              عکس ندارند، به‌جای قاب خالی به‌صورت فهرست نمایش داده می‌شوند.
             </p>
             <MenuTemplatePicker
               value={menuTemplate}
               accentColor={accentColor}
               theme={theme}
               disabled={!editable}
-              onChange={(id, spec) => {
-                setMenuTemplate(id);
-                // The template's own palette is what makes it read as that
-                // style; applying it is the point of choosing one.
-                setAccentColor(spec.defaultAccent);
-                setTheme(spec.defaultTheme);
-              }}
+              // Layout only. Overwriting the restaurant's own palette here
+              // would throw away a choice they made deliberately - the
+              // suggested colours are offered below instead.
+              onChange={setMenuTemplate}
             />
+            {suggestion ? (
+              <button
+                type="button"
+                disabled={!editable}
+                onClick={() => {
+                  setAccentColor(suggestion.defaultAccent);
+                  setTheme(suggestion.defaultTheme);
+                }}
+                className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted transition-colors hover:text-ink"
+              >
+                <span
+                  className="size-4 rounded-full border border-line"
+                  style={{ background: suggestion.defaultAccent }}
+                />
+                رنگ پیشنهادی قالب «{suggestion.labelFa}» را اعمال کن
+              </button>
+            ) : null}
           </div>
 
           <div>

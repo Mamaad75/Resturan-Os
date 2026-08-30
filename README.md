@@ -85,11 +85,11 @@ campaigns, sales reports, staff and roles, restaurant settings and branding,
 QR code generation and a printable QR sheet.
 
 **Per-restaurant look**
-Five menu templates — کلاسیک، سنتی ایرانی، کافه، فست‌فود، مینیمال — each with
-its own layout, palette and typography, chosen from the admin with a live
-preview. Logo, cover image, accent colour and light/dark are set per
-restaurant, and a new signup starts on the template that matches its business
-type.
+Five menu templates — کلاسیک، سنتی ایرانی، کافه، فست‌فود، مینیمال — chosen from
+the admin with a live preview. A template supplies layout only; the logo,
+cover image, accent colour and light/dark theme belong to the restaurant and
+survive a template switch. A new signup starts on the template that matches
+its business type.
 
 **Onboarding**
 A restaurant signs itself up at `/signup` — tenant, restaurant, branch, menu,

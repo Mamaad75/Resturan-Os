@@ -47,10 +47,11 @@ export const iranianMobileSchema = z
 /**
  * Same, but an empty value is allowed and normalises to `null`. An invalid
  * non-empty number is a hard validation error rather than being dropped.
+ *
+ * `.optional()` comes last deliberately - see `optionalText` below.
  */
 export const optionalIranianMobileSchema = z
   .union([z.string(), z.null()])
-  .optional()
   .transform((v, ctx) => {
     if (v == null || v.trim() === '') return null;
     const normalized = normalizeIranianMobile(v);
@@ -62,7 +63,8 @@ export const optionalIranianMobileSchema = z
       return z.NEVER;
     }
     return normalized;
-  });
+  })
+  .optional();
 
 /** Persian or Latin display text with a required length range. */
 export const displayTextSchema = (min: number, max: number, label: string) =>
@@ -73,11 +75,20 @@ export const displayTextSchema = (min: number, max: number, label: string) =>
     .max(max, `${label} حداکثر ${max} کاراکتر است.`)
     .regex(SAFE_TEXT, `${label} شامل کاراکتر غیرمجاز است.`);
 
-/** Optional free text that normalises empty strings to `null`. */
+/**
+ * Optional free text that normalises empty strings to `null`.
+ *
+ * `.optional()` has to come *after* the transform, not before it. With
+ * `.optional()` first the transform still runs on an absent key and turns it
+ * into `null`, which a partial update cannot distinguish from an explicit
+ * "clear this field" - so a PATCH that only changed the menu template would
+ * also wipe the logo, the cover and the tagline. Ordered this way an absent
+ * key stays `undefined` and the service skips it, while an explicit `null` or
+ * an empty string still clears the value.
+ */
 export const optionalText = (max: number, label: string) =>
   z
     .union([z.string(), z.null()])
-    .optional()
     .transform((v) => {
       if (v == null) return null;
       const trimmed = v.trim();
@@ -88,7 +99,8 @@ export const optionalText = (max: number, label: string) =>
     })
     .refine((v) => v === null || SAFE_TEXT.test(v), {
       message: `${label} شامل کاراکتر غیرمجاز است.`,
-    });
+    })
+    .optional();
 
 /** URL-safe slug: lowercase latin letters, digits and single hyphens. */
 export const slugSchema = z

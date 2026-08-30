@@ -29,7 +29,7 @@ export function MenuTemplatePicker({
   value: MenuTemplate;
   accentColor: string;
   theme: 'dark' | 'light';
-  onChange: (template: MenuTemplate, spec: MenuTemplateSpec) => void;
+  onChange: (template: MenuTemplate) => void;
   disabled?: boolean;
 }) {
   return (
@@ -42,7 +42,7 @@ export function MenuTemplatePicker({
             key={id}
             type="button"
             disabled={disabled}
-            onClick={() => onChange(id, spec)}
+            onClick={() => onChange(id)}
             aria-pressed={selected}
             className={cn(
               'flex flex-col overflow-hidden rounded-2xl border text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60',
