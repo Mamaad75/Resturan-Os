@@ -152,6 +152,29 @@
     );
   }
 
+  /*
+    Ornamented heading for the traditional template: a centred title with a
+    rule running out to each side. Drawn with pseudo-elements rather than an
+    image so it takes the restaurant's own accent colour.
+  */
+  .menu-ornament {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .menu-ornament::before,
+  .menu-ornament::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(
+      to right,
+      rgb(var(--gold) / 0),
+      rgb(var(--gold) / 0.55),
+      rgb(var(--gold) / 0)
+    );
+  }
+
   .skeleton {
     @apply relative overflow-hidden rounded-lg bg-surface-raised;
   }

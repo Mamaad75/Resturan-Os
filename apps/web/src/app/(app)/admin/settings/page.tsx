@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  MenuTemplate,
   SERVICE_MODE_LABELS_FA,
   ServiceMode,
   type RestaurantSettings,
@@ -23,6 +24,7 @@ import {
   useToast,
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
+import { MenuTemplatePicker } from '@/features/admin/menu-template-picker';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { toPersianDigits } from '@/lib/format';
@@ -45,6 +47,7 @@ export default function SettingsPage() {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [accentColor, setAccentColor] = useState('#C9A24B');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [menuTemplate, setMenuTemplate] = useState<MenuTemplate>(MenuTemplate.CLASSIC);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
 
   useEffect(() => {
@@ -57,6 +60,7 @@ export default function SettingsPage() {
     setCoverUrl(data.branding.coverUrl);
     setAccentColor(data.branding.accentColor);
     setTheme(data.branding.theme);
+    setMenuTemplate(data.branding.menuTemplate);
     setSettings(data.settings);
   }, [restaurantQuery.data]);
 
@@ -86,6 +90,7 @@ export default function SettingsPage() {
         coverUrl,
         accentColor,
         theme,
+        menuTemplate,
       }),
     onSuccess: () => {
       toast.success('ظاهر منو به‌روزرسانی شد');
@@ -231,9 +236,33 @@ export default function SettingsPage() {
           ) : null}
 
           <div>
+            <p className="text-sm font-medium text-ink-muted">قالب منو</p>
+            <p className="mb-3 text-xs text-ink-subtle">
+              چیدمان منویی که مشتری بعد از اسکن QR می‌بیند. انتخاب یک قالب، رنگ و تم
+              پیشنهادی‌اش را هم اعمال می‌کند — هر دو را بعد می‌توانید تغییر دهید.
+              دسته‌بندی‌هایی که هنوز عکس ندارند، به‌جای قاب خالی به‌صورت فهرست نمایش
+              داده می‌شوند.
+            </p>
+            <MenuTemplatePicker
+              value={menuTemplate}
+              accentColor={accentColor}
+              theme={theme}
+              disabled={!editable}
+              onChange={(id, spec) => {
+                setMenuTemplate(id);
+                // The template's own palette is what makes it read as that
+                // style; applying it is the point of choosing one.
+                setAccentColor(spec.defaultAccent);
+                setTheme(spec.defaultTheme);
+              }}
+            />
+          </div>
+
+          <div>
             <p className="mb-2 text-sm font-medium text-ink-muted">رنگ شاخص</p>
             <div className="flex flex-wrap items-center gap-2">
-              {['#C9A24B', '#B45309', '#0F766E', '#7C3AED', '#BE123C'].map((color) => (
+              {/* The five template accents, so the swatches and the templates agree. */}
+              {['#C9A24B', '#C2410C', '#0F766E', '#DC2626', '#57534E'].map((color) => (
                 <button
                   key={color}
                   disabled={!editable}

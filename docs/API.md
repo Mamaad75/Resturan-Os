@@ -333,6 +333,24 @@ of them. Omitting the field leaves the existing groups untouched.
 
 ---
 
+## Menu templates
+
+`PATCH /restaurant/branding` accepts `menuTemplate` alongside the colours and
+logo. Valid values: `CLASSIC`, `TRADITIONAL`, `CAFE`, `FASTFOOD`, `MINIMAL`.
+
+The column is a plain string, not a database enum, so a new template ships
+without a migration and a template that is later retired does not strand the
+restaurants that chose it — an unrecognised value resolves to `CLASSIC` on
+read. Anything not currently in the list is rejected on write.
+
+Each template carries a recommended accent colour and light/dark setting in
+`MENU_TEMPLATE_SPECS` (`@restaurant-os/types`); the admin applies them when the
+owner picks a template, and the owner can override either afterwards. The
+public menu payload carries the resolved value under
+`restaurant.branding.menuTemplate`.
+
+---
+
 ## Tables, QR, staff, settings
 
 | Method | Path | Permission |

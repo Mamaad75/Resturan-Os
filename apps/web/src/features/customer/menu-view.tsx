@@ -1,6 +1,10 @@
 'use client';
 
-import type { PublicMenu, PublicProduct } from '@restaurant-os/types';
+import {
+  menuTemplateSpec,
+  type PublicMenu,
+  type PublicProduct,
+} from '@restaurant-os/types';
 import { MapPin, Phone, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -8,6 +12,12 @@ import { Badge, EmptyState } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
 import { CartProvider, useCart } from './cart';
+import {
+  effectiveLayout,
+  hexToRgbChannels,
+  templateStyles,
+  type TemplateStyles,
+} from './menu-templates';
 import { CheckoutSheet } from './checkout-sheet';
 import { ProductSheet } from './product-sheet';
 import { WaiterCallButton } from './waiter-call';
@@ -23,6 +33,10 @@ export function MenuView({ menu, slug }: { menu: PublicMenu; slug: string }) {
 function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
   const { restaurant, categories } = menu;
   const cart = useCart();
+  // One source of truth for the look: the admin preview resolves the same
+  // spec through the same helper.
+  const spec = menuTemplateSpec(restaurant.branding.menuTemplate);
+  const styles = templateStyles(spec);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '');
   const [selectedProduct, setSelectedProduct] = useState<PublicProduct | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -82,6 +96,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
     <div
       className="min-h-dvh bg-canvas pb-28"
       data-theme={restaurant.branding.theme === 'light' ? 'light' : undefined}
+      data-menu-template={spec.id}
       style={
         {
           // The restaurant's own accent colour drives the whole page.
@@ -89,7 +104,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
         } as React.CSSProperties
       }
     >
-      <RestaurantHeader restaurant={restaurant} slug={slug} />
+      <RestaurantHeader restaurant={restaurant} slug={slug} styles={styles} />
 
       {/* Sticky category rail */}
       {categories.length > 0 ? (
@@ -108,9 +123,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                 aria-current={activeCategory === category.id}
                 className={cn(
                   'shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors',
-                  activeCategory === category.id
-                    ? 'bg-gold text-ink-inverse'
-                    : 'bg-surface-raised text-ink-muted hover:text-ink',
+                  activeCategory === category.id ? styles.chipActive : styles.chipIdle,
                 )}
               >
                 {category.nameFa}
@@ -130,11 +143,11 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
           />
         ) : null}
 
-        {featured.length > 0 ? (
+        {featured.length > 0 && spec.showFeaturedRail ? (
           <section className="pt-6" aria-labelledby="featured-heading">
             <h2
               id="featured-heading"
-              className="gold-rule mb-4 flex items-center gap-2 text-lg font-bold text-ink"
+              className={cn('flex items-center gap-2', styles.heading)}
             >
               <Sparkles className="size-4 text-gold" />
               پیشنهاد ویژه
@@ -144,7 +157,10 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                 <button
                   key={product.id}
                   onClick={() => setSelectedProduct(product)}
-                  className="group w-40 shrink-0 overflow-hidden rounded-2xl border border-line bg-surface text-start transition-colors hover:border-gold/40"
+                  className={cn(
+                    'group w-40 shrink-0 overflow-hidden border border-line bg-surface text-start transition-colors hover:border-gold/40',
+                    styles.radius,
+                  )}
                 >
                   <div className="relative aspect-square bg-surface-sunken">
                     {product.imageUrl ? (
@@ -173,33 +189,42 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
           </section>
         ) : null}
 
-        {categories.map((category) => (
-          <section
-            key={category.id}
-            id={category.id}
-            ref={(el) => {
-              sectionRefs.current[category.id] = el;
-            }}
-            className="scroll-mt-32 pt-8"
-            aria-labelledby={`heading-${category.id}`}
-          >
-            <h2
-              id={`heading-${category.id}`}
-              className="gold-rule mb-4 text-lg font-bold text-ink"
+        {categories.map((category) => {
+          // Resolved per section: a category nobody has photographed renders
+          // as a list even under a photo-led template.
+          const sectionStyles = templateStyles(
+            spec,
+            effectiveLayout(
+              spec,
+              category.products.some((product) => product.imageUrl != null),
+            ),
+          );
+          return (
+            <section
+              key={category.id}
+              id={category.id}
+              ref={(el) => {
+                sectionRefs.current[category.id] = el;
+              }}
+              className={styles.section}
+              aria-labelledby={`heading-${category.id}`}
             >
-              {category.nameFa}
-            </h2>
-            <div className="space-y-3">
-              {category.products.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={product}
-                  onSelect={() => setSelectedProduct(product)}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+              <h2 id={`heading-${category.id}`} className={styles.heading}>
+                {category.nameFa}
+              </h2>
+              <div className={sectionStyles.productList}>
+                {category.products.map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    styles={sectionStyles}
+                    onSelect={() => setSelectedProduct(product)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </main>
 
       {/* Floating cart */}
@@ -238,9 +263,11 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
 function RestaurantHeader({
   restaurant,
   slug,
+  styles,
 }: {
   restaurant: PublicMenu['restaurant'];
   slug: string;
+  styles: TemplateStyles;
 }) {
   return (
     <header className="relative">
@@ -268,7 +295,12 @@ function RestaurantHeader({
       */}
       <div className="relative z-10 mx-auto -mt-14 max-w-3xl px-4">
         <div className="flex items-end gap-4">
-          <div className="relative size-20 shrink-0 overflow-hidden rounded-2xl border-2 border-canvas bg-surface-raised shadow-lifted">
+          <div
+            className={cn(
+              'relative size-20 shrink-0 overflow-hidden border-2 border-canvas bg-surface-raised shadow-lifted',
+              styles.radius,
+            )}
+          >
             {restaurant.branding.logoUrl ? (
               <Image
                 src={restaurant.branding.logoUrl}
@@ -347,76 +379,137 @@ function RestaurantHeader({
   );
 }
 
+/**
+ * One product, rendered the way the restaurant's template asks for.
+ *
+ * The four layouts differ in what they lead with - a thumbnail beside the
+ * text, a photo above it, a full-width photo, or no photo at all - so each
+ * gets its own body rather than one body full of conditionals.
+ */
 function ProductCard({
   product,
+  styles,
   onSelect,
 }: {
   product: PublicProduct;
+  styles: TemplateStyles;
   onSelect: () => void;
 }) {
   const hasDiscount =
     product.discountPrice != null && product.discountPrice < product.price;
+
+  const price = (
+    <div className="flex items-baseline gap-2">
+      <span className={styles.price}>
+        {formatMoney(product.effectivePrice, 'IRT', { withUnit: false })}
+      </span>
+      <span className="text-xs text-ink-subtle">تومان</span>
+      {hasDiscount ? (
+        <span className="text-xs text-ink-subtle line-through">
+          {formatMoney(product.price, 'IRT', { withUnit: false })}
+        </span>
+      ) : null}
+    </div>
+  );
+
+  const soldOut = !product.isAvailable ? (
+    <span className="shrink-0 rounded-md bg-surface-raised px-2 py-0.5 text-[0.7rem] text-ink-subtle">
+      ناموجود
+    </span>
+  ) : null;
+
+  const photo = (sizes: string, aspect: string) => (
+    <div className={cn('relative overflow-hidden bg-surface-sunken', aspect)}>
+      {product.imageUrl ? (
+        <Image
+          src={product.imageUrl}
+          alt={product.nameFa}
+          fill
+          sizes={sizes}
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      ) : (
+        <PlaceholderArt />
+      )}
+      {product.isAvailable ? (
+        <span className="absolute bottom-2 end-2 flex size-8 items-center justify-center rounded-lg bg-gold text-ink-inverse shadow">
+          <ShoppingBag className="size-4" />
+        </span>
+      ) : null}
+    </div>
+  );
 
   return (
     <button
       onClick={product.isAvailable ? onSelect : undefined}
       disabled={!product.isAvailable}
       className={cn(
-        'group flex w-full gap-4 rounded-2xl border border-line bg-surface p-3 text-start transition-colors',
-        product.isAvailable
-          ? 'hover:border-gold/40'
-          : 'cursor-not-allowed opacity-55',
+        styles.card,
+        'transition-colors',
+        product.isAvailable ? 'hover:border-gold/40' : 'cursor-not-allowed opacity-55',
       )}
     >
-      <div className="min-w-0 flex-1 py-1">
-        <div className="flex items-start gap-2">
-          <h3 className="min-w-0 flex-1 truncate font-medium text-ink">
-            {product.nameFa}
-          </h3>
-          {!product.isAvailable ? (
-            <span className="shrink-0 rounded-md bg-surface-raised px-2 py-0.5 text-[0.7rem] text-ink-subtle">
-              ناموجود
-            </span>
-          ) : null}
-        </div>
-
-        {product.descriptionFa ? (
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-muted">
-            {product.descriptionFa}
-          </p>
-        ) : null}
-
-        <div className="mt-2.5 flex items-baseline gap-2">
-          <span className="font-semibold text-gold">
-            {formatMoney(product.effectivePrice, 'IRT', { withUnit: false })}
-          </span>
-          <span className="text-xs text-ink-subtle">تومان</span>
-          {hasDiscount ? (
-            <span className="text-xs text-ink-subtle line-through">
-              {formatMoney(product.price, 'IRT', { withUnit: false })}
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="relative size-24 shrink-0 overflow-hidden rounded-xl bg-surface-sunken">
-        {product.imageUrl ? (
-          <Image
-            src={product.imageUrl}
-            alt={product.nameFa}
-            fill
-            sizes="96px"
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : (
-          <PlaceholderArt />
-        )}
-        {product.isAvailable ? (
-          <span className="absolute bottom-1.5 end-1.5 flex size-7 items-center justify-center rounded-lg bg-gold text-ink-inverse shadow">
-            <ShoppingBag className="size-3.5" />
-          </span>
-        ) : null}
-      </div>
+      {styles.layout === 'text' ? (
+        <>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="min-w-0 flex-1 truncate font-medium text-ink">
+                {product.nameFa}
+              </h3>
+              {soldOut}
+            </div>
+            {product.descriptionFa ? (
+              <p className="mt-1 line-clamp-1 text-xs leading-relaxed text-ink-subtle">
+                {product.descriptionFa}
+              </p>
+            ) : null}
+          </div>
+          {/* A dotted leader carries the eye across the gap to the price. */}
+          <span className="mx-1 hidden h-px flex-1 self-center border-b border-dotted border-line-strong sm:block" />
+          {price}
+        </>
+      ) : styles.layout === 'list' ? (
+        <>
+          <div className="min-w-0 flex-1 py-1">
+            <div className="flex items-start gap-2">
+              <h3 className="min-w-0 flex-1 truncate font-medium text-ink">
+                {product.nameFa}
+              </h3>
+              {soldOut}
+            </div>
+            {product.descriptionFa ? (
+              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-muted">
+                {product.descriptionFa}
+              </p>
+            ) : null}
+            <div className="mt-2.5">{price}</div>
+          </div>
+          <div className={cn('size-24 shrink-0', styles.radius, 'overflow-hidden')}>
+            {photo('96px', 'size-full')}
+          </div>
+        </>
+      ) : (
+        <>
+          {photo(
+            styles.layout === 'gallery' ? '(max-width: 768px) 100vw, 640px' : '50vw',
+            styles.layout === 'gallery' ? 'aspect-[16/9] w-full' : 'aspect-square w-full',
+          )}
+          <div className="flex flex-1 flex-col gap-1 p-3">
+            <div className="flex items-start gap-2">
+              <h3 className="min-w-0 flex-1 font-medium leading-snug text-ink">
+                {product.nameFa}
+              </h3>
+              {soldOut}
+            </div>
+            {product.descriptionFa ? (
+              <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">
+                {product.descriptionFa}
+              </p>
+            ) : null}
+            <div className="mt-auto pt-2">{price}</div>
+          </div>
+        </>
+      )}
     </button>
   );
 }
@@ -428,19 +521,4 @@ function PlaceholderArt() {
       <UtensilsCrossed className="size-6 text-ink-subtle" />
     </div>
   );
-}
-
-/** "#C9A24B" -> "201 162 75", the channel form the CSS tokens expect. */
-function hexToRgbChannels(hex: string): string | null {
-  const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex.trim());
-  if (!match) return null;
-  let value = match[1];
-  if (value.length === 3) {
-    value = value
-      .split('')
-      .map((char) => char + char)
-      .join('');
-  }
-  const int = Number.parseInt(value, 16);
-  return `${(int >> 16) & 255} ${(int >> 8) & 255} ${int & 255}`;
 }

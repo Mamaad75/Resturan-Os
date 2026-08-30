@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
   AuditAction,
+  menuTemplateSpec,
   type PublicRestaurant,
   type RestaurantBranding,
   type RestaurantSettings,
@@ -150,6 +151,9 @@ export class RestaurantsService {
         ...(input.accentColor !== undefined ? { accentColor: input.accentColor } : {}),
         ...(input.theme !== undefined ? { theme: input.theme } : {}),
         ...(input.tagline !== undefined ? { tagline: input.tagline } : {}),
+        ...(input.menuTemplate !== undefined
+          ? { menuTemplate: input.menuTemplate }
+          : {}),
       },
     });
     this.audit.record({
@@ -355,6 +359,7 @@ export function toBranding(row: {
   accentColor: string;
   theme: string;
   tagline: string | null;
+  menuTemplate: string;
 }): RestaurantBranding {
   return {
     logoUrl: row.logoUrl,
@@ -363,6 +368,9 @@ export function toBranding(row: {
     accentColor: row.accentColor,
     theme: row.theme === 'light' ? 'light' : 'dark',
     tagline: row.tagline,
+    // Normalised through the spec lookup so a value written by an older
+    // release, or a template that has since been removed, still renders.
+    menuTemplate: menuTemplateSpec(row.menuTemplate).id,
   };
 }
 

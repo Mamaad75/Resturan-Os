@@ -11,6 +11,7 @@
 import { PrismaClient, type Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 import { randomBytes } from 'node:crypto';
+import { writeSeedImage } from './seed-images';
 import {
   SEED_CATEGORIES,
   SEED_CUSTOMERS,
@@ -25,6 +26,30 @@ const RESTAURANT_SLUG = 'cafe-roz';
 
 function token(): string {
   return randomBytes(24).toString('hex');
+}
+
+/**
+ * Demo artwork for a seeded product.
+ *
+ * Only the local storage driver writes files here; with `s3` configured the
+ * seed leaves products without an image rather than pushing fixtures into
+ * somebody's bucket.
+ */
+async function productImage(tenantId: string, nameFa: string): Promise<string | null> {
+  if ((process.env.STORAGE_DRIVER ?? 'local') !== 'local') return null;
+  try {
+    return await writeSeedImage({
+      tenantId,
+      key: nameFa,
+      localDir: process.env.STORAGE_LOCAL_DIR ?? './storage/uploads',
+      publicUrl: process.env.STORAGE_PUBLIC_URL ?? 'http://localhost:4000/uploads',
+    });
+  } catch (error) {
+    // A menu without pictures is still a working menu; never fail the seed
+    // over decoration.
+    console.warn(`  could not write demo image for ${nameFa}: ${(error as Error).message}`);
+    return null;
+  }
 }
 
 /** Deterministic-ish pseudo random so history looks varied but plausible. */
@@ -146,6 +171,7 @@ async function main() {
           displayOrder: productIndex,
           preparationMinutes: product.preparationMinutes,
           calories: product.calories ?? null,
+          imageUrl: await productImage(tenant.id, product.nameFa),
           ...(product.modifierGroups?.length
             ? {
                 modifierGroups: {

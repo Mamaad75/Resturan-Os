@@ -13,6 +13,7 @@ import type {
   TableStatus,
   UserRole,
 } from './enums';
+import type { MenuTemplate } from './menu-templates';
 
 /**
  * All monetary amounts are integers in the branch's configured currency unit
@@ -63,6 +64,8 @@ export interface RestaurantBranding {
   accentColor: string;
   theme: 'dark' | 'light';
   tagline: string | null;
+  /** Which layout the customer menu renders; see `menu-templates.ts`. */
+  menuTemplate: MenuTemplate;
 }
 
 export interface RestaurantSettings {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MENU_TEMPLATES } from '@restaurant-os/types';
 import {
   displayTextSchema,
   hexColorSchema,
@@ -21,6 +22,11 @@ export const updateBrandingSchema = z.object({
   accentColor: hexColorSchema.optional(),
   theme: z.enum(['dark', 'light']).optional(),
   tagline: optionalText(160, 'شعار'),
+  menuTemplate: z
+    .enum(MENU_TEMPLATES as [string, ...string[]], {
+      errorMap: () => ({ message: 'قالب منو معتبر نیست.' }),
+    })
+    .optional(),
 });
 export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
 

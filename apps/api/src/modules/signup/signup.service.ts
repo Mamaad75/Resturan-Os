@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   AuditAction,
+  MENU_TEMPLATE_SPECS,
+  MenuTemplate,
   ServiceMode,
   UserRole,
   type AuthSession,
@@ -27,6 +29,7 @@ const BUSINESS_PRESETS = {
     serviceChargeEnabled: true,
     serviceChargeBps: 1000,
     tagline: 'قهوه تخصصی و دسر خانگی',
+    menuTemplate: MenuTemplate.CAFE,
     starterCategories: ['نوشیدنی گرم', 'نوشیدنی سرد', 'دسر'],
   },
   restaurant: {
@@ -35,6 +38,7 @@ const BUSINESS_PRESETS = {
     serviceChargeEnabled: true,
     serviceChargeBps: 1000,
     tagline: 'غذای تازه و دست‌ساز',
+    menuTemplate: MenuTemplate.CLASSIC,
     starterCategories: ['پیش‌غذا', 'غذای اصلی', 'نوشیدنی'],
   },
   fastfood: {
@@ -43,6 +47,7 @@ const BUSINESS_PRESETS = {
     serviceChargeEnabled: false,
     serviceChargeBps: 0,
     tagline: 'سریع، داغ، تازه',
+    menuTemplate: MenuTemplate.FASTFOOD,
     starterCategories: ['برگر', 'پیتزا', 'ساندویچ', 'نوشیدنی'],
   },
 } as const;
@@ -121,6 +126,12 @@ export class SignupService {
             name: input.restaurantName,
             slug: input.slug,
             tagline: preset.tagline,
+            // The business type already tells us which menu style fits; a new
+            // restaurant should look like itself before anyone touches
+            // settings.
+            menuTemplate: preset.menuTemplate,
+            accentColor: MENU_TEMPLATE_SPECS[preset.menuTemplate].defaultAccent,
+            theme: MENU_TEMPLATE_SPECS[preset.menuTemplate].defaultTheme,
             serviceModes: [...preset.serviceModes],
             estimatedPrepMinutes: preset.estimatedPrepMinutes,
             serviceChargeEnabled: preset.serviceChargeEnabled,

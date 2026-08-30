@@ -84,6 +84,13 @@ full menu editing (categories, products, images, modifier groups), discount
 campaigns, sales reports, staff and roles, restaurant settings and branding,
 QR code generation and a printable QR sheet.
 
+**Per-restaurant look**
+Five menu templates — کلاسیک، سنتی ایرانی، کافه، فست‌فود، مینیمال — each with
+its own layout, palette and typography, chosen from the admin with a live
+preview. Logo, cover image, accent colour and light/dark are set per
+restaurant, and a new signup starts on the template that matches its business
+type.
+
 **Onboarding**
 A restaurant signs itself up at `/signup` — tenant, restaurant, branch, menu,
 starter categories, owner account and QR code are created in one transaction —
@@ -409,7 +416,7 @@ reach the client.
 
 ```bash
 pnpm test        # 67 unit tests — money, time, state machine, RBAC, isolation guard
-pnpm test:e2e    # 152 integration tests against a real PostgreSQL database
+pnpm test:e2e    # 159 integration tests against a real PostgreSQL database
 ```
 
 Integration tests boot the real Nest application and use no mocks, because the

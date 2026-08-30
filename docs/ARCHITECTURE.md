@@ -390,6 +390,21 @@ restaurant re-theme its customer menu (accent colour, light/dark) at runtime
 without a rebuild. Gold is reserved for primary actions, active navigation and
 the numbers that matter; overusing it would make it mean nothing.
 
+**Menu templates.** A restaurant chooses how its customer menu is laid out,
+not just what colour it is. A template is a descriptor in
+`packages/types/src/menu-templates.ts` — layout, heading treatment, corner
+radius, density, price weight, default palette — and `templateStyles()` in the
+web app is the single place that turns one into class names. The live menu and
+the admin's preview thumbnails both call it, so what an owner sees while
+choosing is what a guest gets; a preview drawn from separate rules would drift
+the first time either changed.
+
+Photo-led templates resolve their layout per category rather than per menu: a
+category where nothing has been photographed falls back to the list, because a
+grid of empty frames is a worse first impression than a plain list, and every
+newly signed-up restaurant starts with no photos. The rest of the template
+still applies, so the choice is not silently discarded.
+
 **RTL.** Logical properties (`ms-`, `me-`, `ps-`, `pe-`, `start-`, `end-`)
 throughout rather than physical left/right, so the layout mirrors correctly.
 Vazirmatn is self-hosted — no external font request on the customer's first
@@ -408,7 +423,7 @@ customer menu is designed mobile-first and scaled up.
 rounding, Tehran day boundaries and report ranges, the full state-machine
 transition table, the RBAC matrix, and the tenant guard's accept/reject rules.
 
-**Integration tests (152)** boot the real Nest application against a real
+**Integration tests (159)** boot the real Nest application against a real
 PostgreSQL database with no mocks, because the behaviour worth covering only
 exists end to end — transactions, isolation, the state machine, money. Each
 suite truncates the database, so tests never depend on each other.
