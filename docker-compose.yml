@@ -1,4 +1,4 @@
-# Restaurant OS - local development stack.
+# FoodOS - local development stack.
 #
 #   docker compose up -d          start postgres, redis and minio
 #   docker compose --profile app up -d   also build and run the api and web apps

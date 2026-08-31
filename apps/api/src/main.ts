@@ -24,9 +24,10 @@ async function bootstrap() {
 
   if (!config.isProduction) {
     const swaggerConfig = new DocumentBuilder()
-      .setTitle('Restaurant OS API')
+      .setTitle('FoodOS API')
       .setDescription(
-        'Multi-tenant restaurant and cafe operating system. All responses use the ' +
+        'FoodOS - multi-tenant operating system for cafes, restaurants and ' +
+          'fast food. All responses use the ' +
           'envelope { success, data } or { success, error: { code, message } }.',
       )
       .setVersion('1.0.0')
@@ -43,7 +44,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   await app.listen(config.port, '0.0.0.0');
-  logger.log(`Restaurant OS API listening on port ${config.port} (${config.nodeEnv})`);
+  logger.log(`FoodOS API listening on port ${config.port} (${config.nodeEnv})`);
 }
 
 void bootstrap();

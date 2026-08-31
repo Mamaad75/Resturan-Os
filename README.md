@@ -1,4 +1,13 @@
-# Restaurant OS
+# FoodOS
+
+Multi-tenant SaaS for cafes, restaurants and fast-food businesses: a digital
+menu and ordering system wired to a customer book, so each order becomes a
+reason for the next one.
+
+> The npm workspace packages are still named `@restaurant-os/*` and the default
+> database is still `restaurant_os`. Those are internal identifiers, deliberately
+> left alone: renaming them would mean a migration and a redeploy for no
+> user-visible gain. The product is FoodOS everywhere a person can see it.
 
 A multi-tenant restaurant and café operating system built for the Iranian
 market: digital menu, QR ordering, counter (POS), kitchen display, table

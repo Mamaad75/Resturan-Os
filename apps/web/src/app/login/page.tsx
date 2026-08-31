@@ -84,7 +84,7 @@ export default function LoginPage() {
           </div>
           <h1 className="text-2xl font-bold text-ink">ورود به سیستم</h1>
           <p className="mt-1.5 text-sm text-ink-muted">
-            سامانه مدیریت رستوران و کافه
+            فوداواس — سیستم رشد فروش کافه و رستوران
           </p>
         </div>
 

@@ -65,6 +65,12 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
 }
 
 let refreshInFlight: Promise<boolean> | null = null;
+let platformRefreshInFlight: Promise<boolean> | null = null;
+
+/** Platform routes live under this prefix and refresh against their own endpoint. */
+function isPlatformPath(path: string): boolean {
+  return path.startsWith('/platform');
+}
 
 /**
  * Refreshes the session using the httpOnly refresh cookie.
@@ -73,6 +79,46 @@ let refreshInFlight: Promise<boolean> | null = null;
  * queries at once does not rotate the refresh token six times (which would
  * invalidate all but one of them).
  */
+/**
+ * Refreshes the FoodOS platform session.
+ *
+ * Separate from the tenant refresh because it is a different cookie, a
+ * different endpoint and a different token. Sharing one function would mean a
+ * 401 on a platform route rotating a restaurant's session.
+ */
+async function refreshPlatformSession(): Promise<boolean> {
+  platformRefreshInFlight ??= (async () => {
+    try {
+      const response = await fetch(`${API_BASE}/platform/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) return false;
+      const payload = (await response.json()) as ApiResponse<{ accessToken: string }>;
+      if (payload.success) {
+        onPlatformTokenRefreshed?.(payload.data.accessToken);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      setTimeout(() => {
+        platformRefreshInFlight = null;
+      }, 0);
+    }
+  })();
+  return platformRefreshInFlight;
+}
+
+let onPlatformTokenRefreshed: ((token: string) => void) | null = null;
+export function setPlatformTokenHandler(
+  handler: ((token: string) => void) | null,
+): void {
+  onPlatformTokenRefreshed = handler;
+}
+
 async function refreshSession(): Promise<boolean> {
   refreshInFlight ??= (async () => {
     try {
@@ -157,11 +203,15 @@ export async function apiRequest<T>(
     retryOnAuthFailure &&
     (code === 'TOKEN_EXPIRED' || code === 'UNAUTHENTICATED')
   ) {
-    const refreshed = await refreshSession();
+    // Refresh whichever session this path belongs to. A platform 401 must not
+    // rotate a restaurant's refresh token, and vice versa.
+    const refreshed = isPlatformPath(path)
+      ? await refreshPlatformSession()
+      : await refreshSession();
     if (refreshed) {
       return apiRequest<T>(path, { ...options, retryOnAuthFailure: false });
     }
-    onSessionLost?.();
+    if (!isPlatformPath(path)) onSessionLost?.();
   }
 
   throw new ApiError(code, message, response.status, details);

@@ -1,4 +1,4 @@
-# Restaurant OS — API reference
+# FoodOS — API reference
 
 Base URL: `http://localhost:4000/api`
 Interactive Swagger UI (development): `http://localhost:4000/api/docs`

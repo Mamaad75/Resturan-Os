@@ -1,4 +1,4 @@
-# Restaurant OS — architecture
+# FoodOS — architecture
 
 Decisions, and the reasoning behind them.
 

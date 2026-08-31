@@ -1,6 +1,11 @@
 'use client';
 
-import { Permission, type Permission as PermissionType } from '@restaurant-os/types';
+import {
+  Permission,
+  tablesEnabled,
+  type Permission as PermissionType,
+} from '@restaurant-os/types';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
   Bell,
@@ -16,6 +21,7 @@ import {
   Table2,
   Tag,
   UserCog,
+  Users,
   UtensilsCrossed,
   X,
 } from 'lucide-react';
@@ -25,6 +31,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { cn } from '@/lib/cn';
+import { restaurantService, subscriptionService } from '@/services';
 import { NotificationBell } from './notification-bell';
 
 interface NavItem {
@@ -34,6 +41,17 @@ interface NavItem {
   permissions: PermissionType[];
   /** Shown in the mobile bottom bar (space for five at most). */
   primary?: boolean;
+  /**
+   * Extra condition beyond permissions. Used for surfaces that only make sense
+   * for some businesses - a takeaway-only restaurant has no tables, so the
+   * whole section is hidden rather than shown empty.
+   */
+  visible?: (context: NavContext) => boolean;
+}
+
+interface NavContext {
+  hasTables: boolean;
+  crmEnabled: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -57,6 +75,7 @@ const NAV_ITEMS: NavItem[] = [
     icon: Table2,
     permissions: [Permission.TABLE_READ],
     primary: true,
+    visible: (context) => context.hasTables,
   },
   {
     href: '/admin/menu',
@@ -76,6 +95,13 @@ const NAV_ITEMS: NavItem[] = [
     label: 'آشپزخانه',
     icon: ChefHat,
     permissions: [Permission.KITCHEN_READ],
+  },
+  {
+    href: '/admin/customers',
+    label: 'مشتریان',
+    icon: Users,
+    permissions: [Permission.REPORT_READ],
+    visible: (context) => context.crmEnabled,
   },
   {
     href: '/admin/coupons',
@@ -122,6 +148,22 @@ export function AppShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Both drive navigation visibility. `enabled` keeps them off the login
+  // redirect path, where there is no session to query with.
+  const signedIn = status === 'authenticated';
+  const restaurantQuery = useQuery({
+    queryKey: ['restaurant'],
+    queryFn: () => restaurantService.get(),
+    enabled: signedIn,
+    staleTime: 60_000,
+  });
+  const subscriptionQuery = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => subscriptionService.get(),
+    enabled: signedIn,
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
     if (status === 'anonymous') router.replace('/login');
   }, [status, router]);
@@ -137,7 +179,21 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  const visibleItems = NAV_ITEMS.filter((item) => can(...item.permissions));
+  /*
+   * Navigation reflects the business, not just the role: a takeaway-only
+   * restaurant never sees Tables, and a plan without CRM never sees Customers.
+   * The API enforces both independently - this only keeps the sidebar honest.
+   */
+  const navContext: NavContext = {
+    hasTables: restaurantQuery.data
+      ? tablesEnabled(restaurantQuery.data.settings.serviceModes)
+      : true,
+    crmEnabled: subscriptionQuery.data?.entitlements.features.crmEnabled ?? false,
+  };
+
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => can(...item.permissions) && (item.visible?.(navContext) ?? true),
+  );
   const primaryItems = visibleItems.filter((item) => item.primary).slice(0, 4);
 
   return (
@@ -152,7 +208,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <p className="truncate text-sm font-semibold text-ink">
               {tenant?.name ?? 'رستوران'}
             </p>
-            <p className="text-xs text-ink-subtle">سیستم مدیریت</p>
+            <p className="text-xs text-ink-subtle">فوداواس</p>
           </div>
         </div>
 

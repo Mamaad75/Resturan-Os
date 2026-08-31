@@ -1,7 +1,9 @@
 'use client';
 
 import {
-  menuTemplateSpec,
+  presetConfig,
+  resolveTheme,
+  type MenuThemeConfig,
   type PublicMenu,
   type PublicProduct,
 } from '@restaurant-os/types';
@@ -13,11 +15,12 @@ import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
 import { CartProvider, useCart } from './cart';
 import {
-  effectiveLayout,
   hexToRgbChannels,
-  templateStyles,
-  type TemplateStyles,
-} from './menu-templates';
+  scopeCustomCss,
+  themeClasses,
+  themeVariables,
+  type ThemeClasses,
+} from './theme-runtime';
 import { CheckoutSheet } from './checkout-sheet';
 import { ProductSheet } from './product-sheet';
 import { WaiterCallButton } from './waiter-call';
@@ -33,10 +36,16 @@ export function MenuView({ menu, slug }: { menu: PublicMenu; slug: string }) {
 function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
   const { restaurant, categories } = menu;
   const cart = useCart();
-  // One source of truth for the look: the admin preview resolves the same
-  // spec through the same helper.
-  const spec = menuTemplateSpec(restaurant.branding.menuTemplate);
-  const styles = templateStyles(spec);
+
+  /*
+   * The published theme drives everything below. A restaurant that has never
+   * opened the customizer has no theme row yet, so the preset named on its
+   * branding is used instead - the menu looks identical either way.
+   */
+  const config: MenuThemeConfig =
+    menu.theme?.config ?? presetConfig(restaurant.branding.menuTemplate);
+  const styles = themeClasses(config);
+  const customCss = scopeCustomCss(menu.theme?.customCss);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '');
   const [selectedProduct, setSelectedProduct] = useState<PublicProduct | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
@@ -94,25 +103,38 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
 
   return (
     <div
+      id="foodos-menu"
       className="min-h-dvh bg-canvas pb-28"
-      data-theme={restaurant.branding.theme === 'light' ? 'light' : undefined}
-      data-menu-template={spec.id}
-      style={
-        {
-          // The restaurant's own accent colour drives the whole page.
-          '--gold': hexToRgbChannels(restaurant.branding.accentColor) ?? undefined,
-        } as React.CSSProperties
-      }
+      // The theme carries its own colours, so the light/dark token set is
+      // chosen from the theme's background rather than the legacy flag.
+      data-theme={isLightBackground(config.colors.background) ? 'light' : undefined}
+      style={themeVariables(config)}
     >
-      <RestaurantHeader restaurant={restaurant} slug={slug} styles={styles} />
+      {/*
+        Tenant CSS, scoped to this container. It is injected last so it can
+        override the theme, and it can never escape `#foodos-menu`.
+      */}
+      {customCss ? (
+        <style dangerouslySetInnerHTML={{ __html: customCss }} />
+      ) : null}
+
+      <RestaurantHeader
+        restaurant={restaurant}
+        slug={slug}
+        styles={styles}
+        header={config.header}
+      />
 
       {/* Sticky category rail */}
       {categories.length > 0 ? (
         <nav
           aria-label="دسته‌بندی‌ها"
-          className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur-xl"
+          className={cn(
+            'z-30 border-b border-line bg-canvas/85 backdrop-blur-xl',
+            config.header.stickyCategoryNav && 'sticky top-0',
+          )}
         >
-          <div className="no-scrollbar mx-auto flex max-w-3xl gap-2 overflow-x-auto px-4 py-3">
+          <div className="no-scrollbar mx-auto flex w-full max-w-[var(--menu-container)] gap-2 overflow-x-auto px-4 py-3">
             {categories.map((category) => (
               <button
                 key={category.id}
@@ -122,7 +144,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                 onClick={() => scrollToCategory(category.id)}
                 aria-current={activeCategory === category.id}
                 className={cn(
-                  'shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                  'shrink-0 text-sm font-medium transition-colors',
                   activeCategory === category.id ? styles.chipActive : styles.chipIdle,
                 )}
               >
@@ -133,7 +155,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
         </nav>
       ) : null}
 
-      <main className="mx-auto max-w-3xl px-4">
+      <main className="mx-auto w-full max-w-[var(--menu-container)] px-4">
         {categories.length === 0 ? (
           <EmptyState
             icon={<UtensilsCrossed className="size-6" />}
@@ -143,8 +165,11 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
           />
         ) : null}
 
-        {featured.length > 0 && spec.showFeaturedRail ? (
-          <section className="pt-6" aria-labelledby="featured-heading">
+        {featured.length > 0 && config.showFeaturedRail ? (
+          <section
+            className="pt-[var(--menu-section-gap)]"
+            aria-labelledby="featured-heading"
+          >
             <h2
               id="featured-heading"
               className={cn('flex items-center gap-2', styles.heading)}
@@ -157,10 +182,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                 <button
                   key={product.id}
                   onClick={() => setSelectedProduct(product)}
-                  className={cn(
-                    'group w-40 shrink-0 overflow-hidden border border-line bg-surface text-start transition-colors hover:border-gold/40',
-                    styles.radius,
-                  )}
+                  className="group w-40 shrink-0 overflow-hidden rounded-[var(--menu-radius)] border border-line bg-surface text-start transition-colors hover:border-gold/40"
                 >
                   <div className="relative aspect-square bg-surface-sunken">
                     {product.imageUrl ? (
@@ -190,15 +212,25 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
         ) : null}
 
         {categories.map((category) => {
-          // Resolved per section: a category nobody has photographed renders
-          // as a list even under a photo-led template.
-          const sectionStyles = templateStyles(
-            spec,
-            effectiveLayout(
-              spec,
-              category.products.some((product) => product.imageUrl != null),
-            ),
-          );
+          /*
+           * Resolved per section. A photo-led layout in a category nobody has
+           * photographed is a wall of empty frames - the state every new
+           * restaurant starts in - so those sections fall back to the list.
+           * Everything else about the theme still applies.
+           */
+          const hasPhotos = category.products.some((p) => p.imageUrl != null);
+          const sectionStyles =
+            config.productCard.showImage &&
+            !hasPhotos &&
+            (config.layout.productLayout === 'grid' ||
+              config.layout.productLayout === 'gallery')
+              ? themeClasses({
+                  ...config,
+                  layout: { ...config.layout, productLayout: 'list' },
+                })
+              : styles;
+          const sectionLayout =
+            sectionStyles === styles ? config.layout.productLayout : 'list';
           return (
             <section
               key={category.id}
@@ -206,7 +238,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
               ref={(el) => {
                 sectionRefs.current[category.id] = el;
               }}
-              className={styles.section}
+              className="scroll-mt-32 pt-[var(--menu-section-gap)]"
               aria-labelledby={`heading-${category.id}`}
             >
               <h2 id={`heading-${category.id}`} className={styles.heading}>
@@ -218,6 +250,8 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                     key={product.id}
                     product={product}
                     styles={sectionStyles}
+                    layout={sectionLayout}
+                    card={config.productCard}
                     onSelect={() => setSelectedProduct(product)}
                   />
                 ))}
@@ -264,13 +298,16 @@ function RestaurantHeader({
   restaurant,
   slug,
   styles,
+  header,
 }: {
   restaurant: PublicMenu['restaurant'];
   slug: string;
-  styles: TemplateStyles;
+  styles: ThemeClasses;
+  header: MenuThemeConfig['header'];
 }) {
   return (
     <header className="relative">
+      {header.showCover ? (
       <div className="relative h-44 overflow-hidden bg-surface-sunken sm:h-56">
         {restaurant.branding.coverUrl ? (
           <Image
@@ -286,6 +323,7 @@ function RestaurantHeader({
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-canvas via-canvas/55 to-transparent" />
       </div>
+      ) : null}
 
       {/*
         `relative` is load-bearing: the cover's gradient overlay is absolutely
@@ -293,14 +331,20 @@ function RestaurantHeader({
         matter the DOM order. Without this the overlay covers the restaurant
         name, which sits inside the cover's height because of the -mt-14 pull.
       */}
-      <div className="relative z-10 mx-auto -mt-14 max-w-3xl px-4">
-        <div className="flex items-end gap-4">
-          <div
-            className={cn(
-              'relative size-20 shrink-0 overflow-hidden border-2 border-canvas bg-surface-raised shadow-lifted',
-              styles.radius,
-            )}
-          >
+      <div
+        className={cn(
+          'relative z-10 mx-auto w-full max-w-[var(--menu-container)] px-4',
+          header.showCover ? '-mt-14' : 'pt-6',
+        )}
+      >
+        <div
+          className={cn(
+            'flex items-end gap-4',
+            header.logoPlacement === 'center' && 'flex-col items-center text-center',
+          )}
+        >
+          {header.logoPlacement === 'hidden' ? null : (
+          <div className="relative size-20 shrink-0 overflow-hidden rounded-[var(--menu-radius)] border-2 border-canvas bg-surface-raised shadow-lifted">
             {restaurant.branding.logoUrl ? (
               <Image
                 src={restaurant.branding.logoUrl}
@@ -315,11 +359,19 @@ function RestaurantHeader({
               </div>
             )}
           </div>
+          )}
           <div className="min-w-0 flex-1 pb-1">
-            <h1 className="truncate text-xl font-bold text-ink sm:text-2xl">
+            <h1
+              className="truncate text-xl text-ink sm:text-2xl"
+              style={{
+                fontFamily: 'var(--menu-font-headline)',
+                fontWeight: 'var(--menu-headline-weight)' as never,
+                letterSpacing: 'var(--menu-headline-tracking)',
+              }}
+            >
               {restaurant.name}
             </h1>
-            {restaurant.branding.tagline ? (
+            {header.showTagline && restaurant.branding.tagline ? (
               <p className="truncate text-sm text-ink-muted">
                 {restaurant.branding.tagline}
               </p>
@@ -327,7 +379,13 @@ function RestaurantHeader({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div
+          className={cn(
+            'mt-4 flex flex-wrap items-center gap-2',
+            header.logoPlacement === 'center' && 'justify-center',
+            !header.showStatusBadges && 'hidden',
+          )}
+        >
           {restaurant.table ? (
             <Badge tone="gold" dot>
               میز {toPersianDigits(restaurant.table.number)}
@@ -353,7 +411,8 @@ function RestaurantHeader({
           ) : null}
         </div>
 
-        {restaurant.branch.address || restaurant.branch.phone ? (
+        {header.showBranchInfo &&
+        (restaurant.branch.address || restaurant.branch.phone) ? (
           <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-ink-subtle">
             {restaurant.branch.address ? (
               <span className="flex items-center gap-1.5">
@@ -389,10 +448,14 @@ function RestaurantHeader({
 function ProductCard({
   product,
   styles,
+  layout,
+  card,
   onSelect,
 }: {
   product: PublicProduct;
-  styles: TemplateStyles;
+  styles: ThemeClasses;
+  layout: MenuThemeConfig['layout']['productLayout'];
+  card: MenuThemeConfig['productCard'];
   onSelect: () => void;
 }) {
   const hasDiscount =
@@ -413,10 +476,39 @@ function ProductCard({
   );
 
   const soldOut = !product.isAvailable ? (
-    <span className="shrink-0 rounded-md bg-surface-raised px-2 py-0.5 text-[0.7rem] text-ink-subtle">
+    <span
+      className={cn(
+        'shrink-0 px-2 py-0.5 text-[0.7rem]',
+        card.badgeStyle === 'solid'
+          ? 'rounded-md bg-ink-subtle text-canvas'
+          : card.badgeStyle === 'outline'
+            ? 'rounded-md border border-line text-ink-subtle'
+            : 'rounded-md bg-surface-raised text-ink-subtle',
+      )}
+    >
       ناموجود
     </span>
   ) : null;
+
+  const title = (
+    <h3
+      className="min-w-0 flex-1 truncate text-ink"
+      style={{
+        fontFamily: 'var(--menu-font-headline)',
+        fontWeight: 'var(--menu-headline-weight)' as never,
+        letterSpacing: 'var(--menu-headline-tracking)',
+      }}
+    >
+      {product.nameFa}
+    </h3>
+  );
+
+  const description =
+    card.showDescription && product.descriptionFa ? (
+      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-muted">
+        {product.descriptionFa}
+      </p>
+    ) : null;
 
   const photo = (sizes: string, aspect: string) => (
     <div className={cn('relative overflow-hidden bg-surface-sunken', aspect)}>
@@ -431,13 +523,15 @@ function ProductCard({
       ) : (
         <PlaceholderArt />
       )}
-      {product.isAvailable ? (
-        <span className="absolute bottom-2 end-2 flex size-8 items-center justify-center rounded-lg bg-gold text-ink-inverse shadow">
+      {card.showAddButton && product.isAvailable ? (
+        <span className="absolute bottom-2 end-2 flex size-8 items-center justify-center rounded-[var(--menu-radius)] bg-gold text-ink-inverse shadow">
           <ShoppingBag className="size-4" />
         </span>
       ) : null}
     </div>
   );
+
+  const showPhoto = card.showImage && layout !== 'text';
 
   return (
     <button
@@ -445,20 +539,19 @@ function ProductCard({
       disabled={!product.isAvailable}
       className={cn(
         styles.card,
+        layout !== 'text' && 'rounded-[var(--menu-radius)]',
         'transition-colors',
         product.isAvailable ? 'hover:border-gold/40' : 'cursor-not-allowed opacity-55',
       )}
     >
-      {styles.layout === 'text' ? (
+      {layout === 'text' ? (
         <>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <h3 className="min-w-0 flex-1 truncate font-medium text-ink">
-                {product.nameFa}
-              </h3>
+              {title}
               {soldOut}
             </div>
-            {product.descriptionFa ? (
+            {card.showDescription && product.descriptionFa ? (
               <p className="mt-1 line-clamp-1 text-xs leading-relaxed text-ink-subtle">
                 {product.descriptionFa}
               </p>
@@ -468,50 +561,55 @@ function ProductCard({
           <span className="mx-1 hidden h-px flex-1 self-center border-b border-dotted border-line-strong sm:block" />
           {price}
         </>
-      ) : styles.layout === 'list' ? (
+      ) : layout === 'list' ? (
         <>
           <div className="min-w-0 flex-1 py-1">
             <div className="flex items-start gap-2">
-              <h3 className="min-w-0 flex-1 truncate font-medium text-ink">
-                {product.nameFa}
-              </h3>
+              {title}
               {soldOut}
             </div>
-            {product.descriptionFa ? (
-              <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-ink-muted">
-                {product.descriptionFa}
-              </p>
-            ) : null}
+            {description}
             <div className="mt-2.5">{price}</div>
           </div>
-          <div className={cn('size-24 shrink-0', styles.radius, 'overflow-hidden')}>
-            {photo('96px', 'size-full')}
-          </div>
+          {showPhoto ? (
+            <div className="size-24 shrink-0 overflow-hidden rounded-[var(--menu-radius)]">
+              {photo('96px', 'size-full')}
+            </div>
+          ) : null}
         </>
       ) : (
         <>
-          {photo(
-            styles.layout === 'gallery' ? '(max-width: 768px) 100vw, 640px' : '50vw',
-            styles.layout === 'gallery' ? 'aspect-[16/9] w-full' : 'aspect-square w-full',
-          )}
-          <div className="flex flex-1 flex-col gap-1 p-3">
+          {showPhoto
+            ? photo(
+                layout === 'gallery' ? '(max-width: 768px) 100vw, 640px' : '50vw',
+                cn('w-full', styles.imageAspect),
+              )
+            : null}
+          <div className={styles.cardInner}>
             <div className="flex items-start gap-2">
-              <h3 className="min-w-0 flex-1 font-medium leading-snug text-ink">
-                {product.nameFa}
-              </h3>
+              {title}
               {soldOut}
             </div>
-            {product.descriptionFa ? (
-              <p className="line-clamp-2 text-xs leading-relaxed text-ink-muted">
-                {product.descriptionFa}
-              </p>
-            ) : null}
+            {description}
             <div className="mt-auto pt-2">{price}</div>
           </div>
         </>
       )}
     </button>
   );
+}
+
+/**
+ * Whether a background colour wants the light token set.
+ *
+ * Relative luminance rather than a stored flag: the owner picks a background
+ * colour, and text has to stay readable on it whichever they choose.
+ */
+function isLightBackground(hex: string): boolean {
+  const channels = hexToRgbChannels(hex);
+  if (!channels) return false;
+  const [r, g, b] = channels.split(' ').map(Number);
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5;
 }
 
 /** Fallback art so a product without a photo still looks intentional. */

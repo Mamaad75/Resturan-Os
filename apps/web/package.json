@@ -2,7 +2,7 @@
   "name": "@restaurant-os/web",
   "version": "1.0.0",
   "private": true,
-  "description": "Restaurant OS frontend - customer menu, admin, POS and kitchen display",
+  "description": "FoodOS frontend - customer menu, admin, POS and kitchen display",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",

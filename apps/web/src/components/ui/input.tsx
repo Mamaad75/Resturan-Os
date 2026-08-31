@@ -157,6 +157,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
 );
 
 export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+  containerClassName?: string;
   label?: ReactNode;
   hint?: ReactNode;
   error?: string;
@@ -165,7 +166,7 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, hint, error, options, placeholder, className, id, ...props },
+  { label, hint, error, options, placeholder, className, containerClassName, id, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -177,6 +178,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       error={error}
       required={props.required}
       htmlFor={fieldId}
+      className={containerClassName}
     >
       <select
         ref={ref}

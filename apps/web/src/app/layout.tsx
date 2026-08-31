@@ -5,13 +5,15 @@ import { AppProviders } from '@/lib/providers';
 
 export const metadata: Metadata = {
   title: {
-    default: 'رستوران‌ اواس | سیستم مدیریت رستوران و کافه',
-    template: '%s | رستوران‌ اواس',
+    default: 'فوداواس | سیستم رشد فروش کافه و رستوران',
+    template: '%s | فوداواس',
   },
   description:
-    'سامانه یکپارچه مدیریت رستوران و کافه: منوی دیجیتال، سفارش‌گیری با QR، صندوق، آشپزخانه و گزارش‌های فروش.',
-  applicationName: 'Restaurant OS',
+    'فوداواس: منوی دیجیتال، سفارش‌گیری با QR، صندوق، آشپزخانه، باشگاه مشتریان و گزارش‌های رشد فروش برای کافه، رستوران و فست‌فود.',
+  applicationName: 'FoodOS',
   formatDetection: { telephone: false },
+  // PWA-facing identity, so an installed shortcut says FoodOS too.
+  appleWebApp: { capable: true, title: 'FoodOS', statusBarStyle: 'black-translucent' },
 };
 
 export const viewport: Viewport = {

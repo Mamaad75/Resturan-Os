@@ -2,7 +2,7 @@
   "name": "@restaurant-os/api",
   "version": "1.0.0",
   "private": true,
-  "description": "Restaurant OS backend - modular monolith on NestJS + Prisma + PostgreSQL",
+  "description": "FoodOS backend - modular monolith on NestJS + Prisma + PostgreSQL",
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",

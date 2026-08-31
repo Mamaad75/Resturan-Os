@@ -1,5 +1,16 @@
 import type {
   AuditLogDto,
+  CampaignDto,
+  CustomerDto,
+  CustomerSegment,
+  MenuThemeDto,
+  PlanDto,
+  PlatformDashboard,
+  PlatformSession,
+  PlatformTenantDetail,
+  PlatformTenantSummary,
+  SubscriptionDto,
+  TenantEntitlements,
   CouponDto,
   CouponPreview,
   FeedbackSummary,
@@ -383,4 +394,137 @@ export const smsService = {
 export const auditService = {
   list: (params: { page?: number; pageSize?: number; entity?: string } = {}) =>
     api.get<ListResult<AuditLogDto>>('/audit', { query: params }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Menu theme                                                          */
+/* ------------------------------------------------------------------ */
+
+export const themeService = {
+  get: () => api.get<MenuThemeDto>('/menu-theme'),
+  update: (body: Record<string, unknown>) =>
+    api.patch<MenuThemeDto>('/menu-theme', body),
+  reset: (publish = false) =>
+    api.post<MenuThemeDto>('/menu-theme/reset', undefined, {
+      query: { publish: publish ? 'true' : 'false' },
+    }),
+  discardDraft: () => api.post<MenuThemeDto>('/menu-theme/discard-draft'),
+};
+
+/* ------------------------------------------------------------------ */
+/* Subscription (tenant's own view)                                    */
+/* ------------------------------------------------------------------ */
+
+export const subscriptionService = {
+  get: () =>
+    api.get<{ subscription: SubscriptionDto | null; entitlements: TenantEntitlements }>(
+      '/subscription',
+    ),
+  plans: () => api.get<PlanDto[]>('/subscription/plans'),
+};
+
+/* ------------------------------------------------------------------ */
+/* CRM                                                                 */
+/* ------------------------------------------------------------------ */
+
+export interface CustomerDetail extends CustomerDto {
+  recentOrders: Array<{
+    id: string;
+    orderNumber: string;
+    type: string;
+    status: string;
+    total: number;
+    createdAt: string;
+  }>;
+}
+
+export const customerService = {
+  list: (params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    segment?: string;
+    consentOnly?: boolean;
+  }) => api.get<ListResult<CustomerDto>>('/customers', { query: params }),
+  segments: () =>
+    api.get<
+      Array<{
+        segment: CustomerSegment;
+        count: number;
+        labelFa: string;
+        descriptionFa: string;
+      }>
+    >('/customers/segments'),
+  get: (id: string) => api.get<CustomerDetail>(`/customers/${id}`),
+  update: (id: string, body: Record<string, unknown>) =>
+    api.patch<CustomerDto>(`/customers/${id}`, body),
+};
+
+export const campaignService = {
+  list: () => api.get<CampaignDto[]>('/campaigns'),
+  preview: (segment: string) =>
+    api.get<{
+      recipients: number;
+      allowance: number | null;
+      used: number;
+      remaining: number | null;
+    }>('/campaigns/preview', { query: { segment } }),
+  create: (body: Record<string, unknown>) => api.post<CampaignDto>('/campaigns', body),
+  send: (id: string) => api.post<CampaignDto>(`/campaigns/${id}/send`),
+};
+
+/* ------------------------------------------------------------------ */
+/* Platform (FoodOS super admin)                                       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The platform surface authenticates separately from the tenant app: its own
+ * cookie, its own token, its own `me` endpoint. Nothing here shares state with
+ * `authService`, which is what keeps a restaurant session and a platform
+ * session from being mistaken for each other.
+ */
+export const platformService = {
+  login: (body: { email: string; password: string }) =>
+    api.post<PlatformSession>('/platform/auth/login', body, {
+      retryOnAuthFailure: false,
+    }),
+  refresh: () => api.post<PlatformSession>('/platform/auth/refresh'),
+  logout: () => api.post<{ loggedOut: boolean }>('/platform/auth/logout'),
+  me: () => api.get<PlatformSession>('/platform/auth/me'),
+
+  dashboard: () => api.get<PlatformDashboard>('/platform/dashboard'),
+  tenants: (params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    status?: string;
+    planKey?: string;
+  }) => api.get<ListResult<PlatformTenantSummary>>('/platform/tenants', { query: params }),
+  tenant: (id: string) => api.get<PlatformTenantDetail>(`/platform/tenants/${id}`),
+
+  suspend: (id: string, reason: string) =>
+    api.post<SubscriptionDto>(`/platform/tenants/${id}/suspend`, { reason }),
+  activate: (id: string) =>
+    api.post<SubscriptionDto>(`/platform/tenants/${id}/activate`),
+  disable: (id: string) =>
+    api.post<{ isActive: boolean }>(`/platform/tenants/${id}/disable`),
+  restore: (id: string) =>
+    api.post<{ isActive: boolean }>(`/platform/tenants/${id}/restore`),
+  setNotes: (id: string, adminNotes: string | null) =>
+    api.patch<{ adminNotes: string | null }>(`/platform/tenants/${id}/notes`, {
+      adminNotes,
+    }),
+  updateSubscription: (id: string, body: Record<string, unknown>) =>
+    api.patch<SubscriptionDto>(`/platform/tenants/${id}/subscription`, body),
+  extend: (id: string, days: number, note?: string) =>
+    api.post<SubscriptionDto>(`/platform/tenants/${id}/subscription/extend`, {
+      days,
+      note,
+    }),
+
+  plans: () => api.get<PlanDto[]>('/platform/plans'),
+  createPlan: (body: Record<string, unknown>) =>
+    api.post<PlanDto>('/platform/plans', body),
+  updatePlan: (id: string, body: Record<string, unknown>) =>
+    api.patch<PlanDto>(`/platform/plans/${id}`, body),
 };

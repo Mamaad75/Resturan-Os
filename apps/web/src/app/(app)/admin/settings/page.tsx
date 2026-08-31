@@ -1,16 +1,18 @@
 'use client';
 
 import {
-  MENU_TEMPLATE_SPECS,
-  MenuTemplate,
+  BusinessType,
   SERVICE_MODE_LABELS_FA,
   ServiceMode,
+  ServiceModeChoice,
+  tablesEnabled,
   type RestaurantSettings,
 } from '@restaurant-os/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Palette, Store, Truck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
+  Badge,
   Button,
   Card,
   CardBody,
@@ -25,11 +27,11 @@ import {
   useToast,
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
-import { MenuTemplatePicker } from '@/features/admin/menu-template-picker';
+import { MenuThemeCustomizer } from '@/features/admin/menu-theme-customizer';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { toPersianDigits } from '@/lib/format';
-import { restaurantService } from '@/services';
+import { restaurantService, subscriptionService } from '@/services';
 
 export default function SettingsPage() {
   const { can } = useAuth();
@@ -48,8 +50,14 @@ export default function SettingsPage() {
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const [accentColor, setAccentColor] = useState('#C9A24B');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  const [menuTemplate, setMenuTemplate] = useState<MenuTemplate>(MenuTemplate.CLASSIC);
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
+  const [tab, setTab] = useState('general');
+
+  // Entitlements decide which sections are even worth showing.
+  const subscriptionQuery = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => subscriptionService.get(),
+  });
 
   useEffect(() => {
     const data = restaurantQuery.data;
@@ -61,21 +69,8 @@ export default function SettingsPage() {
     setCoverUrl(data.branding.coverUrl);
     setAccentColor(data.branding.accentColor);
     setTheme(data.branding.theme);
-    setMenuTemplate(data.branding.menuTemplate);
     setSettings(data.settings);
   }, [restaurantQuery.data]);
-
-  /*
-   * The template's own palette, offered as a one-click shortcut rather than
-   * applied automatically. Hidden once the restaurant is already using it, so
-   * the button never suggests a change that would do nothing.
-   */
-  const templateSuggestion = MENU_TEMPLATE_SPECS[menuTemplate];
-  const suggestion =
-    templateSuggestion.defaultAccent.toLowerCase() === accentColor.toLowerCase() &&
-    templateSuggestion.defaultTheme === theme
-      ? null
-      : templateSuggestion;
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['restaurant'] });
@@ -103,7 +98,6 @@ export default function SettingsPage() {
         coverUrl,
         accentColor,
         theme,
-        menuTemplate,
       }),
     onSuccess: () => {
       toast.success('ظاهر منو به‌روزرسانی شد');
@@ -146,20 +140,6 @@ export default function SettingsPage() {
   ) {
     setSettings((current) => (current ? { ...current, [key]: value } : current));
     saveSettings.mutate({ [key]: value } as Partial<RestaurantSettings>);
-  }
-
-  function toggleServiceMode(mode: ServiceMode) {
-    if (!settings) return;
-    const enabled = settings.serviceModes.includes(mode);
-    const next = enabled
-      ? settings.serviceModes.filter((m) => m !== mode)
-      : [...settings.serviceModes, mode];
-    // At least one mode must stay on, or customers cannot order at all.
-    if (next.length === 0) {
-      toast.error('حداقل یک حالت سرویس باید فعال بماند');
-      return;
-    }
-    updateSetting('serviceModes', next);
   }
 
   return (
@@ -249,42 +229,6 @@ export default function SettingsPage() {
           ) : null}
 
           <div>
-            <p className="text-sm font-medium text-ink-muted">قالب منو</p>
-            <p className="mb-3 text-xs text-ink-subtle">
-              قالب فقط چیدمان را تعیین می‌کند. رنگ، لوگو و تم را خودتان پایین‌تر
-              انتخاب می‌کنید و با تعویض قالب تغییر نمی‌کنند. دسته‌بندی‌هایی که هنوز
-              عکس ندارند، به‌جای قاب خالی به‌صورت فهرست نمایش داده می‌شوند.
-            </p>
-            <MenuTemplatePicker
-              value={menuTemplate}
-              accentColor={accentColor}
-              theme={theme}
-              disabled={!editable}
-              // Layout only. Overwriting the restaurant's own palette here
-              // would throw away a choice they made deliberately - the
-              // suggested colours are offered below instead.
-              onChange={setMenuTemplate}
-            />
-            {suggestion ? (
-              <button
-                type="button"
-                disabled={!editable}
-                onClick={() => {
-                  setAccentColor(suggestion.defaultAccent);
-                  setTheme(suggestion.defaultTheme);
-                }}
-                className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-surface-sunken px-3 py-2 text-xs text-ink-muted transition-colors hover:text-ink"
-              >
-                <span
-                  className="size-4 rounded-full border border-line"
-                  style={{ background: suggestion.defaultAccent }}
-                />
-                رنگ پیشنهادی قالب «{suggestion.labelFa}» را اعمال کن
-              </button>
-            ) : null}
-          </div>
-
-          <div>
             <p className="mb-2 text-sm font-medium text-ink-muted">رنگ شاخص</p>
             <div className="flex flex-wrap items-center gap-2">
               {/* The five template accents, so the swatches and the templates agree. */}
@@ -350,42 +294,117 @@ export default function SettingsPage() {
 
       <Card>
         <CardHeader
-          title="حالت‌های سرویس"
-          description="تعیین می‌کند مشتری چه نوع سفارشی می‌تواند ثبت کند."
+          title="نوع کسب‌وکار"
+          description="تعیین می‌کند پیش‌فرض‌ها و متن‌ها چطور تنظیم شوند."
         />
         <CardBody className="grid gap-3 sm:grid-cols-3">
           {(
-            [ServiceMode.DINE_IN, ServiceMode.TAKEAWAY, ServiceMode.DELIVERY] as ServiceMode[]
-          ).map((mode) => {
-            const enabled = settings.serviceModes.includes(mode);
-            const isDelivery = mode === ServiceMode.DELIVERY;
-            return (
+            [
+              [BusinessType.CAFE, 'کافه', 'قهوه، دمنوش و دسر'],
+              [BusinessType.RESTAURANT, 'رستوران', 'غذای اصلی و سرو در محل'],
+              [BusinessType.FAST_FOOD, 'فست‌فود', 'برگر، پیتزا و ساندویچ'],
+            ] as Array<[BusinessType, string, string]>
+          ).map(([value, label, hint]) => (
+            <button
+              key={value}
+              disabled={!editable}
+              onClick={() => updateSetting('businessType', value)}
+              className={cn(
+                'flex flex-col items-start gap-1 rounded-xl border p-4 text-start transition-colors',
+                settings.businessType === value
+                  ? 'border-gold/50 bg-gold/[0.08]'
+                  : 'border-line bg-surface-sunken',
+                !editable && 'cursor-not-allowed opacity-60',
+              )}
+            >
+              <span className="text-sm font-medium text-ink">{label}</span>
+              <span className="text-xs text-ink-subtle">{hint}</span>
+            </button>
+          ))}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="نحوه سرویس"
+          description="تعیین می‌کند مشتری چه نوع سفارشی می‌تواند ثبت کند و آیا میز دارید یا نه."
+        />
+        <CardBody className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {(
+              [
+                [ServiceModeChoice.DINE_IN, 'فقط سرو در محل', 'مشتری سر میز سفارش می‌دهد'],
+                [ServiceModeChoice.TAKEAWAY, 'فقط بیرون‌بر', 'بدون میز؛ فقط QR عمومی'],
+                [ServiceModeChoice.BOTH, 'هر دو', 'میز و بیرون‌بر با هم'],
+              ] as Array<[ServiceModeChoice, string, string]>
+            ).map(([value, label, hint]) => (
               <button
-                key={mode}
-                disabled={!editable || isDelivery}
-                onClick={() => toggleServiceMode(mode)}
+                key={value}
+                disabled={!editable}
+                onClick={() => updateSetting('serviceMode', value)}
                 className={cn(
                   'flex flex-col items-start gap-1 rounded-xl border p-4 text-start transition-colors',
-                  enabled
+                  settings.serviceMode === value
                     ? 'border-gold/50 bg-gold/[0.08]'
                     : 'border-line bg-surface-sunken',
-                  (isDelivery || !editable) && 'cursor-not-allowed opacity-60',
+                  !editable && 'cursor-not-allowed opacity-60',
                 )}
               >
                 <span className="flex items-center gap-2 text-sm font-medium text-ink">
-                  {isDelivery ? <Truck className="size-4" /> : <Store className="size-4" />}
-                  {SERVICE_MODE_LABELS_FA[mode]}
+                  <Store className="size-4" />
+                  {label}
                 </span>
-                <span className="text-xs text-ink-subtle">
-                  {isDelivery
-                    ? 'در نسخه بعدی فعال می‌شود'
-                    : enabled
-                      ? 'فعال'
-                      : 'غیرفعال'}
-                </span>
+                <span className="text-xs text-ink-subtle">{hint}</span>
               </button>
-            );
-          })}
+            ))}
+          </div>
+
+          {!tablesEnabled(settings.serviceModes) ? (
+            <p className="rounded-xl border border-line bg-surface-sunken p-3 text-xs leading-relaxed text-ink-muted">
+              چون فقط بیرون‌بر دارید، بخش «میزها» و QR میز نمایش داده نمی‌شود. مشتری با
+              QR عمومی وارد منو می‌شود، شماره موبایلش را وارد می‌کند و شماره سفارش
+              می‌گیرد.
+            </p>
+          ) : null}
+
+          <div className="flex items-center gap-2 text-xs text-ink-subtle">
+            <Truck className="size-3.5" />
+            ارسال با پیک در نسخه بعدی فعال می‌شود.
+          </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader
+          title="مشتریان و پیامک"
+          description="تعیین می‌کند چه اطلاعاتی از مشتری گرفته شود."
+        />
+        <CardBody className="space-y-3">
+          <Switch
+            checked={settings.requireCustomerPhone}
+            onChange={(value) => updateSetting('requireCustomerPhone', value)}
+            disabled={!editable}
+            label="شماره موبایل برای ثبت سفارش الزامی باشد"
+            description={
+              tablesEnabled(settings.serviceModes)
+                ? 'برای سفارش بیرون‌بر همیشه الزامی است. این گزینه آن را برای سرو در محل هم اجباری می‌کند.'
+                : 'برای سفارش بیرون‌بر همیشه الزامی است.'
+            }
+          />
+          <Switch
+            checked={settings.marketingOptInEnabled}
+            onChange={(value) => updateSetting('marketingOptInEnabled', value)}
+            disabled={!editable}
+            label="پرسیدن رضایت دریافت پیامک تبلیغاتی"
+            description="در پایان ثبت سفارش از مشتری پرسیده می‌شود. کمپین‌ها فقط به کسانی می‌روند که موافقت کرده‌اند."
+          />
+          <Switch
+            checked={settings.smsNotificationsEnabled}
+            onChange={(value) => updateSetting('smsNotificationsEnabled', value)}
+            disabled={!editable}
+            label="پیامک وضعیت سفارش"
+            description="پیامک‌های تراکنشی مثل «سفارش شما آماده تحویل است»."
+          />
         </CardBody>
       </Card>
 
@@ -447,6 +466,22 @@ export default function SettingsPage() {
         </CardBody>
       </Card>
 
+      <div>
+        <div className="mb-3">
+          <h2 className="text-lg font-bold text-ink">طراحی منو</h2>
+          <p className="text-sm text-ink-subtle">
+            قالب، رنگ، فونت و چیدمان منویی که مشتری بعد از اسکن QR می‌بیند.
+          </p>
+        </div>
+        <MenuThemeCustomizer
+          restaurant={restaurant}
+          features={subscriptionQuery.data?.entitlements.features ?? null}
+          editable={editable}
+        />
+      </div>
+
+      <SubscriptionCard />
+
       <Card>
         <CardHeader title="عملیات سفارش" />
         <CardBody className="space-y-3">
@@ -456,13 +491,6 @@ export default function SettingsPage() {
             disabled={!editable}
             label="ارسال خودکار به آشپزخانه"
             description="سفارش‌های ثبت‌شده با QR بدون نیاز به تأیید صندوق مستقیم به آشپزخانه می‌روند."
-          />
-          <Switch
-            checked={settings.smsNotificationsEnabled}
-            onChange={(value) => updateSetting('smsNotificationsEnabled', value)}
-            disabled={!editable}
-            label="اطلاع‌رسانی پیامکی"
-            description="ارسال پیامک در مراحل کلیدی سفارش به مشتریانی که شماره داده‌اند."
           />
           <Input
             label="زمان پیش‌فرض آماده‌سازی (دقیقه)"
@@ -488,3 +516,116 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+/**
+ * The tenant's own view of its plan.
+ *
+ * Read-only: a restaurant cannot change its own subscription, only the
+ * platform can. Shown here so an owner can see what they have, what they have
+ * used, and when it runs out - without opening a support ticket to find out.
+ */
+function SubscriptionCard() {
+  const query = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => subscriptionService.get(),
+  });
+
+  if (query.isPending || !query.data) return null;
+  const { subscription, entitlements } = query.data;
+  if (!subscription) return null;
+
+  const tone =
+    subscription.status === 'ACTIVE'
+      ? 'positive'
+      : subscription.status === 'TRIAL'
+        ? 'info'
+        : subscription.status === 'GRACE_PERIOD'
+          ? 'caution'
+          : 'critical';
+
+  const rows: Array<[string, number, number | null]> = [
+    ['شعبه', entitlements.usage.branches, entitlements.limits.maxBranches],
+    ['کاربر', entitlements.usage.staff, entitlements.limits.maxStaff],
+    ['محصول', entitlements.usage.products, entitlements.limits.maxProducts],
+    ['میز', entitlements.usage.tables, entitlements.limits.maxTables],
+    ['سفارش این ماه', entitlements.usage.monthlyOrders, entitlements.limits.maxMonthlyOrders],
+    [
+      'پیامک تبلیغاتی این ماه',
+      entitlements.usage.monthlyMarketingSms,
+      entitlements.limits.smsAllowance,
+    ],
+  ];
+
+  return (
+    <Card>
+      <CardHeader
+        title="اشتراک"
+        description="پلن فعلی، میزان استفاده و تاریخ انقضا."
+        action={<Badge tone={tone}>{SUBSCRIPTION_STATUS_FA[subscription.status]}</Badge>}
+      />
+      <CardBody className="space-y-4">
+        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+          <div>
+            <p className="text-xs text-ink-subtle">پلن</p>
+            <p className="font-semibold text-ink">{subscription.plan.nameFa}</p>
+          </div>
+          {subscription.daysRemaining !== null ? (
+            <div>
+              <p className="text-xs text-ink-subtle">باقی‌مانده</p>
+              <p
+                className={cn(
+                  'font-semibold tabular-nums',
+                  subscription.daysRemaining < 7 ? 'text-critical' : 'text-ink',
+                )}
+              >
+                {subscription.daysRemaining > 0
+                  ? `${toPersianDigits(subscription.daysRemaining)} روز`
+                  : 'منقضی شده'}
+              </p>
+            </div>
+          ) : null}
+          {subscription.suspendedReason ? (
+            <div className="w-full rounded-xl border border-critical/30 bg-critical/10 p-3 text-xs text-critical">
+              {subscription.suspendedReason}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-line">
+          {rows.map(([label, used, cap]) => {
+            const ratio = cap && cap > 0 ? Math.min(1, used / cap) : 0;
+            return (
+              <div
+                key={label}
+                className="flex items-center gap-3 border-b border-line px-3 py-2.5 last:border-b-0"
+              >
+                <span className="w-40 shrink-0 text-xs text-ink-muted">{label}</span>
+                <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+                  <div
+                    className={cn(
+                      'h-full rounded-full',
+                      ratio >= 1 ? 'bg-critical' : ratio > 0.8 ? 'bg-caution' : 'bg-gold',
+                    )}
+                    style={{ width: `${Math.round(ratio * 100)}%` }}
+                  />
+                </div>
+                <span className="w-24 shrink-0 text-end text-xs tabular-nums text-ink-subtle">
+                  {toPersianDigits(used)}
+                  {cap === null ? ' / نامحدود' : ` / ${toPersianDigits(cap)}`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+const SUBSCRIPTION_STATUS_FA: Record<string, string> = {
+  TRIAL: 'دوره آزمایشی',
+  ACTIVE: 'فعال',
+  GRACE_PERIOD: 'مهلت تمدید',
+  EXPIRED: 'منقضی',
+  SUSPENDED: 'معلق',
+};
