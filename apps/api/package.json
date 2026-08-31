@@ -18,6 +18,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
     "db:seed": "ts-node --transpile-only -r tsconfig-paths/register prisma/seed.ts",
+    "db:seed:platform": "ts-node --transpile-only -r tsconfig-paths/register prisma/seed-platform.ts",
     "db:studio": "prisma studio"
   },
   "prisma": {

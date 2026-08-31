@@ -237,7 +237,9 @@ export class RestaurantsService {
     const restaurant = await this.getRestaurantEntity(ctx.tenantId);
 
     const clash = await this.prisma.branch.findFirst({
-      where: { restaurantId: restaurant.id, slug: input.slug },
+      // restaurantId already implies the tenant, but the isolation guard wants
+      // it stated: an implied scope is exactly the kind it exists to catch.
+      where: { tenantId: ctx.tenantId, restaurantId: restaurant.id, slug: input.slug },
       select: { id: true },
     });
     if (clash) {
