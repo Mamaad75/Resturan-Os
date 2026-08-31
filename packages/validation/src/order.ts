@@ -39,6 +39,12 @@ export const createPublicOrderSchema = z
     pickupAt: dateInputSchema.nullable().optional(),
     /** Discount code; the server re-evaluates it and ignores any client total. */
     couponCode: optionalText(32, 'کد تخفیف'),
+    /**
+     * Opt-in to marketing messages, offered at checkout when the restaurant
+     * has enabled it. Absent means "not asked"; false means "declined", and
+     * neither ever turns an existing consent off by accident.
+     */
+    marketingConsent: z.boolean().optional(),
     items: z
       .array(cartItemSchema)
       .min(1, 'سبد خرید خالی است.')

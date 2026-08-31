@@ -283,3 +283,39 @@ export interface RestaurantProfile {
   requireCustomerPhone: boolean;
   marketingOptInEnabled: boolean;
 }
+
+/* ------------------------------------------------------------------ */
+/* Service mode helpers                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The stored `serviceModes` array is the source of truth; this is the
+ * single-choice view of it that settings and the takeaway rules use.
+ *
+ * A restaurant with neither dine-in nor takeaway (delivery only, say) reads as
+ * TAKEAWAY: it has no tables, which is the decision this value drives.
+ */
+export function serviceModeFromModes(
+  modes: readonly string[],
+): 'DINE_IN' | 'TAKEAWAY' | 'BOTH' {
+  const dineIn = modes.includes('DINE_IN');
+  const takeaway = modes.includes('TAKEAWAY');
+  if (dineIn && takeaway) return 'BOTH';
+  if (dineIn) return 'DINE_IN';
+  return 'TAKEAWAY';
+}
+
+/** Inverse of the above, preserving any delivery mode already enabled. */
+export function modesFromServiceMode(
+  choice: 'DINE_IN' | 'TAKEAWAY' | 'BOTH',
+  existing: readonly string[] = [],
+): string[] {
+  const keepDelivery = existing.includes('DELIVERY') ? ['DELIVERY'] : [];
+  if (choice === 'BOTH') return ['DINE_IN', 'TAKEAWAY', ...keepDelivery];
+  return [choice, ...keepDelivery];
+}
+
+/** Tables only make sense where guests actually sit down. */
+export function tablesEnabled(modes: readonly string[]): boolean {
+  return modes.includes('DINE_IN');
+}

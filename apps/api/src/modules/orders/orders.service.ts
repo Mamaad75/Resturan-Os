@@ -97,6 +97,19 @@ export class OrdersService {
       );
     }
 
+    /*
+     * Takeaway always needs a phone - that is how the "ready for pickup"
+     * message reaches the customer, and the schema already insists on it.
+     * Dine-in is the configurable case: a restaurant that wants every guest in
+     * its CRM turns `requireCustomerPhone` on, and this is where that setting
+     * is enforced. It cannot live in the schema, which has no restaurant.
+     */
+    if (settings.requireCustomerPhone && !input.customerPhone) {
+      throw AppException.validation('برای ثبت سفارش، شماره موبایل الزامی است.', {
+        customerPhone: ['شماره موبایل الزامی است.'],
+      });
+    }
+
     await this.assertCanAcceptOrders(resolved.tenantId);
 
     // The customer is anonymous, so this whole path runs as a system scope
@@ -341,9 +354,34 @@ export class OrdersService {
       }
 
       if (customer) {
+        /*
+         * CRM aggregates, maintained in the same transaction as the order.
+         *
+         * `totalSpent` counts the order's total at creation. An order that is
+         * later cancelled is corrected by `adjustCustomerForCancellation`, so
+         * the cached figures stay honest without a nightly recompute.
+         */
         await tx.customer.update({
           where: { id: customer.id, tenantId },
-          data: { ordersCount: { increment: 1 }, lastOrderAt: now },
+          data: {
+            ordersCount: { increment: 1 },
+            totalSpent: { increment: totals.total },
+            lastOrderAt: now,
+            lastBranchId: branchId,
+            ...(customer.firstOrderAt ? {} : { firstOrderAt: now }),
+            ...(input.type === 'DINE_IN'
+              ? { dineInCount: { increment: 1 } }
+              : { takeawayCount: { increment: 1 } }),
+            /*
+             * Consent is only ever turned on here, never off: a guest who
+             * skipped the checkbox on their second order has not withdrawn the
+             * consent they gave on their first. Withdrawal goes through the
+             * CRM, which records when it happened.
+             */
+            ...(input.marketingConsent === true && !customer.marketingConsent
+              ? { marketingConsent: true, marketingConsentAt: now }
+              : {}),
+          },
         });
       }
 
@@ -532,6 +570,26 @@ export class OrdersService {
           note: note ?? null,
         },
       });
+
+      /*
+       * A cancelled order should not go on counting towards the customer's
+       * lifetime value. Reversed in the same transaction as the status change,
+       * so the cached aggregates and the orders they summarise can never
+       * disagree. `lastOrderAt` is deliberately left alone: the customer did
+       * come in, whatever happened to the order afterwards.
+       */
+      if (toStatus === OrderStatus.CANCELLED && existing.customerId) {
+        await tx.customer.update({
+          where: { id: existing.customerId, tenantId: ctx.tenantId },
+          data: {
+            ordersCount: { decrement: 1 },
+            totalSpent: { decrement: existing.total },
+            ...(existing.type === 'DINE_IN'
+              ? { dineInCount: { decrement: 1 } }
+              : { takeawayCount: { decrement: 1 } }),
+          },
+        });
+      }
 
       return tx.order.update({
         where: { id: orderId, tenantId: ctx.tenantId },
@@ -750,6 +808,9 @@ export class OrdersService {
         type: true,
         paymentStatus: true,
         tableId: true,
+        // Needed to reverse the customer's cached aggregates on cancellation.
+        customerId: true,
+        total: true,
       },
     });
     if (!row) throw AppException.notFound('سفارش');
@@ -914,6 +975,13 @@ function buildInitialHistory(
   return entries;
 }
 
+/**
+ * Finds or creates the customer behind a phone number.
+ *
+ * The phone is already normalised to `09xxxxxxxxx` by the validation layer, so
+ * the same person reaching the same restaurant always lands on the same row
+ * however they typed it - which is what stops the CRM filling with duplicates.
+ */
 async function upsertCustomer(
   tx: PrismaTransaction,
   tenantId: string,
@@ -924,7 +992,7 @@ async function upsertCustomer(
     where: { tenantId_phone: { tenantId, phone } },
     create: { tenantId, phone, name: name ?? null },
     update: name ? { name } : {},
-    select: { id: true },
+    select: { id: true, firstOrderAt: true, marketingConsent: true },
   });
 }
 

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { SmsStatus, type SmsMessageDto } from '@restaurant-os/types';
+import { SmsKind, SmsStatus, type SmsMessageDto } from '@restaurant-os/types';
 import { buildPaginationMeta, paginationArgs } from '../../common/utils/pagination.util';
 import type { RequestContext } from '../../common/types/request-context';
 import { APP_CONFIG, type AppConfig } from '../../config/configuration';
@@ -11,6 +11,14 @@ import type { SmsProvider } from './sms.provider';
 export interface EnqueueSmsInput {
   tenantId: string;
   orderId?: string | null;
+  customerId?: string | null;
+  campaignId?: string | null;
+  /**
+   * Transactional by default. Marketing is opt-in at the call site, so a new
+   * message type cannot become marketing by omission - the consent and
+   * allowance rules that go with it are enforced by the caller.
+   */
+  kind?: SmsKind;
   to: string;
   body: string;
 }
@@ -56,6 +64,9 @@ export class SmsService {
         data: {
           tenantId: input.tenantId,
           orderId: input.orderId ?? null,
+          customerId: input.customerId ?? null,
+          campaignId: input.campaignId ?? null,
+          kind: input.kind ?? SmsKind.TRANSACTIONAL,
           to: normalized,
           body: input.body.slice(0, 600),
           provider: this.provider.name,

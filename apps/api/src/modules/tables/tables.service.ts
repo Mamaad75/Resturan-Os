@@ -2,8 +2,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   ACTIVE_ORDER_STATUSES,
+  ApiErrorCode,
   AuditAction,
   TableStatus,
+  tablesEnabled,
   type TableDto,
 } from '@restaurant-os/types';
 import type {
@@ -79,7 +81,27 @@ export class TablesService {
     });
   }
 
+  /**
+   * Tables only exist where guests sit down.
+   *
+   * A takeaway-only restaurant has no table concept at all, so creating one is
+   * refused here rather than merely hidden in the admin - the endpoint is
+   * reachable directly, and a stray table would then appear on the floor plan
+   * and in the QR sheet of a business that has no floor.
+   */
+  private async assertDineIn(ctx: RequestContext): Promise<void> {
+    const restaurant = await this.restaurants.getRestaurantEntity(ctx.tenantId);
+    if (!tablesEnabled(restaurant.serviceModes)) {
+      throw new AppException(
+        ApiErrorCode.SERVICE_MODE_DISABLED,
+        'این مجموعه فقط سفارش بیرون‌بر دارد و میز تعریف نمی‌کند.',
+        409,
+      );
+    }
+  }
+
   async create(ctx: RequestContext, input: CreateTableInput, branchId?: string) {
+    await this.assertDineIn(ctx);
     await this.plans.requireCapacity(ctx.tenantId, 'maxTables');
 
     const resolvedBranchId = await this.restaurants.resolveBranchId(ctx, branchId);
@@ -116,6 +138,7 @@ export class TablesService {
     input: { from: number; to: number; capacity: number; zone?: string | null },
     branchId?: string,
   ) {
+    await this.assertDineIn(ctx);
     const resolvedBranchId = await this.restaurants.resolveBranchId(ctx, branchId);
     const existing = await this.prisma.restaurantTable.findMany({
       where: { tenantId: ctx.tenantId, branchId: resolvedBranchId },

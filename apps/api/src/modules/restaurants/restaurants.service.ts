@@ -2,6 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   AuditAction,
   menuTemplateSpec,
+  modesFromServiceMode,
+  serviceModeFromModes,
   type PublicRestaurant,
   type RestaurantBranding,
   type RestaurantSettings,
@@ -172,10 +174,44 @@ export class RestaurantsService {
 
   async updateSettings(ctx: RequestContext, input: UpdateSettingsInput) {
     const restaurant = await this.getRestaurantEntity(ctx.tenantId);
+
+    /*
+     * `serviceMode` is the single-choice control the settings page shows;
+     * `serviceModes` is the array that has always been stored and that
+     * existing integrations still send. Accepting both keeps the API
+     * backward compatible, and the single choice wins when both arrive.
+     */
+    const serviceModes = input.serviceMode
+      ? (modesFromServiceMode(
+          input.serviceMode,
+          restaurant.serviceModes,
+        ) as UpdateSettingsInput['serviceModes'])
+      : input.serviceModes;
+
+    // A plan that does not sell a service mode cannot have it switched on.
+    if (serviceModes) {
+      const features = (await this.plans.entitlements(ctx.tenantId)).features;
+      if (serviceModes.includes('DINE_IN') && !features.dineInEnabled) {
+        await this.plans.requireFeature(ctx.tenantId, 'dineInEnabled');
+      }
+      if (serviceModes.includes('TAKEAWAY') && !features.takeawayEnabled) {
+        await this.plans.requireFeature(ctx.tenantId, 'takeawayEnabled');
+      }
+    }
+
     await this.prisma.restaurant.update({
       where: { id: restaurant.id, tenantId: ctx.tenantId },
       data: {
-        ...(input.serviceModes !== undefined ? { serviceModes: input.serviceModes } : {}),
+        ...(serviceModes !== undefined ? { serviceModes } : {}),
+        ...(input.businessType !== undefined
+          ? { businessType: input.businessType }
+          : {}),
+        ...(input.requireCustomerPhone !== undefined
+          ? { requireCustomerPhone: input.requireCustomerPhone }
+          : {}),
+        ...(input.marketingOptInEnabled !== undefined
+          ? { marketingOptInEnabled: input.marketingOptInEnabled }
+          : {}),
         ...(input.currency !== undefined ? { currency: input.currency } : {}),
         ...(input.taxEnabled !== undefined ? { taxEnabled: input.taxEnabled } : {}),
         ...(input.taxRateBps !== undefined ? { taxRateBps: input.taxRateBps } : {}),
@@ -436,7 +472,10 @@ export function toBranding(row: {
 }
 
 export function toSettings(row: {
+  businessType: string;
   serviceModes: string[];
+  requireCustomerPhone: boolean;
+  marketingOptInEnabled: boolean;
   currency: string;
   taxEnabled: boolean;
   taxRateBps: number;
@@ -447,7 +486,11 @@ export function toSettings(row: {
   autoConfirmOrders: boolean;
 }): RestaurantSettings {
   return {
+    businessType: row.businessType as RestaurantSettings['businessType'],
+    serviceMode: serviceModeFromModes(row.serviceModes),
     serviceModes: row.serviceModes as RestaurantSettings['serviceModes'],
+    requireCustomerPhone: row.requireCustomerPhone,
+    marketingOptInEnabled: row.marketingOptInEnabled,
     currency: row.currency as RestaurantSettings['currency'],
     taxEnabled: row.taxEnabled,
     taxRateBps: row.taxRateBps,

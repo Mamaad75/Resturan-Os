@@ -1,4 +1,5 @@
 import type {
+  BusinessType,
   Currency,
   ModifierGroupType,
   NotificationChannel,
@@ -9,6 +10,7 @@ import type {
   PaymentStatus,
   QrCodeType,
   ServiceMode,
+  ServiceModeChoice,
   SmsStatus,
   TableStatus,
   UserRole,
@@ -69,7 +71,18 @@ export interface RestaurantBranding {
 }
 
 export interface RestaurantSettings {
+  /** What kind of business this is. Independent of how it serves. */
+  businessType: BusinessType;
+  /**
+   * The single-choice view of `serviceModes`, which is what the settings UI
+   * and the takeaway rules work with. Derived, never stored twice.
+   */
+  serviceMode: ServiceModeChoice;
   serviceModes: ServiceMode[];
+  /** Whether a guest must give a phone number to order. */
+  requireCustomerPhone: boolean;
+  /** Whether checkout offers a marketing opt-in. */
+  marketingOptInEnabled: boolean;
   currency: Currency;
   taxEnabled: boolean;
   /** Basis points, e.g. 900 = 9.00% VAT. */
