@@ -32,10 +32,19 @@ export type UpdateBrandingInput = z.infer<typeof updateBrandingSchema>;
 
 export const updateSettingsSchema = z
   .object({
+    /**
+     * The single-choice view of `serviceModes`. Sending this rewrites the
+     * array; the array itself stays accepted so existing integrations and the
+     * delivery mode keep working.
+     */
+    serviceMode: z.enum(['DINE_IN', 'TAKEAWAY', 'BOTH']).optional(),
     serviceModes: z
       .array(z.enum(['DINE_IN', 'TAKEAWAY', 'DELIVERY']))
       .min(1, 'حداقل یک حالت سرویس باید فعال باشد.')
       .optional(),
+    businessType: z.enum(['CAFE', 'RESTAURANT', 'FAST_FOOD']).optional(),
+    requireCustomerPhone: z.boolean().optional(),
+    marketingOptInEnabled: z.boolean().optional(),
     currency: z.enum(['IRT', 'IRR']).optional(),
     taxEnabled: z.boolean().optional(),
     /** Basis points: 900 = 9.00%. */
@@ -48,6 +57,14 @@ export const updateSettingsSchema = z
   })
   .strict();
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+
+export const createBranchSchema = z.object({
+  name: displayTextSchema(2, 120, 'نام شعبه'),
+  slug: slugSchema,
+  address: optionalText(300, 'آدرس'),
+  phone: optionalText(30, 'تلفن'),
+});
+export type CreateBranchInput = z.infer<typeof createBranchSchema>;
 
 export const updateBranchSchema = z.object({
   name: displayTextSchema(2, 120, 'نام شعبه').optional(),

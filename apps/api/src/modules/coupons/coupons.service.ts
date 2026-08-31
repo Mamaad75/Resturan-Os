@@ -15,6 +15,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService, type PrismaTransaction } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 
 /** Outcome of evaluating a coupon against a specific cart. */
 export interface CouponEvaluation {
@@ -31,6 +32,7 @@ export class CouponsService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
   ) {}
 
   /* ------------------------------------------------------------------ */
@@ -253,6 +255,8 @@ export class CouponsService {
   }
 
   async create(ctx: RequestContext, input: CreateCouponInput): Promise<CouponDto> {
+    await this.plans.requireFeature(ctx.tenantId, 'couponsEnabled');
+
     const clash = await this.prisma.coupon.findFirst({
       where: { tenantId: ctx.tenantId, code: input.code },
       select: { id: true },

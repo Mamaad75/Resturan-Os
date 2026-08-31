@@ -42,6 +42,7 @@ import {
 } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { TablesService } from '../tables/tables.service';
 import {
@@ -66,6 +67,7 @@ export class OrdersService {
     private readonly coupons: CouponsService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
+    private readonly plans: PlansService,
   ) {}
 
   /* ------------------------------------------------------------------ */
@@ -95,6 +97,8 @@ export class OrdersService {
       );
     }
 
+    await this.assertCanAcceptOrders(resolved.tenantId);
+
     // The customer is anonymous, so this whole path runs as a system scope
     // with the tenant pinned from the slug lookup.
     return runAsSystem('public order creation', () =>
@@ -114,6 +118,8 @@ export class OrdersService {
     input: CreateStaffOrderInput,
     branchId?: string,
   ): Promise<{ order: OrderDto; trackingToken: string }> {
+    await this.assertCanAcceptOrders(ctx.tenantId);
+
     const resolvedBranchId = await this.restaurants.resolveBranchId(ctx, branchId);
     const result = await this.createOrder({
       tenantId: ctx.tenantId,
@@ -136,6 +142,28 @@ export class OrdersService {
       },
     });
     return result;
+  }
+
+  /**
+   * Gates every order, whoever placed it.
+   *
+   * Both the subscription check and the monthly cap live here rather than in a
+   * guard, because the public path is anonymous - there is no session for a
+   * guard to read a tenant from, and that is exactly the path a lapsed tenant's
+   * customers would still be scanning QR codes on.
+   */
+  private async assertCanAcceptOrders(tenantId: string): Promise<void> {
+    const { writable, status } = await this.plans.entitlements(tenantId);
+    if (!writable) {
+      throw new AppException(
+        ApiErrorCode.SUBSCRIPTION_INACTIVE,
+        status === 'SUSPENDED'
+          ? 'ثبت سفارش برای این مجموعه موقتاً غیرفعال است.'
+          : 'این مجموعه در حال حاضر سفارش نمی‌پذیرد.',
+        402,
+      );
+    }
+    await this.plans.requireCapacity(tenantId, 'maxMonthlyOrders');
   }
 
   private async createOrder(args: {

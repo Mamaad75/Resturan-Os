@@ -122,6 +122,17 @@ function parseRangeBoundary(value: string, timeZone: string, exclusiveEnd: boole
   return new Date(value);
 }
 
+/**
+ * First instant of the current Tehran calendar month, in UTC.
+ *
+ * Plan allowances reset on the Tehran month boundary, not the UTC one: a
+ * restaurant's month ends when their month ends.
+ */
+export function tehranMonthStart(now: Date = new Date(), timeZone = TEHRAN_TZ): Date {
+  const parts = tehranParts(now, timeZone);
+  return zonedTimeToUtc(parts.year, parts.month, 1, 0, 0, 0, timeZone);
+}
+
 export function minutesBetween(a: Date, b: Date): number {
   return Math.floor(Math.abs(b.getTime() - a.getTime()) / 60_000);
 }

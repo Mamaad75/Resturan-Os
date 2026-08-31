@@ -10,6 +10,7 @@ import { buildPaginationMeta, paginationArgs } from '../../common/utils/paginati
 import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { toPublicProduct } from './menu.mappers';
 
@@ -27,6 +28,7 @@ export class ProductsService {
     @Inject(PRISMA) private readonly prisma: PrismaService,
     private readonly restaurants: RestaurantsService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
   ) {}
 
   async list(
@@ -87,6 +89,8 @@ export class ProductsService {
   }
 
   async create(ctx: RequestContext, input: CreateProductInput) {
+    await this.plans.requireCapacity(ctx.tenantId, 'maxProducts');
+
     const category = await this.prisma.category.findFirst({
       where: { id: input.categoryId, tenantId: ctx.tenantId },
       select: { id: true },

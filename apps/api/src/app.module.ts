@@ -6,6 +6,8 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
+import { PlatformAuthGuard } from './common/guards/platform-auth.guard';
+import { SubscriptionGuard } from './common/guards/subscription.guard';
 import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
 import { AppConfigModule } from './config/config.module';
 import { APP_CONFIG, type AppConfig } from './config/configuration';
@@ -20,6 +22,8 @@ import { RestaurantsModule } from './modules/restaurants/restaurants.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
+import { PlansModule } from './modules/plans/plans.module';
+import { PlatformModule } from './modules/platform/platform.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SignupModule } from './modules/signup/signup.module';
@@ -40,6 +44,7 @@ import { HealthController } from './health.controller';
   imports: [
     AppConfigModule,
     PrismaModule,
+    PlansModule,
     EventEmitterModule.forRoot({ maxListeners: 20, verboseMemoryLeak: true }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
@@ -64,6 +69,7 @@ import { HealthController } from './health.controller';
     QrModule,
     SmsModule,
     SignupModule,
+    PlatformModule,
     NotificationsModule,
     TablesModule,
     OrdersModule,
@@ -78,8 +84,19 @@ import { HealthController } from './health.controller';
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
     // Order matters: rate limit, then authenticate, then authorise.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    /*
+     * Guard order matters and is the whole security model:
+     *   PlatformAuthGuard  - claims @PlatformOnly routes for platform admins
+     *   JwtAuthGuard       - builds the tenant context, or rejects
+     *   PermissionsGuard   - checks the route's declared permissions
+     *   SubscriptionGuard  - refuses writes once a subscription has lapsed
+     * The billing gate runs last so it can never be the thing that lets an
+     * unauthenticated or unauthorised request through.
+     */
+    { provide: APP_GUARD, useClass: PlatformAuthGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
+    { provide: APP_GUARD, useClass: SubscriptionGuard },
   ],
 })
 export class AppModule {}

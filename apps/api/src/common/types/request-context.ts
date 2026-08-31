@@ -26,6 +26,27 @@ export interface AccessTokenPayload {
   name: string;
 }
 
+/**
+ * A FoodOS platform administrator.
+ *
+ * Deliberately has no `tenantId`: platform routes work across tenants, and
+ * giving this shape a tenant field would invite code to use it as if it were a
+ * `RequestContext` and silently scope a platform query to one tenant.
+ */
+export interface PlatformContext {
+  adminId: string;
+  email: string;
+  fullName: string;
+}
+
+/** Platform access-token payload. `scope` is what separates it from a tenant token. */
+export interface PlatformTokenPayload {
+  sub: string;
+  scope: 'platform';
+  email: string;
+  name: string;
+}
+
 /** Identity of a customer reaching a tracking endpoint with an order token. */
 export interface CustomerContext {
   orderId: string;
@@ -35,6 +56,7 @@ export interface CustomerContext {
 declare module 'express' {
   interface Request {
     ctx?: RequestContext;
+    platformCtx?: PlatformContext;
     customerCtx?: CustomerContext;
   }
 }

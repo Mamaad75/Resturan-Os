@@ -9,3 +9,6 @@ export * from './guest';
 export * from './table';
 export * from './settings';
 export * from './report';
+export * from './menu-theme';
+export * from './platform';
+export * from './crm';

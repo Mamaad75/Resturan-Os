@@ -1,13 +1,15 @@
-import { Controller, Get, Param, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@restaurant-os/types';
 import {
+  createBranchSchema,
   updateBrandingSchema,
   updateBranchSchema,
   updateRestaurantSchema,
   updateSettingsSchema,
   uuidSchema,
   type UpdateBrandingInput,
+  type CreateBranchInput,
   type UpdateBranchInput,
   type UpdateRestaurantInput,
   type UpdateSettingsInput,
@@ -64,6 +66,16 @@ export class RestaurantsController {
   @ApiOperation({ summary: 'List branches of the current tenant' })
   listBranches(@Ctx() ctx: RequestContext) {
     return this.restaurants.listBranches(ctx);
+  }
+
+  @Post('branches')
+  @RequirePermissions(Permission.BRANCH_MANAGE)
+  @ApiOperation({ summary: 'Open a new branch, subject to the plan s limits' })
+  createBranch(
+    @Ctx() ctx: RequestContext,
+    @ZodBody(createBranchSchema) dto: CreateBranchInput,
+  ) {
+    return this.restaurants.createBranch(ctx, dto);
   }
 
   @Patch('branches/:id')

@@ -5,5 +5,7 @@ export * from './api';
 export * from './events';
 export * from './models';
 export * from './menu-templates';
+export * from './menu-theme';
+export * from './platform';
 export * from './labels';
 export * from './format';

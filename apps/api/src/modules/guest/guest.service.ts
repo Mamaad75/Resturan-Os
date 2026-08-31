@@ -21,6 +21,7 @@ import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlansService } from '../plans/plans.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 
 @Injectable()
@@ -30,6 +31,7 @@ export class GuestService {
     private readonly restaurants: RestaurantsService,
     private readonly notifications: NotificationsService,
     private readonly events: EventEmitter2,
+    private readonly plans: PlansService,
   ) {}
 
   /* ------------------------------------------------------------------ */
@@ -45,6 +47,9 @@ export class GuestService {
    */
   async callWaiter(slug: string, input: CreateWaiterCallInput) {
     const resolved = await this.restaurants.findPublicBySlug(slug);
+    // Gated on the plan rather than on the UI: the button lives on a public
+    // page anyone can POST to.
+    await this.plans.requireFeature(resolved.tenantId, 'waiterCallEnabled');
 
     return runAsSystem('guest waiter call', async () => {
       const table = await this.prisma.restaurantTable.findFirst({

@@ -4,7 +4,7 @@ import { Reflector } from '@nestjs/core';
 import { permissionsForRole } from '@restaurant-os/types';
 import type { Request } from 'express';
 import { APP_CONFIG, type AppConfig } from '../../config/configuration';
-import { IS_PUBLIC_KEY } from '../decorators/auth.decorators';
+import { IS_PLATFORM_KEY, IS_PUBLIC_KEY } from '../decorators/auth.decorators';
 import { AppException } from '../exceptions/app.exception';
 import type { AccessTokenPayload } from '../types/request-context';
 import { ApiErrorCode } from '@restaurant-os/types';
@@ -30,6 +30,14 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ]);
     if (isPublic) return true;
+
+    // Platform routes have their own identity and their own signing key;
+    // PlatformAuthGuard has already authenticated them.
+    const isPlatform = this.reflector.getAllAndOverride<boolean>(IS_PLATFORM_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPlatform) return true;
 
     const request = context.switchToHttp().getRequest<Request>();
     const token = extractAccessToken(request);

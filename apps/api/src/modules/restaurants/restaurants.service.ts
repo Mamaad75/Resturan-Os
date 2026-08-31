@@ -7,6 +7,7 @@ import {
   type RestaurantSettings,
 } from '@restaurant-os/types';
 import type {
+  CreateBranchInput,
   UpdateBrandingInput,
   UpdateBranchInput,
   UpdateRestaurantInput,
@@ -17,12 +18,14 @@ import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 
 @Injectable()
 export class RestaurantsService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
   ) {}
 
   /* ------------------------------------------------------------------ */
@@ -218,6 +221,62 @@ export class RestaurantsService {
       isOpen: b.isOpen,
       isActive: b.isActive,
     }));
+  }
+
+  /**
+   * Opens a new branch.
+   *
+   * Two gates, both server-side: the plan has to include multi-branch at all,
+   * and the tenant has to be under its branch ceiling. A tenant on a
+   * single-branch plan gets a clear message rather than a silent failure.
+   */
+  async createBranch(ctx: RequestContext, input: CreateBranchInput) {
+    await this.plans.requireFeature(ctx.tenantId, 'multiBranchEnabled');
+    await this.plans.requireCapacity(ctx.tenantId, 'maxBranches');
+
+    const restaurant = await this.getRestaurantEntity(ctx.tenantId);
+
+    const clash = await this.prisma.branch.findFirst({
+      where: { restaurantId: restaurant.id, slug: input.slug },
+      select: { id: true },
+    });
+    if (clash) {
+      throw AppException.conflict('شعبه‌ای با این نشانی از قبل وجود دارد.');
+    }
+
+    const branch = await this.prisma.branch.create({
+      data: {
+        tenantId: ctx.tenantId,
+        restaurantId: restaurant.id,
+        name: input.name,
+        slug: input.slug,
+        address: input.address ?? null,
+        phone: input.phone ?? null,
+      },
+    });
+
+    // A branch without a menu cannot take an order; create it up front rather
+    // than lazily on the first request.
+    await this.getOrCreateMenuId(ctx.tenantId, branch.id);
+
+    this.audit.record({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: AuditAction.CREATE,
+      entity: 'Branch',
+      entityId: branch.id,
+      metadata: { name: branch.name, slug: branch.slug },
+    });
+
+    return {
+      id: branch.id,
+      name: branch.name,
+      slug: branch.slug,
+      address: branch.address,
+      phone: branch.phone,
+      isOpen: branch.isOpen,
+      isActive: branch.isActive,
+    };
   }
 
   async updateBranch(ctx: RequestContext, branchId: string, input: UpdateBranchInput) {

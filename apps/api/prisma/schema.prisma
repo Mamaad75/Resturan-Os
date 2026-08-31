@@ -14,9 +14,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* ------------------------------------------------------------------ */
-/* Enums                                                               */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Enums
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 enum UserRole {
   OWNER
@@ -142,19 +148,73 @@ enum Currency {
   IRR
 }
 
-/* ------------------------------------------------------------------ */
-/* Tenancy                                                             */
-/* ------------------------------------------------------------------ */
+/// What kind of establishment a restaurant is. Distinct from ServiceMode:
+/// this describes the business, that describes how it serves.
+enum BusinessType {
+  CAFE
+  RESTAURANT
+  FAST_FOOD
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  GRACE_PERIOD
+  EXPIRED
+  SUSPENDED
+}
+
+/// Transactional messages are part of an order and always send; marketing
+/// messages require consent and count against the plan's allowance.
+enum SmsKind {
+  TRANSACTIONAL
+  MARKETING
+}
+
+enum CampaignStatus {
+  DRAFT
+  SENDING
+  SENT
+  CANCELLED
+}
+
+/// Which slice of a tenant's customers a campaign targets.
+enum CustomerSegment {
+  ALL
+  NEW
+  RETURNING
+  VIP
+  HIGH_VALUE
+  INACTIVE_30
+  INACTIVE_60
+  DINE_IN
+  TAKEAWAY
+}
+
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Tenancy
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Tenant {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @db.VarChar(160)
-  slug      String   @unique @db.VarChar(64)
-  isActive  Boolean  @default(true)
-  /// Reserved for the platform-admin billing module.
-  plan      String   @default("standard") @db.VarChar(40)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid()) @db.Uuid
+  name       String   @db.VarChar(160)
+  slug       String   @unique @db.VarChar(64)
+  /// Master switch held by the platform: a suspended tenant is inactive.
+  isActive   Boolean  @default(true)
+  /// Legacy free-text plan label. Superseded by `subscription`, kept so old
+  /// rows and any external reader keep working; new code reads the plan
+  /// through Subscription -> Plan.
+  plan       String   @default("standard") @db.VarChar(40)
+  /// Platform-only note about this business. Never exposed to the tenant.
+  adminNotes String?  @db.VarChar(2000)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   restaurants   Restaurant[]
   branches      Branch[]
@@ -173,6 +233,9 @@ model Tenant {
   coupons       Coupon[]
   waiterCalls   WaiterCall[]
   feedback      OrderFeedback[]
+  subscription  Subscription?
+  campaigns     Campaign[]
+  platformAudit PlatformAuditLog[]
 
   @@index([slug])
   @@map("tenants")
@@ -197,22 +260,33 @@ model Restaurant {
   menuTemplate String  @default("CLASSIC") @db.VarChar(24)
 
   // Service configuration
-  serviceModes         ServiceMode[] @default([DINE_IN, TAKEAWAY])
-  currency             Currency      @default(IRT)
-  taxEnabled           Boolean       @default(false)
+  /// What kind of business this is. Independent of `serviceModes`, which say
+  /// how it serves; a cafe can be takeaway-only and a fast food place can seat
+  /// guests.
+  businessType            BusinessType  @default(RESTAURANT)
+  serviceModes            ServiceMode[] @default([DINE_IN, TAKEAWAY])
+  currency                Currency      @default(IRT)
+  taxEnabled              Boolean       @default(false)
   /// Basis points, e.g. 900 = 9.00%.
-  taxRateBps           Int           @default(0)
-  serviceChargeEnabled Boolean       @default(false)
-  serviceChargeBps     Int           @default(0)
-  estimatedPrepMinutes Int           @default(20)
-  smsNotificationsEnabled Boolean    @default(true)
-  autoConfirmOrders    Boolean       @default(true)
+  taxRateBps              Int           @default(0)
+  serviceChargeEnabled    Boolean       @default(false)
+  serviceChargeBps        Int           @default(0)
+  estimatedPrepMinutes    Int           @default(20)
+  smsNotificationsEnabled Boolean       @default(true)
+  autoConfirmOrders       Boolean       @default(true)
+  /// Whether a guest must give a phone number to place an order. Takeaway
+  /// needs one to send the "ready for pickup" message; dine-in usually does
+  /// not, so this defaults off and onboarding turns it on for takeaway.
+  requireCustomerPhone    Boolean       @default(false)
+  /// Offer marketing opt-in at checkout. Off until the owner enables it.
+  marketingOptInEnabled   Boolean       @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branches Branch[]
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branches  Branch[]
+  menuTheme MenuTheme?
 
   @@index([tenantId])
   @@index([slug])
@@ -240,14 +314,15 @@ model Branch {
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
 
-  users         User[]
-  menus         Menu[]
-  tables        RestaurantTable[]
-  orders        Order[]
-  qrCodes       QrCode[]
-  notifications Notification[]
-  waiterCalls   WaiterCall[]
-  feedback      OrderFeedback[]
+  users             User[]
+  menus             Menu[]
+  tables            RestaurantTable[]
+  orders            Order[]
+  qrCodes           QrCode[]
+  notifications     Notification[]
+  waiterCalls       WaiterCall[]
+  feedback          OrderFeedback[]
+  lastSeenCustomers Customer[]
 
   @@unique([restaurantId, slug])
   @@index([tenantId])
@@ -255,9 +330,15 @@ model Branch {
   @@map("branches")
 }
 
-/* ------------------------------------------------------------------ */
-/* Identity                                                            */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Identity
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model User {
   id                 String    @id @default(uuid()) @db.Uuid
@@ -275,10 +356,10 @@ model User {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branch        Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch        Branch?              @relation(fields: [branchId], references: [id], onDelete: SetNull)
   refreshTokens RefreshToken[]
-  createdOrders Order[]        @relation("OrderCreatedBy")
+  createdOrders Order[]              @relation("OrderCreatedBy")
   statusChanges OrderStatusHistory[]
   payments      Payment[]
   auditLogs     AuditLog[]
@@ -311,9 +392,15 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-/* ------------------------------------------------------------------ */
-/* Catalogue                                                           */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Catalogue
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Menu {
   id        String   @id @default(uuid()) @db.Uuid
@@ -429,27 +516,33 @@ model ModifierOption {
   @@map("modifier_options")
 }
 
-/* ------------------------------------------------------------------ */
-/* Floor                                                               */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Floor
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model RestaurantTable {
-  id       String      @id @default(uuid()) @db.Uuid
-  tenantId String      @db.Uuid
-  branchId String      @db.Uuid
-  number   Int
-  name     String?     @db.VarChar(60)
-  capacity Int         @default(4)
-  status   TableStatus @default(AVAILABLE)
-  zone     String?     @db.VarChar(60)
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @db.Uuid
+  branchId      String      @db.Uuid
+  number        Int
+  name          String?     @db.VarChar(60)
+  capacity      Int         @default(4)
+  status        TableStatus @default(AVAILABLE)
+  zone          String?     @db.VarChar(60)
   /// Denormalised pointer to the order currently seated at this table.
-  activeOrderId String? @db.Uuid
+  activeOrderId String?     @db.Uuid
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branch  Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch      Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
   orders      Order[]
   qrCodes     QrCode[]
   waiterCalls WaiterCall[]
@@ -461,19 +554,19 @@ model RestaurantTable {
 }
 
 model QrCode {
-  id        String     @id @default(uuid()) @db.Uuid
-  tenantId  String     @db.Uuid
-  branchId  String?    @db.Uuid
-  tableId   String?    @db.Uuid
-  type      QrCodeType
-  label     String     @db.VarChar(80)
+  id         String     @id @default(uuid()) @db.Uuid
+  tenantId   String     @db.Uuid
+  branchId   String?    @db.Uuid
+  tableId    String?    @db.Uuid
+  type       QrCodeType
+  label      String     @db.VarChar(80)
   /// Stable routing path only. Menu content is always fetched live, so
   /// changing a price never invalidates a printed QR code.
-  targetPath String    @db.VarChar(300)
-  scanCount Int        @default(0)
-  isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  targetPath String     @db.VarChar(300)
+  scanCount  Int        @default(0)
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
 
   tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   branch Branch?          @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -485,27 +578,54 @@ model QrCode {
   @@map("qr_codes")
 }
 
-/* ------------------------------------------------------------------ */
-/* Customers & orders                                                  */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Customers & orders
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Customer {
-  id          String    @id @default(uuid()) @db.Uuid
-  tenantId    String    @db.Uuid
-  phone       String    @db.VarChar(20)
-  name        String?   @db.VarChar(120)
-  ordersCount Int       @default(0)
-  totalSpent  Int       @default(0)
-  lastOrderAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @db.Uuid
+  phone    String  @db.VarChar(20)
+  name     String? @db.VarChar(120)
+
+  /// Cached aggregates, maintained inside the order transaction. They are
+  /// derivable from orders, but every customer list and segment filter reads
+  /// them, and recomputing per row would make the CRM unusable at scale.
+  ordersCount   Int       @default(0)
+  totalSpent    Int       @default(0)
+  dineInCount   Int       @default(0)
+  takeawayCount Int       @default(0)
+  firstOrderAt  DateTime?
+  lastOrderAt   DateTime?
+  lastBranchId  String?   @db.Uuid
+
+  /// Marketing consent is separate from transactional messaging: an order
+  /// confirmation always sends, a campaign only sends with consent.
+  marketingConsent   Boolean   @default(false)
+  marketingConsentAt DateTime?
+
+  tags  String[] @default([])
+  notes String?  @db.VarChar(2000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lastBranch    Branch?        @relation(fields: [lastBranchId], references: [id], onDelete: SetNull)
   orders        Order[]
   notifications Notification[]
+  smsMessages   SmsMessage[]
 
   @@unique([tenantId, phone])
   @@index([tenantId])
+  @@index([tenantId, lastOrderAt])
+  @@index([tenantId, totalSpent])
   @@map("customers")
 }
 
@@ -549,16 +669,16 @@ model Order {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branch        Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  table         RestaurantTable?     @relation(fields: [tableId], references: [id], onDelete: SetNull)
-  customer      Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  createdBy     User?                @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  items         OrderItem[]
-  statusHistory OrderStatusHistory[]
-  payments      Payment[]
-  notifications Notification[]
-  smsMessages   SmsMessage[]
+  tenant           Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch           Branch               @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  table            RestaurantTable?     @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  customer         Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdBy        User?                @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  items            OrderItem[]
+  statusHistory    OrderStatusHistory[]
+  payments         Payment[]
+  notifications    Notification[]
+  smsMessages      SmsMessage[]
   couponRedemption CouponRedemption?
   feedback         OrderFeedback?
 
@@ -575,15 +695,15 @@ model Order {
 }
 
 model OrderItem {
-  id        String @id @default(uuid()) @db.Uuid
-  tenantId  String @db.Uuid
-  orderId   String @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
+  tenantId  String  @db.Uuid
+  orderId   String  @db.Uuid
   productId String? @db.Uuid
 
   /// Product identity is copied at order time so historical receipts and
   /// reports stay correct after the menu is edited or a product is deleted.
-  productName   String @db.VarChar(120)
-  productNameFa String @db.VarChar(120)
+  productName   String  @db.VarChar(120)
+  productNameFa String  @db.VarChar(120)
   imageUrl      String? @db.VarChar(500)
 
   quantity       Int
@@ -605,9 +725,9 @@ model OrderItem {
 }
 
 model OrderItemModifier {
-  id          String @id @default(uuid()) @db.Uuid
-  tenantId    String @db.Uuid
-  orderItemId String @db.Uuid
+  id               String  @id @default(uuid()) @db.Uuid
+  tenantId         String  @db.Uuid
+  orderItemId      String  @db.Uuid
   modifierOptionId String? @db.Uuid
 
   name       String @db.VarChar(80)
@@ -644,14 +764,20 @@ model OrderStatusHistory {
   @@map("order_status_history")
 }
 
-/* ------------------------------------------------------------------ */
-/* Payments                                                            */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Payments
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Payment {
-  id       String @id @default(uuid()) @db.Uuid
-  tenantId String @db.Uuid
-  orderId  String @db.Uuid
+  id           String  @id @default(uuid()) @db.Uuid
+  tenantId     String  @db.Uuid
+  orderId      String  @db.Uuid
   /// Null for customer-initiated online payments.
   recordedById String? @db.Uuid
 
@@ -661,8 +787,8 @@ model Payment {
   currency Currency      @default(IRT)
 
   /// Gateway identifier ("zarinpal", "manual", ...) and its reference.
-  provider    String? @db.VarChar(60)
-  providerRef String? @db.VarChar(200)
+  provider     String? @db.VarChar(60)
+  providerRef  String? @db.VarChar(200)
   /// Raw provider payload, kept for reconciliation and dispute handling.
   providerMeta Json?
 
@@ -686,9 +812,15 @@ model Payment {
   @@map("payments")
 }
 
-/* ------------------------------------------------------------------ */
-/* Messaging                                                           */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Messaging
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Notification {
   id         String  @id @default(uuid()) @db.Uuid
@@ -699,12 +831,12 @@ model Notification {
   customerId String? @db.Uuid
   orderId    String? @db.Uuid
 
-  type    NotificationType
-  channel NotificationChannel @default(IN_APP)
-  title   String              @db.VarChar(160)
-  body    String              @db.VarChar(500)
+  type     NotificationType
+  channel  NotificationChannel @default(IN_APP)
+  title    String              @db.VarChar(160)
+  body     String              @db.VarChar(500)
   /// Generic pointer to the subject of the notification.
-  entityId String?            @db.Uuid
+  entityId String?             @db.Uuid
 
   readAt    DateTime?
   createdAt DateTime  @default(now())
@@ -724,18 +856,27 @@ model Notification {
 }
 
 model SmsMessage {
-  id       String  @id @default(uuid()) @db.Uuid
-  tenantId String  @db.Uuid
-  orderId  String? @db.Uuid
+  id         String  @id @default(uuid()) @db.Uuid
+  tenantId   String  @db.Uuid
+  orderId    String? @db.Uuid
+  customerId String? @db.Uuid
+  campaignId String? @db.Uuid
+
+  /// Transactional messages bypass consent and the marketing allowance;
+  /// marketing messages require both.
+  kind       SmsKind @default(TRANSACTIONAL)
+  /// Provider credits consumed, when the provider reports them. Rolls up into
+  /// the tenant usage the platform admin sees.
+  creditCost Int     @default(1)
 
   to       String    @db.VarChar(20)
   body     String    @db.VarChar(600)
   status   SmsStatus @default(PENDING)
   provider String    @db.VarChar(60)
 
-  providerRef String?   @db.VarChar(200)
-  attempts    Int       @default(0)
-  lastError   String?   @db.VarChar(500)
+  providerRef   String?   @db.VarChar(200)
+  attempts      Int       @default(0)
+  lastError     String?   @db.VarChar(500)
   /// Set by the worker when a retry becomes due (exponential backoff).
   nextAttemptAt DateTime?
   sentAt        DateTime?
@@ -744,18 +885,28 @@ model SmsMessage {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  order  Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  order    Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([status, nextAttemptAt])
   @@index([orderId])
+  @@index([tenantId, kind, createdAt])
+  @@index([campaignId])
   @@map("sms_messages")
 }
 
-/* ------------------------------------------------------------------ */
-/* Promotions                                                          */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Promotions
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model Coupon {
   id       String     @id @default(uuid()) @db.Uuid
@@ -777,8 +928,8 @@ model Coupon {
   endsAt   DateTime?
 
   /// Total redemptions allowed across all customers; null means unlimited.
-  usageLimit  Int?
-  usageCount  Int  @default(0)
+  usageLimit       Int?
+  usageCount       Int  @default(0)
   /// Redemptions allowed per customer phone; null means unlimited.
   perCustomerLimit Int?
 
@@ -795,15 +946,15 @@ model Coupon {
 }
 
 model CouponRedemption {
-  id         String  @id @default(uuid()) @db.Uuid
-  tenantId   String  @db.Uuid
-  couponId   String  @db.Uuid
-  orderId    String  @db.Uuid
-  customerId String? @db.Uuid
+  id            String  @id @default(uuid()) @db.Uuid
+  tenantId      String  @db.Uuid
+  couponId      String  @db.Uuid
+  orderId       String  @db.Uuid
+  customerId    String? @db.Uuid
   /// Phone captured even for guests, so per-customer limits still apply.
   customerPhone String? @db.VarChar(20)
   /// The discount actually granted, for reporting on campaign cost.
-  amount     Int
+  amount        Int
 
   createdAt DateTime @default(now())
 
@@ -818,9 +969,15 @@ model CouponRedemption {
   @@map("coupon_redemptions")
 }
 
-/* ------------------------------------------------------------------ */
-/* Guest interaction                                                   */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Guest interaction
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model WaiterCall {
   id       String @id @default(uuid()) @db.Uuid
@@ -875,9 +1032,15 @@ model OrderFeedback {
   @@map("order_feedback")
 }
 
-/* ------------------------------------------------------------------ */
-/* Audit                                                               */
-/* ------------------------------------------------------------------ */
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Audit
+ */
+/**
+ * ------------------------------------------------------------------
+ */
 
 model AuditLog {
   id       String  @id @default(uuid()) @db.Uuid
@@ -901,4 +1064,246 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([userId])
   @@map("audit_logs")
+}
+
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Platform (FoodOS)
+ */
+/**
+ * ------------------------------------------------------------------
+ */
+
+/// A FoodOS staff account, living entirely outside tenancy.
+///
+/// Deliberately not a `User` with a special role: every User row requires a
+/// tenantId and is reached through tenant-scoped queries, so a platform
+/// identity modelled that way would either need a fake tenant or a hole in
+/// the isolation guard. A separate table keeps the two authentication
+/// surfaces, and the two blast radiuses, apart.
+model PlatformAdmin {
+  id                 String    @id @default(uuid()) @db.Uuid
+  email              String    @unique @db.VarChar(160)
+  passwordHash       String    @db.VarChar(255)
+  fullName           String    @db.VarChar(120)
+  isActive           Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  refreshTokens PlatformRefreshToken[]
+  auditLogs     PlatformAuditLog[]
+
+  @@map("platform_admins")
+}
+
+model PlatformRefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  adminId   String    @db.Uuid
+  /// SHA-256 of the opaque token; the raw value only ever lives in the cookie.
+  tokenHash String    @unique @db.VarChar(64)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  admin PlatformAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId])
+  @@index([expiresAt])
+  @@map("platform_refresh_tokens")
+}
+
+/// Audit trail for platform actions. Separate from the tenant `AuditLog`
+/// because a tenant must never be able to read what the platform did to it,
+/// and because the actor is a PlatformAdmin rather than a User.
+model PlatformAuditLog {
+  id       String  @id @default(uuid()) @db.Uuid
+  adminId  String? @db.Uuid
+  tenantId String? @db.Uuid
+
+  action   String  @db.VarChar(60)
+  entity   String  @db.VarChar(60)
+  entityId String? @db.Uuid
+
+  /// Before/after values for anything that changed a tenant's standing.
+  previousValue Json?
+  newValue      Json?
+
+  ipAddress String?  @db.VarChar(64)
+  userAgent String?  @db.VarChar(300)
+  createdAt DateTime @default(now())
+
+  admin  PlatformAdmin? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  tenant Tenant?        @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([adminId, createdAt])
+  @@map("platform_audit_logs")
+}
+
+/// A sellable plan. Limits and feature flags are real columns rather than a
+/// JSON blob so the API can filter and compare on them, and so adding a limit
+/// is a migration rather than a silent behaviour change.
+///
+/// `null` on a limit means unlimited.
+model Plan {
+  id          String  @id @default(uuid()) @db.Uuid
+  /// Stable machine key, e.g. "basic". Used by seeds and by any external
+  /// billing integration; the display name can change freely.
+  key         String  @unique @db.VarChar(40)
+  name        String  @db.VarChar(80)
+  nameFa      String  @db.VarChar(80)
+  description String? @db.VarChar(500)
+
+  /// Monthly price in the platform currency unit (Toman).
+  monthlyPrice Int     @default(0)
+  isActive     Boolean @default(true)
+  /// Plan offered to new signups when nothing else is specified.
+  isDefault    Boolean @default(false)
+  displayOrder Int     @default(0)
+
+  // Limits. null = unlimited.
+  maxBranches      Int?
+  maxStaff         Int?
+  maxProducts      Int?
+  maxTables        Int?
+  maxMonthlyOrders Int?
+  /// Marketing messages per calendar month. Transactional SMS is never capped.
+  smsAllowance     Int?
+
+  // Feature flags.
+  customThemeEnabled   Boolean @default(false)
+  advancedThemeEnabled Boolean @default(false)
+  customCssEnabled     Boolean @default(false)
+  crmEnabled           Boolean @default(false)
+  campaignsEnabled     Boolean @default(false)
+  takeawayEnabled      Boolean @default(true)
+  dineInEnabled        Boolean @default(true)
+  waiterCallEnabled    Boolean @default(true)
+  reportsEnabled       Boolean @default(true)
+  couponsEnabled       Boolean @default(true)
+  multiBranchEnabled   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@index([isActive, displayOrder])
+  @@map("plans")
+}
+
+/// One tenant's standing with the platform. One row per tenant today; the
+/// model is separate from Tenant so billing history can be added without
+/// reshaping the tenant table.
+model Subscription {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @db.Uuid
+  planId   String @db.Uuid
+
+  status SubscriptionStatus @default(TRIAL)
+
+  startedAt       DateTime  @default(now())
+  /// When the paid period ends. null means open-ended (platform-granted).
+  expiresAt       DateTime?
+  /// While in TRIAL, when the trial runs out.
+  trialEndsAt     DateTime?
+  /// Read-write access continues until this instant after expiry, so an
+  /// invoice a few days late does not take a restaurant offline mid-service.
+  graceUntil      DateTime?
+  /// Set when the platform suspended the tenant, with the stated reason.
+  suspendedAt     DateTime?
+  suspendedReason String?   @db.VarChar(300)
+
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@index([expiresAt])
+  @@map("subscriptions")
+}
+
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Marketing
+ */
+/**
+ * ------------------------------------------------------------------
+ */
+
+model Campaign {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+
+  name    String          @db.VarChar(120)
+  segment CustomerSegment @default(ALL)
+  body    String          @db.VarChar(600)
+  status  CampaignStatus  @default(DRAFT)
+
+  /// Snapshot of how the send went; the SmsMessage rows are the detail.
+  recipientCount Int @default(0)
+  sentCount      Int @default(0)
+  failedCount    Int @default(0)
+
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages SmsMessage[]
+
+  @@index([tenantId, createdAt])
+  @@map("campaigns")
+}
+
+/**
+ * ------------------------------------------------------------------
+ */
+/**
+ * Menu theme
+ */
+/**
+ * ------------------------------------------------------------------
+ */
+
+/// The customer menu's appearance, one row per restaurant.
+///
+/// `preset` names the starting template; `draft` and `published` hold the
+/// full theme configuration. Keeping them as validated JSON rather than forty
+/// columns is deliberate: the shape is owned by a Zod schema in
+/// `@restaurant-os/validation`, it is written whole by the customizer and read
+/// whole by the renderer, and no query ever filters on an individual knob.
+model MenuTheme {
+  id           String @id @default(uuid()) @db.Uuid
+  tenantId     String @db.Uuid
+  restaurantId String @unique @db.Uuid
+
+  preset String @default("CLASSIC") @db.VarChar(24)
+
+  /// What guests see. Null means "render the preset's defaults".
+  published Json?
+  /// Work in progress, visible only in the admin preview.
+  draft     Json?
+
+  /// Tenant-authored CSS, injected into the menu page only and scoped to it.
+  /// Gated by the plan's customCssEnabled flag on write.
+  customCss String? @db.VarChar(20000)
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("menu_themes")
 }

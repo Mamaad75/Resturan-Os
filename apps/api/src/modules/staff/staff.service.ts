@@ -8,6 +8,7 @@ import { AppException } from '../../common/exceptions/app.exception';
 import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 import { AuthService } from '../auth/auth.service';
 import { PasswordService } from '../auth/password.service';
 
@@ -18,6 +19,7 @@ export class StaffService {
     private readonly passwords: PasswordService,
     private readonly auth: AuthService,
     private readonly audit: AuditService,
+    private readonly plans: PlansService,
   ) {}
 
   async list(ctx: RequestContext): Promise<StaffDto[]> {
@@ -30,6 +32,10 @@ export class StaffService {
   }
 
   async create(ctx: RequestContext, input: CreateStaffInput): Promise<StaffDto> {
+    // The plan's staff ceiling, checked before anything is written. Hiding the
+    // button in the admin would not stop a direct API call.
+    await this.plans.requireCapacity(ctx.tenantId, 'maxStaff');
+
     this.assertCanManageRole(ctx, input.role);
 
     const clash = await this.prisma.user.findFirst({

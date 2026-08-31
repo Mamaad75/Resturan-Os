@@ -23,6 +23,7 @@ import {
 } from '../../common/utils/time.util';
 import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
+import { PlansService } from '../plans/plans.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 import { ORDER_SUMMARY_INCLUDE, toOrderSummaryDto } from '../orders/order.mappers';
 
@@ -40,9 +41,15 @@ export class ReportsService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaService,
     private readonly restaurants: RestaurantsService,
+    private readonly plans: PlansService,
   ) {}
 
+  /**
+   * The full sales report is a paid feature. The dashboard summary is not -
+   * a restaurant on any plan still needs a home screen with today's numbers.
+   */
   async salesReport(ctx: RequestContext, query: ReportQueryInput): Promise<SalesReport> {
+    await this.plans.requireFeature(ctx.tenantId, 'reportsEnabled');
     const branchId = await this.restaurants.resolveBranchId(ctx, query.branchId);
     const range = resolveReportRange(query.preset, query.from, query.to);
 

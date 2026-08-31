@@ -15,6 +15,8 @@ export interface AppConfig {
   redisUrl: string | null;
   auth: {
     accessSecret: string;
+    /** Separate signing key for platform sessions; see PlatformAuthGuard. */
+    platformSecret: string;
     accessTtlSeconds: number;
     refreshTtlDays: number;
     cookieSecret: string;
@@ -90,6 +92,19 @@ export function loadConfiguration(): AppConfig {
     throw new Error('JWT_ACCESS_SECRET must be at least 32 characters in production.');
   }
 
+  /*
+   * Platform sessions are signed with their own key so a tenant access token
+   * can never be replayed against the platform surface, whatever it claims
+   * inside. Deployments that do not set it derive one from the tenant secret,
+   * which keeps the two keys different without adding a required variable to
+   * an already-running production environment.
+   */
+  const platformSecret =
+    optional('JWT_PLATFORM_SECRET') ?? `${accessSecret}::foodos-platform`;
+  if (isProduction && platformSecret.length < 32) {
+    throw new Error('JWT_PLATFORM_SECRET must be at least 32 characters in production.');
+  }
+
   const databaseUrl =
     nodeEnv === 'test'
       ? required('TEST_DATABASE_URL', process.env.DATABASE_URL)
@@ -116,6 +131,7 @@ export function loadConfiguration(): AppConfig {
     redisUrl: optional('REDIS_URL'),
     auth: {
       accessSecret,
+      platformSecret,
       accessTtlSeconds: int('JWT_ACCESS_TTL', 900),
       refreshTtlDays: int('REFRESH_TOKEN_TTL_DAYS', 30),
       cookieSecret: required('COOKIE_SECRET', devSecretFallback),

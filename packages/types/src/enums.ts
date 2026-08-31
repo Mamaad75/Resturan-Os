@@ -167,3 +167,61 @@ export const AuditAction = {
   SETTINGS_CHANGE: 'SETTINGS_CHANGE',
 } as const;
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
+
+/** What kind of establishment a restaurant is. */
+export const BusinessType = {
+  CAFE: 'CAFE',
+  RESTAURANT: 'RESTAURANT',
+  FAST_FOOD: 'FAST_FOOD',
+} as const;
+export type BusinessType = (typeof BusinessType)[keyof typeof BusinessType];
+
+/**
+ * How a restaurant serves, as the owner picks it in settings. Stored as the
+ * existing `serviceModes` array on the restaurant; this is the single-choice
+ * view of it that the settings UI and the takeaway rules work with.
+ */
+export const ServiceModeChoice = {
+  DINE_IN: 'DINE_IN',
+  TAKEAWAY: 'TAKEAWAY',
+  BOTH: 'BOTH',
+} as const;
+export type ServiceModeChoice =
+  (typeof ServiceModeChoice)[keyof typeof ServiceModeChoice];
+
+export const SubscriptionStatus = {
+  TRIAL: 'TRIAL',
+  ACTIVE: 'ACTIVE',
+  GRACE_PERIOD: 'GRACE_PERIOD',
+  EXPIRED: 'EXPIRED',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type SubscriptionStatus =
+  (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
+
+export const SmsKind = {
+  TRANSACTIONAL: 'TRANSACTIONAL',
+  MARKETING: 'MARKETING',
+} as const;
+export type SmsKind = (typeof SmsKind)[keyof typeof SmsKind];
+
+export const CampaignStatus = {
+  DRAFT: 'DRAFT',
+  SENDING: 'SENDING',
+  SENT: 'SENT',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type CampaignStatus = (typeof CampaignStatus)[keyof typeof CampaignStatus];
+
+export const CustomerSegment = {
+  ALL: 'ALL',
+  NEW: 'NEW',
+  RETURNING: 'RETURNING',
+  VIP: 'VIP',
+  HIGH_VALUE: 'HIGH_VALUE',
+  INACTIVE_30: 'INACTIVE_30',
+  INACTIVE_60: 'INACTIVE_60',
+  DINE_IN: 'DINE_IN',
+  TAKEAWAY: 'TAKEAWAY',
+} as const;
+export type CustomerSegment = (typeof CustomerSegment)[keyof typeof CustomerSegment];

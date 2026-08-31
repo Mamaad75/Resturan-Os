@@ -60,6 +60,13 @@ export const ApiErrorCode = {
   PAYMENT_AMOUNT_MISMATCH: 'PAYMENT_AMOUNT_MISMATCH',
   PAYMENT_PROVIDER_ERROR: 'PAYMENT_PROVIDER_ERROR',
   SMS_PROVIDER_ERROR: 'SMS_PROVIDER_ERROR',
+
+  /** The tenant's plan does not include this feature. */
+  PLAN_FEATURE_UNAVAILABLE: 'PLAN_FEATURE_UNAVAILABLE',
+  /** The tenant is at the ceiling their plan allows for this resource. */
+  PLAN_LIMIT_REACHED: 'PLAN_LIMIT_REACHED',
+  /** The subscription has lapsed or been suspended; writes are refused. */
+  SUBSCRIPTION_INACTIVE: 'SUBSCRIPTION_INACTIVE',
   STORAGE_ERROR: 'STORAGE_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;

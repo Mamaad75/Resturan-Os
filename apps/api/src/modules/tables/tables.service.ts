@@ -16,6 +16,7 @@ import { APP_CONFIG, type AppConfig } from '../../config/configuration';
 import { DomainEvent, type TableUpdatedEvent } from '../../events/domain-events';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { PlansService } from '../plans/plans.service';
 import { RestaurantsService } from '../restaurants/restaurants.service';
 
 @Injectable()
@@ -26,6 +27,7 @@ export class TablesService {
     private readonly restaurants: RestaurantsService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
+    private readonly plans: PlansService,
   ) {}
 
   async list(ctx: RequestContext, branchId?: string): Promise<TableDto[]> {
@@ -78,6 +80,8 @@ export class TablesService {
   }
 
   async create(ctx: RequestContext, input: CreateTableInput, branchId?: string) {
+    await this.plans.requireCapacity(ctx.tenantId, 'maxTables');
+
     const resolvedBranchId = await this.restaurants.resolveBranchId(ctx, branchId);
     const clash = await this.prisma.restaurantTable.findFirst({
       where: { tenantId: ctx.tenantId, branchId: resolvedBranchId, number: input.number },
@@ -130,7 +134,11 @@ export class TablesService {
         zone: input.zone ?? null,
       });
     }
+    // Charged for what would actually be inserted, not the requested range:
+    // re-running a bulk create over existing numbers should not fail on a
+    // limit it is not about to consume.
     if (rows.length > 0) {
+      await this.plans.requireCapacity(ctx.tenantId, 'maxTables', rows.length);
       await this.prisma.restaurantTable.createMany({ data: rows });
     }
     this.audit.record({

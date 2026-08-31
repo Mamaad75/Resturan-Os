@@ -2,7 +2,11 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Permission } from '@restaurant-os/types';
 import type { Request } from 'express';
-import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from '../decorators/auth.decorators';
+import {
+  IS_PLATFORM_KEY,
+  IS_PUBLIC_KEY,
+  PERMISSIONS_KEY,
+} from '../decorators/auth.decorators';
 import { AppException } from '../exceptions/app.exception';
 
 /**
@@ -19,6 +23,14 @@ export class PermissionsGuard implements CanActivate {
       context.getClass(),
     ]);
     if (isPublic) return true;
+
+    // Platform routes are gated by PlatformAuthGuard; the tenant role matrix
+    // does not apply to them.
+    const isPlatform = this.reflector.getAllAndOverride<boolean>(IS_PLATFORM_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPlatform) return true;
 
     const required = this.reflector.getAllAndOverride<Permission[]>(PERMISSIONS_KEY, [
       context.getHandler(),
