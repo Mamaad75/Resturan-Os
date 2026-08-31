@@ -84,11 +84,23 @@ export async function resetDatabase(prisma: PrismaClient): Promise<void> {
 export async function seedTenant(
   prisma: PrismaClient,
   label: string,
+  options: { planKey?: string } = {},
 ): Promise<TestTenant> {
   const slug = `${label}-${randomBytes(3).toString('hex')}`;
 
   const tenant = await prisma.tenant.create({
     data: { name: `مجموعه ${label}`, slug },
+  });
+
+  /*
+   * Every tenant needs a subscription before it can write anything: the
+   * entitlements resolver treats a tenant without one as expired, which is the
+   * only safe default for a billing gate. Tests get the unlimited plan unless
+   * they are specifically exercising a limit.
+   */
+  const plan = await ensurePlan(prisma, options.planKey ?? 'test-unlimited');
+  await prisma.subscription.create({
+    data: { tenantId: tenant.id, planId: plan.id, status: 'ACTIVE' },
   });
 
   const restaurant = await prisma.restaurant.create({
@@ -219,6 +231,81 @@ export async function seedTenant(
     tableIds: tables.map((table) => table.id),
     users,
   };
+}
+
+/**
+ * Plans the suite needs, created once and reused.
+ *
+ * `test-unlimited` is the default: no caps, every feature on, so a test that
+ * is not about plans is never surprised by one. Tests that exercise limits ask
+ * for a specific plan by key and create it themselves.
+ */
+export async function ensurePlan(
+  prisma: PrismaClient,
+  key: string,
+  overrides: Record<string, unknown> = {},
+) {
+  const unlimited = {
+    name: key,
+    nameFa: key,
+    monthlyPrice: 0,
+    isActive: true,
+    isDefault: false,
+    maxBranches: null,
+    maxStaff: null,
+    maxProducts: null,
+    maxTables: null,
+    maxMonthlyOrders: null,
+    smsAllowance: null,
+    customThemeEnabled: true,
+    advancedThemeEnabled: true,
+    customCssEnabled: true,
+    crmEnabled: true,
+    campaignsEnabled: true,
+    takeawayEnabled: true,
+    dineInEnabled: true,
+    waiterCallEnabled: true,
+    reportsEnabled: true,
+    couponsEnabled: true,
+    multiBranchEnabled: true,
+    ...overrides,
+  };
+
+  return prisma.plan.upsert({
+    where: { key },
+    create: { key, ...unlimited },
+    update: unlimited,
+  });
+}
+
+/** Creates a FoodOS platform administrator and returns its credentials. */
+export async function seedPlatformAdmin(
+  prisma: PrismaClient,
+  email = `admin-${randomBytes(3).toString('hex')}@foodos.test`,
+) {
+  const passwordHash = await argon2.hash(PASSWORD, {
+    type: argon2.argon2id,
+    memoryCost: 2 ** 12,
+    timeCost: 2,
+    parallelism: 1,
+  });
+  const admin = await prisma.platformAdmin.create({
+    data: { email, passwordHash, fullName: 'Platform Tester' },
+  });
+  return { id: admin.id, email, password: PASSWORD };
+}
+
+/** Signs in as a platform administrator and returns the bearer token. */
+export async function platformLogin(
+  ctx: TestContext,
+  account: { email: string; password: string },
+): Promise<string> {
+  const response = await ctx
+    .http()
+    .post('/api/platform/auth/login')
+    .send({ email: account.email, password: account.password })
+    .expect(200);
+  return response.body.data.accessToken as string;
 }
 
 /** Signs in and returns the bearer token for a seeded role. */

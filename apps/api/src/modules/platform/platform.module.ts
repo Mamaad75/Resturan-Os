@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { PlatformAuditService } from './platform-audit.service';
 import { PlatformAuthController } from './platform-auth.controller';
 import { PlatformAuthService } from './platform-auth.service';
+import { PlatformBootstrapService } from './platform-bootstrap.service';
 import { PlatformController } from './platform.controller';
 import { PlatformDashboardService } from './platform-dashboard.service';
 import { PlatformPlansService } from './platform-plans.service';
@@ -20,6 +21,7 @@ import { PlatformTenantsService } from './platform-tenants.service';
   controllers: [PlatformAuthController, PlatformController],
   providers: [
     PlatformAuthService,
+    PlatformBootstrapService,
     PlatformAuditService,
     PlatformDashboardService,
     PlatformTenantsService,

@@ -425,11 +425,11 @@ customer menu is designed mobile-first and scaled up.
 
 ## 10. Testing strategy
 
-**Unit tests (67)** cover pure logic with no I/O: money arithmetic and
+**Unit tests (104)** cover pure logic with no I/O: money arithmetic and
 rounding, Tehran day boundaries and report ranges, the full state-machine
 transition table, the RBAC matrix, and the tenant guard's accept/reject rules.
 
-**Integration tests (159)** boot the real Nest application against a real
+**Integration tests (206)** boot the real Nest application against a real
 PostgreSQL database with no mocks, because the behaviour worth covering only
 exists end to end — transactions, isolation, the state machine, money. Each
 suite truncates the database, so tests never depend on each other.
@@ -447,7 +447,44 @@ and a PHP payload renamed to `.png` is rejected by the upload pipeline.
 
 ---
 
-## 11. Known limits
+## 11. The platform tier
+
+FoodOS sits above the tenants it serves, and the two are kept apart
+deliberately.
+
+**A separate identity.** `PlatformAdmin` is its own table, not a `User` with a
+special role. Every `User` row requires a `tenantId` and is reached through
+tenant-scoped queries, so a platform identity modelled that way would need
+either a fake tenant or a hole in the isolation guard. Platform sessions are
+signed with their own key (`JWT_PLATFORM_SECRET`), so a restaurant owner's
+token cannot be replayed against `/platform` however it is crafted, and a
+platform token is refused by every tenant route.
+
+**Cross-tenant reads are explicit.** The isolation guard stays armed for the
+platform module too; each query that legitimately spans tenants is wrapped in
+`runAsSystem` with a stated reason, so the complete list of places that see
+across the platform is greppable.
+
+**Entitlements are computed, never cached.** `PlansService.entitlements()`
+resolves a tenant's plan, its live usage and its effective subscription status
+on every check. Status is derived from dates rather than stored, so an expiry
+takes effect at the instant it falls due without a scheduled job having run,
+and raising a limit applies on the very next request.
+
+**The gate fails closed.** A tenant with no subscription row reads as expired
+rather than unlimited. That is what makes the seeded test tenants need an
+explicit subscription — and it is the only safe default for a billing gate.
+
+**Writes stop, reads do not.** `SubscriptionGuard` refuses mutating requests
+once a subscription has lapsed, and leaves reads alone: a restaurant whose
+invoice is late should still be able to see its own orders and the page that
+explains why. Public order creation is gated inside the order service instead,
+because an anonymous QR request has no session for a guard to read a tenant
+from.
+
+---
+
+## 12. Known limits
 
 Honest about what this version does not do:
 

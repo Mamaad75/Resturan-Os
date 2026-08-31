@@ -369,3 +369,47 @@ export function diffFromPreset(
 }
 
 export { MENU_TEMPLATE_SPECS };
+
+/**
+ * Scopes tenant CSS to the menu container.
+ *
+ * Every selector is prefixed with `#foodos-menu`, so a rule the restaurant
+ * wrote cannot reach the admin shell, another tenant's page, or anything
+ * outside their own menu - even if they wrote `body { display: none }`.
+ * The validation layer has already rejected script-bearing constructs; this is
+ * the containment half of the same job.
+ */
+export function scopeCustomCss(css: string | null | undefined): string {
+  if (!css) return '';
+  const SCOPE = '#foodos-menu';
+
+  return (
+    css
+      // Strip comments first so a commented-out brace cannot confuse the split.
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('}')
+      .map((block) => {
+        const [rawSelector, ...rest] = block.split('{');
+        if (rest.length === 0) return '';
+        const body = rest.join('{').trim();
+        if (!body) return '';
+
+        const selectors = rawSelector
+          .split(',')
+          .map((selector) => selector.trim())
+          .filter(Boolean)
+          .map((selector) => {
+            // An at-rule keeps its own syntax; its inner rules are already
+            // scoped because the whole block sits inside the scoped sheet.
+            if (selector.startsWith('@')) return selector;
+            // Targeting the page itself means targeting the menu container.
+            if (/^(html|body|:root)$/i.test(selector)) return SCOPE;
+            return `${SCOPE} ${selector}`;
+          });
+
+        return `${selectors.join(', ')} { ${body} }`;
+      })
+      .filter(Boolean)
+      .join('\n')
+  );
+}

@@ -93,12 +93,41 @@ full menu editing (categories, products, images, modifier groups), discount
 campaigns, sales reports, staff and roles, restaurant settings and branding,
 QR code generation and a printable QR sheet.
 
+**FoodOS platform console** (`/superadmin`)
+A super admin above every tenant: dashboard totals and recurring revenue, the
+full tenant list with search and status filters, tenant detail with usage
+against plan limits, suspend/activate/disable/restore, plan changes,
+subscription dates, trial and grace windows, manual extension, private notes,
+and an audit trail of every action with its before and after values.
+
+**Plans and subscriptions**
+Dynamic plan rows, not hardcoded tiers. Each carries limits (branches, staff,
+products, tables, monthly orders, marketing SMS) and feature flags (menu
+customizer, advanced customization, custom CSS, CRM, campaigns, dine-in,
+takeaway, waiter call, reports, coupons, multi-branch). Everything is enforced
+in the API: a plan that allows two branches refuses the third whether the
+request comes from the admin or from curl.
+
+**Customers (CRM)**
+A customer book built from order phone numbers, with lifetime value, average
+order, dine-in vs takeaway split, first and last order, tags, notes and
+marketing consent. Segments (new, returning, VIP, high value, inactive 30/60,
+dine-in, takeaway) filter the list and choose a campaign's recipients from the
+same definition.
+
+**SMS campaigns**
+Marketing messages, separated from transactional ones at the model level.
+Consent is part of the recipient query, so a campaign can only ever reach
+somebody who opted in, and the send is charged against the plan's monthly
+allowance.
+
 **Per-restaurant look**
-Five menu templates — کلاسیک، سنتی ایرانی، کافه، فست‌فود، مینیمال — chosen from
-the admin with a live preview. A template supplies layout only; the logo,
-cover image, accent colour and light/dark theme belong to the restaurant and
-survive a template switch. A new signup starts on the template that matches
-its business type.
+Five menu presets — کلاسیک، سنتی ایرانی، کافه، فست‌فود، مینیمال — and a full
+theme customizer beside them: colours, typography, layout, product card,
+header, buttons and footer, with a phone-sized live preview rendered through
+the same code the real menu uses. Draft and publish are separate, so an owner
+can experiment without changing what guests see. On the Business plan, custom
+CSS is scoped to the menu container and cannot reach the admin.
 
 **Onboarding**
 A restaurant signs itself up at `/signup` — tenant, restaurant, branch, menu,
@@ -424,8 +453,8 @@ reach the client.
 ## Testing
 
 ```bash
-pnpm test        # 67 unit tests — money, time, state machine, RBAC, isolation guard
-pnpm test:e2e    # 159 integration tests against a real PostgreSQL database
+pnpm test        # 104 unit tests — money, time, state machine, RBAC, isolation guard
+pnpm test:e2e    # 206 integration tests against a real PostgreSQL database
 ```
 
 Integration tests boot the real Nest application and use no mocks, because the
