@@ -16,6 +16,7 @@ import type {
   UserRole,
 } from './enums';
 import type { MenuTemplate } from './menu-templates';
+import type { MenuThemeConfig } from './menu-theme';
 
 /**
  * All monetary amounts are integers in the branch's configured currency unit
@@ -118,6 +119,16 @@ export interface PublicRestaurant {
 export interface PublicMenu {
   restaurant: PublicRestaurant;
   categories: PublicCategory[];
+  /**
+   * The published appearance. Absent means the restaurant has never opened the
+   * customizer, and the renderer falls back to the preset named by
+   * `restaurant.branding.menuTemplate`.
+   */
+  theme?: {
+    preset: MenuTemplate;
+    config: MenuThemeConfig;
+    customCss: string | null;
+  } | null;
 }
 
 export interface PublicCategory {

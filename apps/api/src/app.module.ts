@@ -32,6 +32,7 @@ import { SmsModule } from './modules/sms/sms.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { TablesModule } from './modules/tables/tables.module';
+import { ThemeModule } from './modules/theme/theme.module';
 import { HealthController } from './health.controller';
 
 /**
@@ -72,6 +73,7 @@ import { HealthController } from './health.controller';
     SignupModule,
     PlatformModule,
     CrmModule,
+    ThemeModule,
     NotificationsModule,
     TablesModule,
     OrdersModule,

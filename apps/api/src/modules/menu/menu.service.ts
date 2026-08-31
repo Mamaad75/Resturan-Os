@@ -5,6 +5,7 @@ import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
 import { RestaurantsService } from '../restaurants/restaurants.service';
+import { ThemeService } from '../theme/theme.service';
 import { MENU_INCLUDE, toPublicCategory } from './menu.mappers';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class MenuService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaService,
     private readonly restaurants: RestaurantsService,
+    private readonly theme: ThemeService,
   ) {}
 
   /**
@@ -22,8 +24,15 @@ export class MenuService {
    */
   async getPublicMenu(slug: string, tableNumber?: number): Promise<PublicMenu> {
     const resolved = await this.restaurants.findPublicBySlug(slug, tableNumber);
+
+    // Only the published theme travels to a guest; a draft stays in the admin.
+    const theme = await this.theme.getPublished(
+      resolved.publicRestaurant.id,
+      resolved.tenantId,
+    );
+
     if (!resolved.menuId) {
-      return { restaurant: resolved.publicRestaurant, categories: [] };
+      return { restaurant: resolved.publicRestaurant, categories: [], theme };
     }
 
     // The slug lookup established the tenant, so this read is properly scoped.
@@ -43,6 +52,7 @@ export class MenuService {
       categories: categories
         .map(toPublicCategory)
         .filter((category) => category.products.length > 0),
+      theme,
     };
   }
 
