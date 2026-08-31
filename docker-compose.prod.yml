@@ -1,0 +1,117 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: foodos-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: foodos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: foodos
+      TZ: Asia/Tehran
+    volumes:
+      - foodos-postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foodos -d foodos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: foodos-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - foodos-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+
+    container_name: foodos-api
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tehran
+
+      DATABASE_URL: postgresql://foodos:${POSTGRES_PASSWORD}@postgres:5432/foodos?schema=public
+      REDIS_URL: redis://redis:6379
+
+      API_PORT: "4000"
+      API_PREFIX: api
+
+      API_URL: https://foodos.bymer.ir
+      APP_URL: https://foodos.bymer.ir
+      CORS_ORIGINS: https://foodos.bymer.ir
+
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_ACCESS_TTL: "900"
+      REFRESH_TOKEN_TTL_DAYS: "30"
+
+      COOKIE_SECRET: ${COOKIE_SECRET}
+      COOKIE_DOMAIN: foodos.bymer.ir
+      COOKIE_SECURE: "true"
+
+      THROTTLE_TTL: "60"
+      THROTTLE_LIMIT: "300"
+      THROTTLE_AUTH_LIMIT: "10"
+      THROTTLE_PUBLIC_ORDER_LIMIT: "12"
+
+      SMS_PROVIDER: console
+
+      PAYMENT_PROVIDER: manual
+      PAYMENT_CALLBACK_URL: https://foodos.bymer.ir/payment/callback
+
+      STORAGE_DRIVER: local
+      STORAGE_LOCAL_DIR: /app/storage/uploads
+      STORAGE_PUBLIC_URL: https://foodos.bymer.ir/uploads
+
+    ports:
+      - "127.0.0.1:4100:4000"
+
+    volumes:
+      - foodos-uploads:/app/storage/uploads
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://foodos.bymer.ir/api
+        NEXT_PUBLIC_WS_URL: https://foodos.bymer.ir
+        NEXT_PUBLIC_APP_URL: https://foodos.bymer.ir
+
+    container_name: foodos-web
+    restart: unless-stopped
+
+    depends_on:
+      api:
+        condition: service_started
+
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Tehran
+      PORT: "3000"
+
+    ports:
+      - "127.0.0.1:3100:3000"
+
+volumes:
+  foodos-postgres-data:
+  foodos-redis-data:
+  foodos-uploads:

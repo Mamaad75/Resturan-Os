@@ -16,3 +16,8 @@ storage
 !.env.example
 README.md
 docs
+
+# Keep the API StorageModule source code in Docker builds.
+# Runtime upload directories named "storage" remain ignored.
+!apps/api/src/modules/storage
+!apps/api/src/modules/storage/**

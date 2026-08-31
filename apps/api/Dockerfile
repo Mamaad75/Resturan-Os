@@ -48,6 +48,11 @@ COPY --from=build /tmp/api-deploy/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./dist
 COPY --from=build /app/apps/api/prisma ./prisma
 
+# Generate Prisma Client inside the final runtime node_modules.
+# pnpm deploy does not reliably carry the generated .prisma/client directory.
+RUN node node_modules/prisma/build/index.js generate --schema=prisma/schema.prisma \
+    && test -f node_modules/.prisma/client/default.js
+
 # Uploads live on a volume; the app must be able to write there.
 RUN mkdir -p /app/storage/uploads && chown -R restaurant:restaurant /app
 
