@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { OrderStatus } from '@restaurant-os/types';
 import {
   dateInputSchema,
   displayTextSchema,
@@ -29,10 +30,15 @@ export type CartItemInput = z.infer<typeof cartItemSchema>;
  */
 export const createPublicOrderSchema = z
   .object({
-    type: z.enum(['DINE_IN', 'TAKEAWAY'], {
+    type: z.enum(['DINE_IN', 'TAKEAWAY', 'DELIVERY'], {
       errorMap: () => ({ message: 'نوع سفارش معتبر نیست.' }),
     }),
     tableId: uuidSchema.nullable().optional(),
+    /** Delivery only. The zone decides the fee, which the server applies. */
+    deliveryZoneId: uuidSchema.nullable().optional(),
+    deliveryAddress: optionalText(400, 'نشانی'),
+    deliveryNotes: optionalText(300, 'توضیح نشانی'),
+
     customerName: optionalText(120, 'نام'),
     customerPhone: optionalIranianMobileSchema,
     notes: optionalText(500, 'توضیحات سفارش'),
@@ -74,6 +80,38 @@ export const createPublicOrderSchema = z
         });
       }
     }
+    if (order.type === 'DELIVERY') {
+      // Everything a courier needs to arrive, and everything the restaurant
+      // needs to price the trip.
+      if (!order.customerName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customerName'],
+          message: 'برای ارسال با پیک، نام الزامی است.',
+        });
+      }
+      if (!order.customerPhone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customerPhone'],
+          message: 'برای ارسال با پیک، شماره موبایل الزامی است.',
+        });
+      }
+      if (!order.deliveryAddress) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['deliveryAddress'],
+          message: 'نشانی تحویل را وارد کنید.',
+        });
+      }
+      if (!order.deliveryZoneId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['deliveryZoneId'],
+          message: 'منطقه ارسال را انتخاب کنید.',
+        });
+      }
+    }
   });
 export type CreatePublicOrderInput = z.infer<typeof createPublicOrderSchema>;
 
@@ -83,8 +121,13 @@ export type CreatePublicOrderInput = z.infer<typeof createPublicOrderSchema>;
  */
 export const createStaffOrderSchema = z
   .object({
-    type: z.enum(['DINE_IN', 'TAKEAWAY']),
+    type: z.enum(['DINE_IN', 'TAKEAWAY', 'DELIVERY']),
     tableId: uuidSchema.nullable().optional(),
+    /** Delivery only. The zone decides the fee, which the server applies. */
+    deliveryZoneId: uuidSchema.nullable().optional(),
+    deliveryAddress: optionalText(400, 'نشانی'),
+    deliveryNotes: optionalText(300, 'توضیح نشانی'),
+
     customerName: optionalText(120, 'نام'),
     customerPhone: optionalIranianMobileSchema,
     notes: optionalText(500, 'توضیحات سفارش'),
@@ -111,6 +154,38 @@ export const createStaffOrderSchema = z
         message: 'برای سفارش بیرون‌بر، نام الزامی است.',
       });
     }
+    if (order.type === 'DELIVERY') {
+      // Everything a courier needs to arrive, and everything the restaurant
+      // needs to price the trip.
+      if (!order.customerName) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customerName'],
+          message: 'برای ارسال با پیک، نام الزامی است.',
+        });
+      }
+      if (!order.customerPhone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customerPhone'],
+          message: 'برای ارسال با پیک، شماره موبایل الزامی است.',
+        });
+      }
+      if (!order.deliveryAddress) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['deliveryAddress'],
+          message: 'نشانی تحویل را وارد کنید.',
+        });
+      }
+      if (!order.deliveryZoneId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['deliveryZoneId'],
+          message: 'منطقه ارسال را انتخاب کنید.',
+        });
+      }
+    }
   });
 export type CreateStaffOrderInput = z.infer<typeof createStaffOrderSchema>;
 
@@ -120,19 +195,19 @@ export const addOrderItemsSchema = z.object({
 });
 export type AddOrderItemsInput = z.infer<typeof addOrderItemsSchema>;
 
+/*
+ * Derived from the shared enum rather than retyped.
+ *
+ * A hand-written copy drifts: adding OUT_FOR_DELIVERY to the domain left this
+ * list behind, and the API rejected a legal transition before the state
+ * machine ever saw it.
+ */
+const orderStatusEnum = z.nativeEnum(OrderStatus, {
+  errorMap: () => ({ message: 'وضعیت سفارش معتبر نیست.' }),
+});
+
 export const updateOrderStatusSchema = z.object({
-  status: z.enum([
-    'PENDING',
-    'CONFIRMED',
-    'SENT_TO_KITCHEN',
-    'PREPARING',
-    'READY',
-    'READY_FOR_PICKUP',
-    'SERVED',
-    'PICKED_UP',
-    'COMPLETED',
-    'CANCELLED',
-  ]),
+  status: orderStatusEnum,
   note: optionalText(300, 'یادداشت'),
 });
 export type UpdateOrderStatusInput = z.infer<typeof updateOrderStatusSchema>;

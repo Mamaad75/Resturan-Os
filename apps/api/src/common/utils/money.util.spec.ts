@@ -98,8 +98,62 @@ describe('money utilities', () => {
         discountTotal: 0,
         taxTotal: 0,
         serviceChargeTotal: 0,
+        deliveryTotal: 0,
         total: 0,
       });
+    });
+  });
+
+  /*
+   * The courier fee is a carriage cost, not a menu item: it must not be
+   * discounted, taxed, or service-charged, and must not inflate the subtotal
+   * that a percentage coupon is measured against.
+   */
+  describe('computeOrderTotals with a delivery fee', () => {
+    const line = { unitPrice: 100_000, modifiersTotal: 0, quantity: 2 };
+
+    it('adds the fee to the total but not the subtotal', () => {
+      const totals = computeOrderTotals([line], { deliveryFee: 45_000 });
+      expect(totals.subtotal).toBe(200_000);
+      expect(totals.deliveryTotal).toBe(45_000);
+      expect(totals.total).toBe(245_000);
+    });
+
+    it('does not tax or service-charge the fee', () => {
+      const withFee = computeOrderTotals([line], {
+        deliveryFee: 45_000,
+        taxEnabled: true,
+        taxRateBps: 900,
+        serviceChargeEnabled: true,
+        serviceChargeBps: 1000,
+      });
+      const withoutFee = computeOrderTotals([line], {
+        taxEnabled: true,
+        taxRateBps: 900,
+        serviceChargeEnabled: true,
+        serviceChargeBps: 1000,
+      });
+      expect(withFee.taxTotal).toBe(withoutFee.taxTotal);
+      expect(withFee.serviceChargeTotal).toBe(withoutFee.serviceChargeTotal);
+      expect(withFee.total).toBe(withoutFee.total + 45_000);
+    });
+
+    it('does not let a discount eat the fee', () => {
+      // A discount larger than the food still leaves the courier to be paid.
+      const totals = computeOrderTotals([line], {
+        discountAmount: 500_000,
+        deliveryFee: 45_000,
+      });
+      expect(totals.discountTotal).toBe(200_000);
+      expect(totals.total).toBe(45_000);
+    });
+
+    it('treats a negative fee as zero', () => {
+      expect(computeOrderTotals([line], { deliveryFee: -1 }).total).toBe(200_000);
+    });
+
+    it('is zero when no fee is given', () => {
+      expect(computeOrderTotals([line]).deliveryTotal).toBe(0);
     });
   });
 

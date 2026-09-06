@@ -221,6 +221,36 @@ export class OrdersService {
         tableRow = table;
       }
 
+      /*
+       * The delivery zone is read here, inside the transaction, and its fee is
+       * copied onto the order. Taking the fee from the request instead would
+       * let a customer set their own delivery price.
+       */
+      let deliveryZone: {
+        id: string;
+        fee: number;
+        minOrderTotal: number;
+        estimatedMinutes: number;
+      } | null = null;
+      if (input.type === OrderType.DELIVERY) {
+        const zone = await tx.deliveryZone.findFirst({
+          where: {
+            id: input.deliveryZoneId!,
+            tenantId,
+            branchId,
+            isActive: true,
+          },
+          select: {
+            id: true,
+            fee: true,
+            minOrderTotal: true,
+            estimatedMinutes: true,
+          },
+        });
+        if (!zone) throw AppException.notFound('منطقه ارسال');
+        deliveryZone = zone;
+      }
+
       const lines = await this.pricing.resolveLines(tx, tenantId, menuId, input.items);
 
       /*
@@ -233,6 +263,17 @@ export class OrdersService {
       const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
       let couponDiscount = 0;
       let appliedCouponId: string | null = null;
+
+      if (deliveryZone && deliveryZone.minOrderTotal > 0) {
+        // Measured against the food, before the courier fee: a minimum exists
+        // to make the trip worth taking, and the fee is the trip.
+        if (subtotal < deliveryZone.minOrderTotal) {
+          throw AppException.validation(
+            `حداقل مبلغ سفارش برای این منطقه ${deliveryZone.minOrderTotal.toLocaleString('fa-IR')} تومان است.`,
+            { deliveryZoneId: ['سفارش به حداقل مبلغ این منطقه نرسیده است.'] },
+          );
+        }
+      }
 
       if (input.couponCode) {
         const evaluation = await this.coupons.evaluate(
@@ -257,6 +298,7 @@ export class OrdersService {
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
         serviceChargeBps: restaurant.serviceChargeBps,
+        deliveryFee: deliveryZone?.fee ?? 0,
       });
 
       const orderNumber = await nextOrderNumber(tx, branchId);
@@ -298,6 +340,10 @@ export class OrdersService {
           customerPhone: input.customerPhone ?? null,
           pickupAt: input.pickupAt ? new Date(input.pickupAt) : null,
           notes: input.notes ?? null,
+          deliveryZoneId: deliveryZone?.id ?? null,
+          deliveryFee: deliveryZone?.fee ?? 0,
+          deliveryAddress: input.deliveryAddress ?? null,
+          deliveryNotes: input.deliveryNotes ?? null,
           subtotal: totals.subtotal,
           discountTotal: totals.discountTotal,
           taxTotal: totals.taxTotal,
@@ -584,6 +630,7 @@ export class OrdersService {
           data: {
             ordersCount: { decrement: 1 },
             totalSpent: { decrement: existing.total },
+            // Delivery counts with takeaway: both are "not at a table".
             ...(existing.type === 'DINE_IN'
               ? { dineInCount: { decrement: 1 } }
               : { takeawayCount: { decrement: 1 } }),
@@ -597,6 +644,18 @@ export class OrdersService {
           status: toStatus,
           ...(toStatus === OrderStatus.COMPLETED ? { completedAt: now } : {}),
           ...(toStatus === OrderStatus.CANCELLED ? { cancelledAt: now } : {}),
+          ...(toStatus === OrderStatus.OUT_FOR_DELIVERY
+            ? {
+                dispatchedAt: now,
+                /*
+                 * Whoever presses "handed to courier" is the courier, unless
+                 * the counter already assigned one. Without this a dispatch
+                 * board fills with orders in flight and nobody named on them.
+                 */
+                ...(existing.courierId ? {} : { courierId: ctx.userId }),
+              }
+            : {}),
+          ...(toStatus === OrderStatus.DELIVERED ? { deliveredAt: now } : {}),
         },
         include: ORDER_DETAIL_INCLUDE,
       });
@@ -811,6 +870,8 @@ export class OrdersService {
         // Needed to reverse the customer's cached aggregates on cancellation.
         customerId: true,
         total: true,
+        // Whether a dispatch should adopt the acting user as the courier.
+        courierId: true,
       },
     });
     if (!row) throw AppException.notFound('سفارش');
@@ -1015,7 +1076,9 @@ async function recalculateTotals(
   });
   const current = await tx.order.findFirstOrThrow({
     where: { id: orderId, tenantId },
-    select: { discountTotal: true },
+    // The courier fee is already fixed on the order; re-pricing the items must
+    // carry it through, or adding a drink to a delivery drops the delivery.
+    select: { discountTotal: true, deliveryFee: true },
   });
 
   const totals = computeOrderTotals(items, {
@@ -1024,6 +1087,7 @@ async function recalculateTotals(
     taxRateBps: restaurant.taxRateBps,
     serviceChargeEnabled: restaurant.serviceChargeEnabled,
     serviceChargeBps: restaurant.serviceChargeBps,
+    deliveryFee: current.deliveryFee,
   });
 
   return tx.order.update({

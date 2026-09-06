@@ -401,6 +401,26 @@ export class RestaurantsService {
     const branch = restaurant.branches[0];
     if (!branch) throw AppException.notFound('شعبه فعالی برای این رستوران');
 
+    /*
+     * Only fetched when the restaurant actually delivers, so a dine-in-only
+     * menu does not pay for a query it will never use.
+     */
+    const deliveryZones = restaurant.serviceModes.includes('DELIVERY')
+      ? await runAsSystem('public menu: delivery zones', () =>
+          this.prisma.deliveryZone.findMany({
+            where: { branchId: branch.id, isActive: true },
+            select: {
+              id: true,
+              title: true,
+              fee: true,
+              minOrderTotal: true,
+              estimatedMinutes: true,
+            },
+            orderBy: [{ displayOrder: 'asc' }, { title: 'asc' }],
+          }),
+        )
+      : [];
+
     let table: { id: string; number: number; name: string | null } | null = null;
     if (tableNumber != null) {
       const found = await this.prisma.restaurantTable.findFirst({
@@ -435,6 +455,7 @@ export class RestaurantsService {
           isOpen: branch.isOpen,
         },
         table,
+        deliveryZones,
       },
     };
   }

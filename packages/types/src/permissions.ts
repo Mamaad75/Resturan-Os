@@ -29,6 +29,13 @@ export const Permission = {
   TABLE_READ: 'table:read',
   TABLE_MANAGE: 'table:manage',
 
+  // Delivery
+  DELIVERY_READ: 'delivery:read',
+  /// Dispatch, assign a courier, mark delivered.
+  DELIVERY_DISPATCH: 'delivery:dispatch',
+  /// Edit zones and fees.
+  DELIVERY_MANAGE: 'delivery:manage',
+
   // Payments
   PAYMENT_READ: 'payment:read',
   PAYMENT_CREATE: 'payment:create',
@@ -83,6 +90,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.STAFF_READ,
     Permission.SETTINGS_READ,
     Permission.QR_MANAGE,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_DISPATCH,
+    Permission.DELIVERY_MANAGE,
   ],
 
   [UserRole.CASHIER]: [
@@ -98,6 +108,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.TABLE_MANAGE,
     Permission.PAYMENT_READ,
     Permission.PAYMENT_CREATE,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_DISPATCH,
   ],
 
   [UserRole.KITCHEN]: [
@@ -117,6 +129,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.ORDER_UPDATE,
     Permission.TABLE_READ,
     Permission.TABLE_MANAGE,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_DISPATCH,
+  ],
+
+  [UserRole.COURIER]: [
+    Permission.ORDER_READ,
+    Permission.DELIVERY_READ,
+    Permission.DELIVERY_DISPATCH,
+    Permission.ORDER_STATUS_UPDATE,
   ],
 
   [UserRole.ACCOUNTANT]: [
@@ -160,4 +181,5 @@ export const ROLE_HOME_ROUTE: Record<UserRole, string> = {
   [UserRole.KITCHEN]: '/kds',
   [UserRole.WAITER]: '/pos',
   [UserRole.ACCOUNTANT]: '/admin/reports',
+  [UserRole.COURIER]: '/delivery',
 };

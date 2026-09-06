@@ -20,6 +20,8 @@ export const ORDER_STATUS_LABELS_FA: Record<OrderStatus, string> = {
   [OrderStatus.READY]: 'آماده سرو',
   [OrderStatus.READY_FOR_PICKUP]: 'آماده تحویل',
   [OrderStatus.SERVED]: 'سرو شد',
+  [OrderStatus.OUT_FOR_DELIVERY]: 'در حال ارسال',
+  [OrderStatus.DELIVERED]: 'تحویل شد',
   [OrderStatus.PICKED_UP]: 'تحویل داده شد',
   [OrderStatus.COMPLETED]: 'تکمیل شده',
   [OrderStatus.CANCELLED]: 'لغو شده',
@@ -34,6 +36,8 @@ export const ORDER_STATUS_CUSTOMER_MESSAGE_FA: Record<OrderStatus, string> = {
   [OrderStatus.READY]: 'سفارش شما آماده است و به‌زودی سرو می‌شود.',
   [OrderStatus.READY_FOR_PICKUP]: 'سفارش شما آماده تحویل است.',
   [OrderStatus.SERVED]: 'سفارش شما سرو شد. نوش جان!',
+  [OrderStatus.OUT_FOR_DELIVERY]: 'پیک سفارش شما را تحویل گرفت و در راه است.',
+  [OrderStatus.DELIVERED]: 'سفارش شما تحویل داده شد. نوش جان!',
   [OrderStatus.PICKED_UP]: 'سفارش شما تحویل داده شد. نوش جان!',
   [OrderStatus.COMPLETED]: 'سفارش شما تکمیل شد. از انتخاب شما سپاسگزاریم.',
   [OrderStatus.CANCELLED]: 'سفارش شما لغو شد.',
@@ -48,6 +52,8 @@ export const ORDER_TRANSITION_ACTION_FA: Record<OrderStatus, string> = {
   [OrderStatus.READY]: 'آماده شد',
   [OrderStatus.READY_FOR_PICKUP]: 'آماده تحویل',
   [OrderStatus.SERVED]: 'سرو شد',
+  [OrderStatus.OUT_FOR_DELIVERY]: 'تحویل به پیک',
+  [OrderStatus.DELIVERED]: 'تحویل به مشتری',
   [OrderStatus.PICKED_UP]: 'تحویل شد',
   [OrderStatus.COMPLETED]: 'تکمیل سفارش',
   [OrderStatus.CANCELLED]: 'لغو سفارش',
@@ -90,6 +96,7 @@ export const USER_ROLE_LABELS_FA: Record<UserRole, string> = {
   [UserRole.KITCHEN]: 'آشپزخانه',
   [UserRole.WAITER]: 'گارسون',
   [UserRole.ACCOUNTANT]: 'حسابدار',
+  [UserRole.COURIER]: 'پیک',
 };
 
 export const SERVICE_MODE_LABELS_FA: Record<ServiceMode, string> = {
@@ -120,6 +127,10 @@ export const STATUS_NOTIFICATION_TYPE: Record<OrderStatus, NotificationType> = {
   [OrderStatus.READY]: NotificationType.ORDER_READY,
   [OrderStatus.READY_FOR_PICKUP]: NotificationType.ORDER_READY,
   [OrderStatus.SERVED]: NotificationType.ORDER_SERVED,
+  // A dispatch is the delivery equivalent of "ready"; the handover at the door
+  // is the equivalent of "served".
+  [OrderStatus.OUT_FOR_DELIVERY]: NotificationType.ORDER_READY,
+  [OrderStatus.DELIVERED]: NotificationType.ORDER_SERVED,
   [OrderStatus.PICKED_UP]: NotificationType.ORDER_SERVED,
   [OrderStatus.COMPLETED]: NotificationType.ORDER_COMPLETED,
   [OrderStatus.CANCELLED]: NotificationType.ORDER_CANCELLED,

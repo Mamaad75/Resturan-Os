@@ -17,6 +17,8 @@ export interface OrderTotals {
   discountTotal: number;
   taxTotal: number;
   serviceChargeTotal: number;
+  /** Courier fee. Zero on anything but a delivery order. */
+  deliveryTotal: number;
   total: number;
 }
 
@@ -27,6 +29,8 @@ export interface TotalsOptions {
   taxRateBps?: number;
   serviceChargeEnabled?: boolean;
   serviceChargeBps?: number;
+  /** Flat courier fee, added last and never taxed or discounted. */
+  deliveryFee?: number;
 }
 
 export function lineTotal(line: PricedLine): number {
@@ -47,6 +51,7 @@ export function computeOrderTotals(
     taxRateBps = 0,
     serviceChargeEnabled = false,
     serviceChargeBps = 0,
+    deliveryFee = 0,
   } = options;
 
   const subtotal = lines.reduce((sum, line) => sum + lineTotal(line), 0);
@@ -64,12 +69,20 @@ export function computeOrderTotals(
       ? Math.round(((base + serviceChargeTotal) * taxRateBps) / 10_000)
       : 0;
 
+  /*
+   * The courier fee rides on top of everything else. It is not part of the
+   * subtotal, so a percentage discount cannot eat it, and it is not taxed or
+   * service-charged - a delivery fee is a carriage cost, not a menu item.
+   */
+  const deliveryTotal = Math.max(0, deliveryFee);
+
   return {
     subtotal,
     discountTotal,
     taxTotal,
     serviceChargeTotal,
-    total: base + serviceChargeTotal + taxTotal,
+    deliveryTotal,
+    total: base + serviceChargeTotal + taxTotal + deliveryTotal,
   };
 }
 

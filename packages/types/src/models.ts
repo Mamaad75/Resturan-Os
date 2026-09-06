@@ -114,6 +114,18 @@ export interface PublicRestaurant {
     number: number;
     name: string | null;
   } | null;
+  /**
+   * Active delivery areas for this branch, empty when delivery is off. The
+   * guest picks one and the server prices the trip from it - the fee is never
+   * taken from the request.
+   */
+  deliveryZones: Array<{
+    id: string;
+    title: string;
+    fee: number;
+    minOrderTotal: number;
+    estimatedMinutes: number;
+  }>;
 }
 
 export interface PublicMenu {
@@ -243,10 +255,21 @@ export interface OrderDto {
   discountTotal: Money;
   taxTotal: Money;
   serviceChargeTotal: Money;
+  /** Courier fee. Zero on anything but a delivery order. */
+  deliveryTotal: Money;
   total: Money;
   paidTotal: Money;
   currency: Currency;
   itemCount: number;
+  /** Delivery details. All null on a dine-in or takeaway order. */
+  delivery: {
+    address: string | null;
+    notes: string | null;
+    zone: { id: string; title: string; estimatedMinutes: number } | null;
+    courier: { id: string; fullName: string } | null;
+    dispatchedAt: string | null;
+    deliveredAt: string | null;
+  } | null;
   items: OrderItemDto[];
   payments: PaymentDto[];
   statusHistory: OrderStatusHistoryDto[];

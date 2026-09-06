@@ -157,3 +157,85 @@ describe('order state machine', () => {
     });
   });
 });
+
+/**
+ * Delivery lifecycle.
+ *
+ * The path a courier order takes differs from takeaway in the two states that
+ * matter operationally - who has the food, and whether it arrived - so the
+ * table is pinned rather than assumed to follow takeaway's shape.
+ */
+describe('delivery transitions', () => {
+  const D = OrderType.DELIVERY;
+
+  it('runs kitchen -> ready -> courier -> door -> done', () => {
+    expect(canTransition(D, OrderStatus.PENDING, OrderStatus.CONFIRMED)).toBe(true);
+    expect(
+      canTransition(D, OrderStatus.CONFIRMED, OrderStatus.SENT_TO_KITCHEN),
+    ).toBe(true);
+    expect(
+      canTransition(D, OrderStatus.SENT_TO_KITCHEN, OrderStatus.PREPARING),
+    ).toBe(true);
+    expect(canTransition(D, OrderStatus.PREPARING, OrderStatus.READY)).toBe(true);
+    expect(
+      canTransition(D, OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY),
+    ).toBe(true);
+    expect(
+      canTransition(D, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED),
+    ).toBe(true);
+    expect(canTransition(D, OrderStatus.DELIVERED, OrderStatus.COMPLETED)).toBe(true);
+  });
+
+  it('never lets a delivery order be served or picked up at a counter', () => {
+    expect(canTransition(D, OrderStatus.READY, OrderStatus.SERVED)).toBe(false);
+    expect(
+      canTransition(D, OrderStatus.READY, OrderStatus.PICKED_UP),
+    ).toBe(false);
+    expect(
+      canTransition(D, OrderStatus.PREPARING, OrderStatus.READY_FOR_PICKUP),
+    ).toBe(false);
+  });
+
+  it('stops cancellation once a courier has the food', () => {
+    expect(canTransition(D, OrderStatus.READY, OrderStatus.CANCELLED)).toBe(true);
+    expect(
+      canTransition(D, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.CANCELLED),
+    ).toBe(false);
+    expect(canTransition(D, OrderStatus.DELIVERED, OrderStatus.CANCELLED)).toBe(false);
+  });
+
+  it('keeps the delivery states off the other two order types', () => {
+    for (const type of [OrderType.DINE_IN, OrderType.TAKEAWAY]) {
+      expect(canTransition(type, OrderStatus.READY, OrderStatus.OUT_FOR_DELIVERY)).toBe(
+        false,
+      );
+      expect(
+        canTransition(type, OrderStatus.READY_FOR_PICKUP, OrderStatus.DELIVERED),
+      ).toBe(false);
+    }
+  });
+
+  it('cannot skip the journey', () => {
+    expect(canTransition(D, OrderStatus.READY, OrderStatus.DELIVERED)).toBe(false);
+    expect(canTransition(D, OrderStatus.READY, OrderStatus.COMPLETED)).toBe(false);
+  });
+
+  it('shows the courier leg on the customer timeline', () => {
+    const steps = getTrackingSteps(D);
+    expect(steps).toContain(OrderStatus.OUT_FOR_DELIVERY);
+    expect(steps).toContain(OrderStatus.DELIVERED);
+    expect(steps).not.toContain(OrderStatus.SERVED);
+  });
+
+  it('advances the tracking progress monotonically along that timeline', () => {
+    const steps = getTrackingSteps(D);
+    const ranks = steps.map((status) => getStatusProgress(status));
+    for (let i = 1; i < ranks.length; i += 1) {
+      expect(ranks[i]).toBeGreaterThan(ranks[i - 1]);
+    }
+  });
+
+  it('treats an order in flight as still live', () => {
+    expect(ACTIVE_ORDER_STATUSES).toContain(OrderStatus.OUT_FOR_DELIVERY);
+  });
+});

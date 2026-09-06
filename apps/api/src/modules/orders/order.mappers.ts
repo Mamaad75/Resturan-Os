@@ -21,6 +21,8 @@ export const ORDER_DETAIL_INCLUDE = Prisma.validator<Prisma.OrderInclude>()({
     orderBy: { createdAt: 'asc' },
     include: { changedByUser: { select: { fullName: true } } },
   },
+  deliveryZone: { select: { id: true, title: true, estimatedMinutes: true } },
+  courier: { select: { id: true, fullName: true } },
 });
 
 export const ORDER_SUMMARY_INCLUDE = Prisma.validator<Prisma.OrderInclude>()({
@@ -53,10 +55,32 @@ export function toOrderDto(row: OrderDetailRow): OrderDto {
     discountTotal: row.discountTotal,
     taxTotal: row.taxTotal,
     serviceChargeTotal: row.serviceChargeTotal,
+    deliveryTotal: row.deliveryFee,
     total: row.total,
     paidTotal: row.paidTotal,
     currency: row.currency,
     itemCount: row.items.reduce((sum, item) => sum + item.quantity, 0),
+    // Present only on a delivery order, so the UI can branch on the object
+    // rather than on six separate nulls.
+    delivery:
+      row.type === 'DELIVERY'
+        ? {
+            address: row.deliveryAddress,
+            notes: row.deliveryNotes,
+            zone: row.deliveryZone
+              ? {
+                  id: row.deliveryZone.id,
+                  title: row.deliveryZone.title,
+                  estimatedMinutes: row.deliveryZone.estimatedMinutes,
+                }
+              : null,
+            courier: row.courier
+              ? { id: row.courier.id, fullName: row.courier.fullName }
+              : null,
+            dispatchedAt: row.dispatchedAt?.toISOString() ?? null,
+            deliveredAt: row.deliveredAt?.toISOString() ?? null,
+          }
+        : null,
     items: row.items.map((item) => ({
       id: item.id,
       productId: item.productId ?? '',

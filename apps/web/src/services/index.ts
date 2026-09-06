@@ -151,11 +151,17 @@ export const publicService = {
   createOrder: (
     slug: string,
     body: {
-      type: 'DINE_IN' | 'TAKEAWAY';
+      type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
       tableId?: string | null;
       customerName?: string | null;
       customerPhone?: string | null;
       notes?: string | null;
+      /** Delivery only. The server prices the trip from the zone. */
+      deliveryZoneId?: string | null;
+      deliveryAddress?: string | null;
+      deliveryNotes?: string | null;
+      couponCode?: string | null;
+      marketingConsent?: boolean;
       items: Array<{
         productId: string;
         quantity: number;
@@ -591,6 +597,64 @@ export interface InvoiceDto {
 export interface PlatformInvoiceDto extends InvoiceDto {
   tenant: { id: string; name: string; slug: string };
 }
+
+export interface DeliveryZoneDto {
+  id: string;
+  branchId: string;
+  title: string;
+  fee: number;
+  minOrderTotal: number;
+  estimatedMinutes: number;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface CourierDto {
+  id: string;
+  fullName: string;
+  role: string;
+  phone: string | null;
+}
+
+export interface DeliveryBoardOrder {
+  id: string;
+  orderNumber: string;
+  status: string;
+  total: number;
+  deliveryFee: number;
+  deliveryAddress: string | null;
+  deliveryNotes: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  dispatchedAt: string | null;
+  createdAt: string;
+  paymentStatus: string;
+  deliveryZone: { id: string; title: string; estimatedMinutes: number } | null;
+  courier: { id: string; fullName: string } | null;
+}
+
+export const deliveryService = {
+  zones: (params: { branchId?: string; activeOnly?: boolean } = {}) =>
+    api.get<DeliveryZoneDto[]>('/delivery/zones', {
+      query: { branchId: params.branchId, activeOnly: params.activeOnly },
+    }),
+  createZone: (branchId: string, body: Record<string, unknown>) =>
+    api.post<DeliveryZoneDto>(`/delivery/zones/${branchId}`, body),
+  updateZone: (id: string, body: Record<string, unknown>) =>
+    api.patch<DeliveryZoneDto>(`/delivery/zones/${id}`, body),
+  deleteZone: (id: string) =>
+    api.delete<{ deleted: boolean; zone: DeliveryZoneDto | null }>(
+      `/delivery/zones/${id}`,
+    ),
+  couriers: () => api.get<CourierDto[]>('/delivery/couriers'),
+  board: (branchId?: string) =>
+    api.get<DeliveryBoardOrder[]>('/delivery/board', { query: { branchId } }),
+  assignCourier: (orderId: string, courierId: string | null) =>
+    api.patch<{ id: string; courierId: string | null }>(
+      `/delivery/orders/${orderId}/courier`,
+      { courierId: courierId ?? undefined },
+    ),
+};
 
 export const billingService = {
   bankAccounts: () => api.get<BankAccountDto[]>('/billing/bank-accounts'),

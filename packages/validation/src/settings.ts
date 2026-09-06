@@ -3,9 +3,11 @@ import { MENU_TEMPLATES } from '@restaurant-os/types';
 import {
   displayTextSchema,
   hexColorSchema,
+  moneySchema,
   nonNegativeIntSchema,
   optionalText,
   slugSchema,
+  uuidSchema,
 } from './primitives';
 
 export const updateRestaurantSchema = z.object({
@@ -75,3 +77,31 @@ export const updateBranchSchema = z.object({
   isActive: z.boolean().optional(),
 });
 export type UpdateBranchInput = z.infer<typeof updateBranchSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Delivery                                                            */
+/* ------------------------------------------------------------------ */
+
+export const deliveryZoneSchema = z.object({
+  title: displayTextSchema(2, 80, 'نام منطقه'),
+  fee: moneySchema,
+  minOrderTotal: moneySchema.optional(),
+  estimatedMinutes: z.coerce
+    .number()
+    .int('زمان باید عدد صحیح باشد.')
+    .min(5, 'حداقل ۵ دقیقه.')
+    .max(240, 'حداکثر ۴ ساعت.')
+    .optional(),
+  isActive: z.boolean().optional(),
+  displayOrder: z.coerce.number().int().min(0).max(999).optional(),
+});
+export type DeliveryZoneInput = z.infer<typeof deliveryZoneSchema>;
+
+export const updateDeliveryZoneSchema = deliveryZoneSchema.partial();
+export type UpdateDeliveryZoneInput = z.infer<typeof updateDeliveryZoneSchema>;
+
+/** Handing an order to a courier. */
+export const dispatchOrderSchema = z.object({
+  courierId: uuidSchema.optional(),
+});
+export type DispatchOrderInput = z.infer<typeof dispatchOrderSchema>;

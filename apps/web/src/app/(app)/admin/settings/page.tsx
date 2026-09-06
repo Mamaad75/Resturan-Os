@@ -28,6 +28,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { MenuThemeCustomizer } from '@/features/admin/menu-theme-customizer';
+import { DeliveryZones } from '@/features/admin/delivery-zones';
 import { SubscriptionPayment } from '@/features/admin/subscription-payment';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
@@ -353,12 +354,39 @@ export default function SettingsPage() {
             </p>
           ) : null}
 
-          <div className="flex items-center gap-2 text-xs text-ink-subtle">
-            <Truck className="size-3.5" />
-            ارسال با پیک در نسخه بعدی فعال می‌شود.
-          </div>
+          <Switch
+            checked={settings.serviceModes.includes(ServiceMode.DELIVERY)}
+            onChange={(value) =>
+              updateSetting(
+                'serviceModes',
+                (value
+                  ? [...settings.serviceModes, ServiceMode.DELIVERY]
+                  : settings.serviceModes.filter(
+                      (mode) => mode !== ServiceMode.DELIVERY,
+                    )) as RestaurantSettings['serviceModes'],
+              )
+            }
+            disabled={!editable}
+            label="ارسال با پیک"
+            description="مشتری می‌تواند نشانی بدهد و سفارش را با پیک بگیرد. هزینه پیک از روی منطقه حساب می‌شود."
+          />
+
+          {settings.serviceModes.includes(ServiceMode.DELIVERY) ? (
+            <div className="flex items-start gap-2 rounded-xl border border-line bg-surface-sunken p-3 text-xs leading-relaxed text-ink-muted">
+              <Truck className="mt-0.5 size-3.5 shrink-0" />
+              مناطق ارسال و هزینه هرکدام را در کارت «مناطق ارسال» پایین همین صفحه
+              تعریف کنید.
+            </div>
+          ) : null}
         </CardBody>
       </Card>
+
+      {settings.serviceModes.includes(ServiceMode.DELIVERY) ? (
+        <DeliveryZones
+          branchId={restaurant.branches[0]?.id ?? null}
+          editable={editable}
+        />
+      ) : null}
 
       <Card>
         <CardHeader

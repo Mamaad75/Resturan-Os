@@ -5,7 +5,17 @@ import {
   type PublicRestaurant,
 } from '@restaurant-os/types';
 import { createPublicOrderSchema } from '@restaurant-os/validation';
-import { Check, Minus, Plus, ShoppingBag, Tag, Trash2, UtensilsCrossed, X } from 'lucide-react';
+import {
+  Bike,
+  Check,
+  Minus,
+  Plus,
+  ShoppingBag,
+  Tag,
+  Trash2,
+  UtensilsCrossed,
+  X,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Button, Input, Modal, Textarea, useToast } from '@/components/ui';
@@ -15,7 +25,7 @@ import { formatMoney, toPersianDigits } from '@/lib/format';
 import { couponService, publicService } from '@/services';
 import { useCart } from './cart';
 
-type OrderType = 'DINE_IN' | 'TAKEAWAY';
+type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
 export function CheckoutSheet({
   open,
@@ -36,13 +46,24 @@ export function CheckoutSheet({
   const dineInAvailable =
     modes.includes(ServiceMode.DINE_IN) && Boolean(restaurant.table);
   const takeawayAvailable = modes.includes(ServiceMode.TAKEAWAY);
+  // Delivery needs somewhere to deliver to: a restaurant that switched the
+  // mode on but never priced an area cannot take delivery orders yet.
+  const zones = restaurant.deliveryZones ?? [];
+  const deliveryAvailable =
+    modes.includes(ServiceMode.DELIVERY) && zones.length > 0;
 
   const [orderType, setOrderType] = useState<OrderType>(
-    dineInAvailable ? 'DINE_IN' : 'TAKEAWAY',
+    dineInAvailable ? 'DINE_IN' : takeawayAvailable ? 'TAKEAWAY' : 'DELIVERY',
   );
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [deliveryZoneId, setDeliveryZoneId] = useState(zones[0]?.id ?? '');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryNotes, setDeliveryNotes] = useState('');
+
+  const selectedZone = zones.find((zone) => zone.id === deliveryZoneId) ?? null;
+  const deliveryFee = orderType === 'DELIVERY' ? (selectedZone?.fee ?? 0) : 0;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -99,6 +120,10 @@ export function CheckoutSheet({
       customerPhone: customerPhone.trim() || null,
       notes: notes.trim() || null,
       couponCode: appliedCoupon?.code ?? null,
+      deliveryZoneId: orderType === 'DELIVERY' ? deliveryZoneId || null : null,
+      deliveryAddress:
+        orderType === 'DELIVERY' ? deliveryAddress.trim() || null : null,
+      deliveryNotes: orderType === 'DELIVERY' ? deliveryNotes.trim() || null : null,
       items: cart.lines.map((line) => ({
         productId: line.productId,
         quantity: line.quantity,
@@ -180,6 +205,16 @@ export function CheckoutSheet({
                 </span>
               </div>
             ) : null}
+            {deliveryFee > 0 ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-ink-muted">
+                  هزینه پیک{selectedZone ? ` (${selectedZone.title})` : ''}
+                </span>
+                <span className="font-semibold text-ink">
+                  {formatMoney(deliveryFee)}
+                </span>
+              </div>
+            ) : null}
             <p className="text-[0.7rem] leading-relaxed text-ink-subtle">
               مالیات و حق سرویس در فاکتور نهایی توسط سیستم محاسبه و اعمال می‌شود.
             </p>
@@ -256,29 +291,113 @@ export function CheckoutSheet({
           </ul>
 
           {/* Only offer the modes this restaurant actually runs. */}
-          {dineInAvailable && takeawayAvailable ? (
+          {[dineInAvailable, takeawayAvailable, deliveryAvailable].filter(Boolean)
+            .length > 1 ? (
             <div>
               <p className="mb-2 text-sm font-medium text-ink-muted">نوع سفارش</p>
               <div className="grid grid-cols-2 gap-2">
-                <ModeButton
-                  active={orderType === 'DINE_IN'}
-                  onClick={() => setOrderType('DINE_IN')}
-                  icon={<UtensilsCrossed className="size-4" />}
-                  label="سرو در محل"
-                  sub={`میز ${toPersianDigits(restaurant.table?.number ?? 0)}`}
-                />
-                <ModeButton
-                  active={orderType === 'TAKEAWAY'}
-                  onClick={() => setOrderType('TAKEAWAY')}
-                  icon={<ShoppingBag className="size-4" />}
-                  label="بیرون‌بر"
-                  sub="تحویل در محل"
-                />
+                {dineInAvailable ? (
+                  <ModeButton
+                    active={orderType === 'DINE_IN'}
+                    onClick={() => setOrderType('DINE_IN')}
+                    icon={<UtensilsCrossed className="size-4" />}
+                    label="سرو در محل"
+                    sub={`میز ${toPersianDigits(restaurant.table?.number ?? 0)}`}
+                  />
+                ) : null}
+                {takeawayAvailable ? (
+                  <ModeButton
+                    active={orderType === 'TAKEAWAY'}
+                    onClick={() => setOrderType('TAKEAWAY')}
+                    icon={<ShoppingBag className="size-4" />}
+                    label="بیرون‌بر"
+                    sub="تحویل در محل"
+                  />
+                ) : null}
+                {deliveryAvailable ? (
+                  <ModeButton
+                    active={orderType === 'DELIVERY'}
+                    onClick={() => setOrderType('DELIVERY')}
+                    icon={<Bike className="size-4" />}
+                    label="ارسال با پیک"
+                    sub="تحویل درب منزل"
+                  />
+                ) : null}
               </div>
             </div>
           ) : null}
 
-          {orderType === 'TAKEAWAY' ? (
+          {orderType === 'DELIVERY' ? (
+            <div className="space-y-3">
+              <div>
+                <p className="mb-2 text-sm font-medium text-ink-muted">منطقه</p>
+                <div className="grid gap-2">
+                  {zones.map((zone) => {
+                    const belowMinimum =
+                      zone.minOrderTotal > 0 &&
+                      cart.estimatedSubtotal < zone.minOrderTotal;
+                    return (
+                      <button
+                        key={zone.id}
+                        type="button"
+                        onClick={() => setDeliveryZoneId(zone.id)}
+                        className={cn(
+                          'flex items-center justify-between gap-3 rounded-xl border p-3 text-start transition-colors',
+                          deliveryZoneId === zone.id
+                            ? 'border-gold/50 bg-gold/[0.08]'
+                            : 'border-line bg-surface-raised',
+                        )}
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-ink">
+                            {zone.title}
+                          </span>
+                          <span className="block text-xs text-ink-subtle">
+                            حدود {toPersianDigits(zone.estimatedMinutes)} دقیقه
+                            {belowMinimum
+                              ? ` · حداقل سفارش ${formatMoney(zone.minOrderTotal, 'IRT')}`
+                              : ''}
+                          </span>
+                        </span>
+                        <span
+                          className={cn(
+                            'shrink-0 text-sm font-semibold tabular-nums',
+                            belowMinimum ? 'text-critical' : 'text-gold',
+                          )}
+                        >
+                          {formatMoney(zone.fee, 'IRT')}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {errors.deliveryZoneId ? (
+                  <p className="mt-1.5 text-xs text-critical">
+                    {errors.deliveryZoneId}
+                  </p>
+                ) : null}
+              </div>
+
+              <Textarea
+                label="نشانی"
+                rows={2}
+                placeholder="خیابان، کوچه، پلاک، واحد"
+                value={deliveryAddress}
+                onChange={(e) => setDeliveryAddress(e.target.value)}
+                error={errors.deliveryAddress}
+                required
+              />
+              <Input
+                label="توضیح برای پیک (اختیاری)"
+                placeholder="کد درب، طبقه، نشانه"
+                value={deliveryNotes}
+                onChange={(e) => setDeliveryNotes(e.target.value)}
+                error={errors.deliveryNotes}
+              />
+            </div>
+          ) : null}
+
+          {orderType === 'TAKEAWAY' || orderType === 'DELIVERY' ? (
             <div className="space-y-3">
               <Input
                 label="نام شما"
@@ -297,7 +416,11 @@ export function CheckoutSheet({
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 error={errors.customerPhone}
-                hint="برای اطلاع‌رسانی آماده شدن سفارش"
+                hint={
+                  orderType === 'DELIVERY'
+                    ? 'پیک برای هماهنگی تحویل با شما تماس می‌گیرد'
+                    : 'برای اطلاع‌رسانی آماده شدن سفارش'
+                }
                 required
               />
             </div>

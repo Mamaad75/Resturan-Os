@@ -9,6 +9,7 @@ import { OrderStatus, OrderType } from './enums';
  *
  * Dine-in:  PENDING -> CONFIRMED -> SENT_TO_KITCHEN -> PREPARING -> READY -> SERVED -> COMPLETED
  * Takeaway: PENDING -> CONFIRMED -> SENT_TO_KITCHEN -> PREPARING -> READY_FOR_PICKUP -> PICKED_UP -> COMPLETED
+ * Delivery: PENDING -> CONFIRMED -> SENT_TO_KITCHEN -> PREPARING -> READY -> OUT_FOR_DELIVERY -> DELIVERED -> COMPLETED
  */
 const SHARED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
@@ -20,6 +21,8 @@ const SHARED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.CANCELLED],
   [OrderStatus.SERVED]: [],
   [OrderStatus.PICKED_UP]: [],
+  [OrderStatus.OUT_FOR_DELIVERY]: [],
+  [OrderStatus.DELIVERED]: [],
   [OrderStatus.COMPLETED]: [],
   [OrderStatus.CANCELLED]: [],
 };
@@ -29,6 +32,21 @@ const DINE_IN_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED],
   [OrderStatus.READY]: [OrderStatus.SERVED, OrderStatus.CANCELLED],
   [OrderStatus.SERVED]: [OrderStatus.COMPLETED],
+};
+
+/*
+ * Delivery keeps READY as "the food is ready", which is what the kitchen
+ * display already means by it, and adds the two states only a courier can
+ * move through. Cancelling stops once the order is in a courier's hands: at
+ * that point the food is gone, and the money question is a refund, not a
+ * status.
+ */
+const DELIVERY_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  ...SHARED_TRANSITIONS,
+  [OrderStatus.PREPARING]: [OrderStatus.READY, OrderStatus.CANCELLED],
+  [OrderStatus.READY]: [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.CANCELLED],
+  [OrderStatus.OUT_FOR_DELIVERY]: [OrderStatus.DELIVERED],
+  [OrderStatus.DELIVERED]: [OrderStatus.COMPLETED],
 };
 
 const TAKEAWAY_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
@@ -47,11 +65,9 @@ const TAKEAWAY_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export function getTransitionTable(
   orderType: OrderType,
 ): Record<OrderStatus, OrderStatus[]> {
-  // DELIVERY is architecturally reserved; it currently follows the takeaway
-  // handoff shape until a dedicated courier lifecycle is introduced.
-  return orderType === OrderType.DINE_IN
-    ? DINE_IN_TRANSITIONS
-    : TAKEAWAY_TRANSITIONS;
+  if (orderType === OrderType.DINE_IN) return DINE_IN_TRANSITIONS;
+  if (orderType === OrderType.DELIVERY) return DELIVERY_TRANSITIONS;
+  return TAKEAWAY_TRANSITIONS;
 }
 
 /** Statuses reachable from `from` for an order of the given type. */
@@ -98,6 +114,8 @@ export const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.READY_FOR_PICKUP,
   OrderStatus.SERVED,
   OrderStatus.PICKED_UP,
+  OrderStatus.OUT_FOR_DELIVERY,
+  OrderStatus.DELIVERED,
 ];
 
 /**
@@ -105,21 +123,31 @@ export const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
  * `SERVED`/`PICKED_UP` collapse into a single visual step per order type.
  */
 export function getTrackingSteps(orderType: OrderType): OrderStatus[] {
-  return orderType === OrderType.DINE_IN
-    ? [
-        OrderStatus.PENDING,
-        OrderStatus.SENT_TO_KITCHEN,
-        OrderStatus.PREPARING,
-        OrderStatus.READY,
-        OrderStatus.SERVED,
-      ]
-    : [
-        OrderStatus.PENDING,
-        OrderStatus.SENT_TO_KITCHEN,
-        OrderStatus.PREPARING,
-        OrderStatus.READY_FOR_PICKUP,
-        OrderStatus.PICKED_UP,
-      ];
+  if (orderType === OrderType.DINE_IN) {
+    return [
+      OrderStatus.PENDING,
+      OrderStatus.SENT_TO_KITCHEN,
+      OrderStatus.PREPARING,
+      OrderStatus.READY,
+      OrderStatus.SERVED,
+    ];
+  }
+  if (orderType === OrderType.DELIVERY) {
+    return [
+      OrderStatus.PENDING,
+      OrderStatus.SENT_TO_KITCHEN,
+      OrderStatus.PREPARING,
+      OrderStatus.OUT_FOR_DELIVERY,
+      OrderStatus.DELIVERED,
+    ];
+  }
+  return [
+    OrderStatus.PENDING,
+    OrderStatus.SENT_TO_KITCHEN,
+    OrderStatus.PREPARING,
+    OrderStatus.READY_FOR_PICKUP,
+    OrderStatus.PICKED_UP,
+  ];
 }
 
 /** Rank used to decide how far along the tracking timeline an order is. */
@@ -132,6 +160,9 @@ const STATUS_PROGRESS: Record<OrderStatus, number> = {
   [OrderStatus.READY_FOR_PICKUP]: 4,
   [OrderStatus.SERVED]: 5,
   [OrderStatus.PICKED_UP]: 5,
+  // Delivery has one more real step than the other two: the journey.
+  [OrderStatus.OUT_FOR_DELIVERY]: 5,
+  [OrderStatus.DELIVERED]: 6,
   [OrderStatus.COMPLETED]: 6,
   [OrderStatus.CANCELLED]: -1,
 };

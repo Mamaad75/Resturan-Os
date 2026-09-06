@@ -22,6 +22,9 @@ const ORDER_STATUS_TONE: Record<OrderStatus, BadgeTone> = {
   [OrderStatus.READY]: 'positive',
   [OrderStatus.READY_FOR_PICKUP]: 'positive',
   [OrderStatus.SERVED]: 'neutral',
+  // A run in progress reads like PREPARING: work is happening right now.
+  [OrderStatus.OUT_FOR_DELIVERY]: 'gold',
+  [OrderStatus.DELIVERED]: 'neutral',
   [OrderStatus.PICKED_UP]: 'neutral',
   [OrderStatus.COMPLETED]: 'neutral',
   [OrderStatus.CANCELLED]: 'critical',

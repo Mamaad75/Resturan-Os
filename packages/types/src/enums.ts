@@ -15,6 +15,7 @@ export const UserRole = {
   KITCHEN: 'KITCHEN',
   WAITER: 'WAITER',
   ACCOUNTANT: 'ACCOUNTANT',
+  COURIER: 'COURIER',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
@@ -34,6 +35,8 @@ export const OrderStatus = {
   READY_FOR_PICKUP: 'READY_FOR_PICKUP',
   SERVED: 'SERVED',
   PICKED_UP: 'PICKED_UP',
+  OUT_FOR_DELIVERY: 'OUT_FOR_DELIVERY',
+  DELIVERED: 'DELIVERED',
   COMPLETED: 'COMPLETED',
   CANCELLED: 'CANCELLED',
 } as const;

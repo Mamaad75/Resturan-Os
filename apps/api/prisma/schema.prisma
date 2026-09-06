@@ -31,6 +31,8 @@ enum UserRole {
   KITCHEN
   WAITER
   ACCOUNTANT
+  /// Carries delivery orders. Sees the dispatch board and nothing else.
+  COURIER
 }
 
 enum OrderType {
@@ -48,6 +50,10 @@ enum OrderStatus {
   READY_FOR_PICKUP
   SERVED
   PICKED_UP
+  /// Delivery only: a courier has the order and is on the way.
+  OUT_FOR_DELIVERY
+  /// Delivery only: handed to the customer at their door.
+  DELIVERED
   COMPLETED
   CANCELLED
 }
@@ -255,6 +261,7 @@ model Tenant {
   campaigns     Campaign[]
   platformAudit PlatformAuditLog[]
   invoices      SubscriptionInvoice[]
+  deliveryZones DeliveryZone[]
 
   @@index([slug])
   @@map("tenants")
@@ -338,6 +345,7 @@ model Branch {
   tables            RestaurantTable[]
   orders            Order[]
   qrCodes           QrCode[]
+  deliveryZones     DeliveryZone[]
   notifications     Notification[]
   waiterCalls       WaiterCall[]
   feedback          OrderFeedback[]
@@ -379,6 +387,7 @@ model User {
   branch        Branch?              @relation(fields: [branchId], references: [id], onDelete: SetNull)
   refreshTokens RefreshToken[]
   createdOrders Order[]              @relation("OrderCreatedBy")
+  courierOrders Order[]              @relation("OrderCourier")
   statusChanges OrderStatusHistory[]
   payments      Payment[]
   auditLogs     AuditLog[]
@@ -672,6 +681,18 @@ model Order {
   pickupAt      DateTime?
   notes         String?   @db.VarChar(500)
 
+  // Delivery. All null on a dine-in or takeaway order.
+  deliveryAddress String? @db.VarChar(400)
+  /// Door code, floor, landmark - whatever gets the courier to the door.
+  deliveryNotes   String? @db.VarChar(300)
+  deliveryZoneId  String? @db.Uuid
+  /// Copied from the zone at order time, so a later price change never
+  /// rewrites what a customer was charged.
+  deliveryFee     Int     @default(0)
+  courierId       String? @db.Uuid
+  dispatchedAt    DateTime?
+  deliveredAt     DateTime?
+
   /// All amounts are server-computed integers; client totals are ignored.
   subtotal           Int      @default(0)
   discountTotal      Int      @default(0)
@@ -693,6 +714,8 @@ model Order {
   table            RestaurantTable?     @relation(fields: [tableId], references: [id], onDelete: SetNull)
   customer         Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
   createdBy        User?                @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  courier          User?                @relation("OrderCourier", fields: [courierId], references: [id], onDelete: SetNull)
+  deliveryZone     DeliveryZone?        @relation(fields: [deliveryZoneId], references: [id], onDelete: SetNull)
   items            OrderItem[]
   statusHistory    OrderStatusHistory[]
   payments         Payment[]
@@ -708,6 +731,8 @@ model Order {
   @@index([tableId])
   @@index([customerId])
   @@index([createdAt])
+  /// The courier's board: their orders still in flight.
+  @@index([courierId, status])
   @@index([status])
   @@index([paymentStatus])
   @@map("orders")
@@ -1398,4 +1423,38 @@ model SubscriptionInvoice {
   /// The platform queue: everything still waiting, oldest first.
   @@index([status, createdAt])
   @@map("subscription_invoices")
+}
+
+/// A delivery area and what it costs to reach.
+///
+/// Zones rather than a distance calculation: Iranian addresses are described
+/// by neighbourhood, and a restaurant owner can price "سعادت‌آباد" without
+/// anyone drawing a polygon or paying for a geocoder.
+model DeliveryZone {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  branchId String @db.Uuid
+
+  title String @db.VarChar(80)
+  /// Courier fee in Toman, added to the order total untaxed.
+  fee   Int    @default(0)
+  /// Smallest order this zone will accept. 0 means no minimum.
+  minOrderTotal Int @default(0)
+  /// Rough door-to-door time, shown to the customer as an expectation.
+  estimatedMinutes Int @default(45)
+
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@unique([branchId, title])
+  @@index([tenantId])
+  @@index([branchId, isActive, displayOrder])
+  @@map("delivery_zones")
 }
