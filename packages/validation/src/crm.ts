@@ -37,3 +37,42 @@ export const createCampaignSchema = z.object({
   body: displayTextSchema(10, 480, 'متن پیام'),
 });
 export type CreateCampaignInput = z.infer<typeof createCampaignSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Loyalty                                                             */
+/* ------------------------------------------------------------------ */
+
+export const loyaltyProgramSchema = z.object({
+  isEnabled: z.boolean(),
+  pointsPerThousand: z.coerce
+    .number()
+    .int('نرخ امتیاز باید عدد صحیح باشد.')
+    .min(0, 'نرخ نمی‌تواند منفی باشد.')
+    .max(1000, 'نرخ بیش از حد بزرگ است.'),
+  tomanPerPoint: z.coerce
+    .number()
+    .int('ارزش امتیاز باید عدد صحیح باشد.')
+    .min(1, 'ارزش هر امتیاز حداقل ۱ تومان است.')
+    .max(1_000_000, 'ارزش امتیاز بیش از حد بزرگ است.'),
+  minRedeemPoints: z.coerce.number().int().min(0).max(1_000_000),
+  /** 10000 = the whole order may be paid with points. */
+  maxRedeemBps: z.coerce.number().int().min(0).max(10_000),
+  welcomePoints: z.coerce.number().int().min(0).max(1_000_000),
+  expiryDays: z
+    .union([z.coerce.number().int().min(1).max(3650), z.null()])
+    .optional(),
+});
+export type LoyaltyProgramInput = z.infer<typeof loyaltyProgramSchema>;
+
+/** Manual correction. A reason is required: an unexplained balance is a dispute. */
+export const adjustPointsSchema = z.object({
+  points: z.coerce
+    .number()
+    .int('امتیاز باید عدد صحیح باشد.')
+    .refine((value) => value !== 0, { message: 'مقدار نمی‌تواند صفر باشد.' })
+    .refine((value) => Math.abs(value) <= 1_000_000, {
+      message: 'مقدار بیش از حد بزرگ است.',
+    }),
+  note: displayTextSchema(3, 300, 'دلیل'),
+});
+export type AdjustPointsInput = z.infer<typeof adjustPointsSchema>;

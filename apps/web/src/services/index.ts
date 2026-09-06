@@ -633,6 +633,41 @@ export interface DeliveryBoardOrder {
   courier: { id: string; fullName: string } | null;
 }
 
+export interface LoyaltyRulesDto {
+  isEnabled: boolean;
+  pointsPerThousand: number;
+  tomanPerPoint: number;
+  minRedeemPoints: number;
+  maxRedeemBps: number;
+  welcomePoints: number;
+  expiryDays: number | null;
+}
+
+export interface LoyaltyEntryDto {
+  id: string;
+  type: 'EARN' | 'REDEEM' | 'ADJUST' | 'EXPIRE' | 'REVERSAL';
+  points: number;
+  balanceAfter: number;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface LoyaltySummaryDto {
+  points: number;
+  pointsValue: number;
+  tier: { key: string; label: string; toNext: number | null; nextLabel: string | null };
+  entries: LoyaltyEntryDto[];
+}
+
+export const loyaltyService = {
+  program: () => api.get<LoyaltyRulesDto>('/loyalty/program'),
+  saveProgram: (body: LoyaltyRulesDto) =>
+    api.put<LoyaltyRulesDto>('/loyalty/program', body),
+  customer: (id: string) => api.get<LoyaltySummaryDto>(`/loyalty/customers/${id}`),
+  adjust: (id: string, points: number, note: string) =>
+    api.post<LoyaltySummaryDto>(`/loyalty/customers/${id}/adjust`, { points, note }),
+};
+
 export const deliveryService = {
   zones: (params: { branchId?: string; activeOnly?: boolean } = {}) =>
     api.get<DeliveryZoneDto[]>('/delivery/zones', {

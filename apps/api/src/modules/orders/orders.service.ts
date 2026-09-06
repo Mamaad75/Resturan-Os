@@ -53,6 +53,7 @@ import {
   toTrackingDto,
 } from './order.mappers';
 import { CouponsService } from '../coupons/coupons.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import { OrderPricingService, type ResolvedLine } from './order-pricing.service';
 
 @Injectable()
@@ -65,6 +66,7 @@ export class OrdersService {
     private readonly tables: TablesService,
     private readonly pricing: OrderPricingService,
     private readonly coupons: CouponsService,
+    private readonly loyalty: LoyaltyService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
     private readonly plans: PlansService,
@@ -292,8 +294,39 @@ export class OrdersService {
         appliedCouponId = evaluation.couponId;
       }
 
-      const totals = computeOrderTotals(lines, {
+      /*
+       * Loyalty is priced against the bill the customer would otherwise pay,
+       * so the points cap is measured on a real number rather than on the raw
+       * subtotal. The quote is authoritative: the request says how many points
+       * to try, never what they are worth.
+       */
+      const beforeLoyalty = computeOrderTotals(lines, {
         discountAmount: (input.discountAmount ?? 0) + couponDiscount,
+        taxEnabled: restaurant.taxEnabled,
+        taxRateBps: restaurant.taxRateBps,
+        serviceChargeEnabled: restaurant.serviceChargeEnabled,
+        serviceChargeBps: restaurant.serviceChargeBps,
+        deliveryFee: deliveryZone?.fee ?? 0,
+      });
+
+      const customer = input.customerPhone
+        ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
+        : null;
+
+      const loyalty = await this.loyalty.quote(tx, tenantId, {
+        customerId: customer?.id ?? null,
+        requestedPoints: input.redeemPoints ?? 0,
+        orderTotal: beforeLoyalty.total,
+      });
+      if ((input.redeemPoints ?? 0) > 0 && loyalty.points === 0 && loyalty.reason) {
+        throw AppException.validation(loyalty.reason, {
+          redeemPoints: [loyalty.reason],
+        });
+      }
+
+      const totals = computeOrderTotals(lines, {
+        discountAmount:
+          (input.discountAmount ?? 0) + couponDiscount + loyalty.discount,
         taxEnabled: restaurant.taxEnabled,
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
@@ -320,10 +353,6 @@ export class OrdersService {
         ? OrderStatus.SENT_TO_KITCHEN
         : OrderStatus.PENDING;
 
-      const customer = input.customerPhone
-        ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
-        : null;
-
       const order = await tx.order.create({
         data: {
           tenantId,
@@ -340,6 +369,8 @@ export class OrdersService {
           customerPhone: input.customerPhone ?? null,
           pickupAt: input.pickupAt ? new Date(input.pickupAt) : null,
           notes: input.notes ?? null,
+          loyaltyPointsUsed: loyalty.points,
+          loyaltyDiscount: loyalty.discount,
           deliveryZoneId: deliveryZone?.id ?? null,
           deliveryFee: deliveryZone?.fee ?? 0,
           deliveryAddress: input.deliveryAddress ?? null,
@@ -428,6 +459,20 @@ export class OrdersService {
               ? { marketingConsent: true, marketingConsentAt: now }
               : {}),
           },
+        });
+
+        // Points are taken here, in the same transaction that wrote the
+        // discount they paid for.
+        await this.loyalty.spend(tx, {
+          tenantId,
+          customerId: customer.id,
+          orderId: order.id,
+          points: loyalty.points,
+        });
+        await this.loyalty.grantWelcome(tx, {
+          tenantId,
+          customerId: customer.id,
+          isFirstOrder: !customer.firstOrderAt,
         });
       }
 
@@ -624,7 +669,27 @@ export class OrdersService {
        * disagree. `lastOrderAt` is deliberately left alone: the customer did
        * come in, whatever happened to the order afterwards.
        */
+      if (toStatus === OrderStatus.COMPLETED && existing.customerId) {
+        /*
+         * Points are earned on completion, not on placement: awarding them
+         * earlier would mean clawing them back from a balance the customer may
+         * already have spent. Measured on the food after discounts - never on
+         * tax, service charge or the courier fee.
+         */
+        await this.loyalty.earnForOrder(tx, {
+          tenantId: ctx.tenantId,
+          customerId: existing.customerId,
+          orderId,
+          eligibleSpend: Math.max(0, existing.subtotal - existing.discountTotal),
+        });
+      }
+
       if (toStatus === OrderStatus.CANCELLED && existing.customerId) {
+        await this.loyalty.reverseForOrder(tx, {
+          tenantId: ctx.tenantId,
+          customerId: existing.customerId,
+          orderId,
+        });
         await tx.customer.update({
           where: { id: existing.customerId, tenantId: ctx.tenantId },
           data: {
@@ -870,6 +935,9 @@ export class OrdersService {
         // Needed to reverse the customer's cached aggregates on cancellation.
         customerId: true,
         total: true,
+        // The base the points award is measured on.
+        subtotal: true,
+        discountTotal: true,
         // Whether a dispatch should adopt the acting user as the courier.
         courierId: true,
       },

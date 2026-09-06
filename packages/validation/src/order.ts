@@ -46,6 +46,12 @@ export const createPublicOrderSchema = z
     /** Discount code; the server re-evaluates it and ignores any client total. */
     couponCode: optionalText(32, 'کد تخفیف'),
     /**
+     * Points to spend on this order. The server decides what they are worth;
+     * a request never states the discount.
+     */
+    redeemPoints: z.coerce.number().int().min(0).max(1_000_000).optional(),
+
+    /**
      * Opt-in to marketing messages, offered at checkout when the restaurant
      * has enabled it. Absent means "not asked"; false means "declined", and
      * neither ever turns an existing consent off by accident.
@@ -135,6 +141,12 @@ export const createStaffOrderSchema = z
     discountAmount: moneySchema.default(0),
     /** Discount code applied at the counter, on top of any manual discount. */
     couponCode: optionalText(32, 'کد تخفیف'),
+    /**
+     * Points to spend on this order. The server decides what they are worth;
+     * a request never states the discount.
+     */
+    redeemPoints: z.coerce.number().int().min(0).max(1_000_000).optional(),
+
     items: z.array(cartItemSchema).min(1, 'سبد خرید خالی است.').max(60),
     /** Skip PENDING and go straight to the kitchen from the counter. */
     sendToKitchen: z.boolean().default(false),

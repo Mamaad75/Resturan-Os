@@ -170,6 +170,18 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+/// Why a customer's point balance moved. The ledger is the truth; the balance
+/// on the customer row is a cache of its running total.
+enum LoyaltyEntryType {
+  EARN
+  REDEEM
+  /// Manual correction by staff, with a stated reason.
+  ADJUST
+  EXPIRE
+  /// Points given back when the order that earned them was cancelled.
+  REVERSAL
+}
+
 /// Where a subscription payment stands. Card-to-card is settled by a human
 /// reading a receipt, so an invoice waits in PENDING until someone looks.
 enum InvoiceStatus {
@@ -260,8 +272,10 @@ model Tenant {
   subscription  Subscription?
   campaigns     Campaign[]
   platformAudit PlatformAuditLog[]
-  invoices      SubscriptionInvoice[]
-  deliveryZones DeliveryZone[]
+  invoices       SubscriptionInvoice[]
+  deliveryZones  DeliveryZone[]
+  loyaltyProgram LoyaltyProgram?
+  loyaltyEntries LoyaltyEntry[]
 
   @@index([slug])
   @@map("tenants")
@@ -638,6 +652,14 @@ model Customer {
   marketingConsent   Boolean   @default(false)
   marketingConsentAt DateTime?
 
+  /// Running balance, maintained alongside every ledger entry. Derivable from
+  /// loyalty_entries, but every customer list shows it.
+  loyaltyPoints Int @default(0)
+
+  /// Used by the birthday campaign segment. Day and month are what matter;
+  /// the year is stored because a date column is simpler than two ints.
+  birthDate DateTime? @db.Date
+
   tags  String[] @default([])
   notes String?  @db.VarChar(2000)
 
@@ -649,11 +671,13 @@ model Customer {
   orders        Order[]
   notifications Notification[]
   smsMessages   SmsMessage[]
+  loyaltyEntries LoyaltyEntry[]
 
   @@unique([tenantId, phone])
   @@index([tenantId])
   @@index([tenantId, lastOrderAt])
   @@index([tenantId, totalSpent])
+  @@index([tenantId, loyaltyPoints])
   @@map("customers")
 }
 
@@ -702,6 +726,11 @@ model Order {
   paidTotal          Int      @default(0)
   currency           Currency @default(IRT)
 
+  /// Points spent on this order, and what they were worth. Kept so a
+  /// cancellation can return exactly what was taken.
+  loyaltyPointsUsed Int @default(0)
+  loyaltyDiscount   Int @default(0)
+
   estimatedReadyAt DateTime?
   completedAt      DateTime?
   cancelledAt      DateTime?
@@ -723,6 +752,7 @@ model Order {
   smsMessages      SmsMessage[]
   couponRedemption CouponRedemption?
   feedback         OrderFeedback?
+  loyaltyEntries   LoyaltyEntry[]
 
   @@unique([tenantId, orderNumber])
   @@index([tenantId])
@@ -1457,4 +1487,64 @@ model DeliveryZone {
   @@index([tenantId])
   @@index([branchId, isActive, displayOrder])
   @@map("delivery_zones")
+}
+
+/// The restaurant's points scheme. One row per tenant.
+model LoyaltyProgram {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @db.Uuid
+
+  isEnabled Boolean @default(false)
+
+  /// Points earned per 1,000 Toman of eligible spend. Eligible spend is the
+  /// food after discounts - never the courier fee, tax or service charge.
+  pointsPerThousand Int @default(1)
+  /// What one point is worth in Toman when redeemed.
+  tomanPerPoint     Int @default(1000)
+  /// Smallest redemption allowed, so a balance is saved up rather than
+  /// dribbled away one point at a time.
+  minRedeemPoints   Int @default(50)
+  /// Cap on how much of an order points may pay for, in basis points.
+  /// 10000 = the whole order.
+  maxRedeemBps      Int @default(5000)
+  /// Points granted the first time a phone number orders. 0 disables it.
+  welcomePoints     Int @default(0)
+  /// Days before unused points lapse. null means they never do.
+  expiryDays        Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("loyalty_programs")
+}
+
+/// Append-only record of every point movement.
+///
+/// The customer's balance is a cache of this ledger's running total, so a
+/// disputed balance can always be explained line by line.
+model LoyaltyEntry {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  customerId String @db.Uuid
+  orderId    String? @db.Uuid
+
+  type LoyaltyEntryType
+  /// Signed: positive earns, negative spends.
+  points       Int
+  /// Balance after this entry, so history reads without re-summing.
+  balanceAfter Int
+  note         String? @db.VarChar(300)
+
+  createdByUserId String?  @db.Uuid
+  createdAt       DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order    Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, customerId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("loyalty_entries")
 }
