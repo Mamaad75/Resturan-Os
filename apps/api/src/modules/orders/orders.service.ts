@@ -556,32 +556,41 @@ export class OrdersService {
         input.items,
       );
 
-      for (const line of lines) {
-        await tx.orderItem.create({
-          data: {
-            tenantId: ctx.tenantId,
-            orderId,
-            productId: line.productId,
-            productName: line.productName,
-            productNameFa: line.productNameFa,
-            imageUrl: line.imageUrl,
-            quantity: line.quantity,
-            unitPrice: line.unitPrice,
-            modifiersTotal: line.modifiersTotal,
-            lineTotal: line.lineTotal,
-            notes: line.notes,
-            modifiers: {
-              create: line.modifiers.map((modifier) => ({
-                tenantId: ctx.tenantId,
-                modifierOptionId: modifier.modifierOptionId,
-                name: modifier.name,
-                nameFa: modifier.nameFa,
-                priceDelta: modifier.priceDelta,
-              })),
+      /*
+       * Issued together rather than one await at a time. Each item is
+       * independent - nothing here reads what the previous insert wrote - so
+       * a table of eight additions costs one round trip's latency instead of
+       * eight. `createMany` is not an option: each item carries nested
+       * modifier rows.
+       */
+      await Promise.all(
+        lines.map((line) =>
+          tx.orderItem.create({
+            data: {
+              tenantId: ctx.tenantId,
+              orderId,
+              productId: line.productId,
+              productName: line.productName,
+              productNameFa: line.productNameFa,
+              imageUrl: line.imageUrl,
+              quantity: line.quantity,
+              unitPrice: line.unitPrice,
+              modifiersTotal: line.modifiersTotal,
+              lineTotal: line.lineTotal,
+              notes: line.notes,
+              modifiers: {
+                create: line.modifiers.map((modifier) => ({
+                  tenantId: ctx.tenantId,
+                  modifierOptionId: modifier.modifierOptionId,
+                  name: modifier.name,
+                  nameFa: modifier.nameFa,
+                  priceDelta: modifier.priceDelta,
+                })),
+              },
             },
-          },
-        });
-      }
+          }),
+        ),
+      );
 
       return recalculateTotals(tx, ctx.tenantId, orderId, restaurant);
     });
