@@ -1,6 +1,7 @@
 import '@fontsource-variable/vazirmatn';
 import '@/styles/globals.css';
 import type { Metadata, Viewport } from 'next';
+import { THEME_INIT_SCRIPT } from '@/features/theme/theme-context';
 import { AppProviders } from '@/lib/providers';
 
 export const metadata: Metadata = {
@@ -27,6 +28,14 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fa" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/*
+          Applies the stored theme before first paint. Without it the page
+          renders dark and then snaps to light, which is the flash every
+          themed site gets judged by.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body
         style={{ ['--font-vazirmatn' as string]: "'Vazirmatn Variable'" }}
         className="min-h-dvh bg-canvas font-sans text-ink"

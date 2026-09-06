@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { ApiError } from '@/lib/api-client';
 import { ToastProvider } from '@/components/ui';
 import { AuthProvider } from '@/features/auth/auth-context';
+import { ThemeProvider } from '@/features/theme/theme-context';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -30,9 +31,11 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <AuthProvider>{children}</AuthProvider>
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

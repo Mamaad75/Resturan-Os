@@ -1,6 +1,6 @@
 'use client';
 
-import type { MenuThemeConfig } from '@restaurant-os/types';
+import { isLightColor, type MenuThemeConfig } from '@restaurant-os/types';
 import { ShoppingBag } from 'lucide-react';
 import {
   scopeCustomCss,
@@ -57,7 +57,7 @@ export function MenuThemePreview({
 }) {
   const styles = themeClasses(config);
   const scoped = scopeCustomCss(customCss);
-  const isLight = isLightBackground(config.colors.background);
+  const isLight = isLightColor(config.colors.background);
 
   return (
     <div className="mx-auto w-full max-w-[22rem]">
@@ -267,10 +267,3 @@ function PreviewCard({
   );
 }
 
-function isLightBackground(hex: string): boolean {
-  const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
-  if (!match) return false;
-  const int = Number.parseInt(match[1], 16);
-  const [r, g, b] = [(int >> 16) & 255, (int >> 8) & 255, int & 255];
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5;
-}

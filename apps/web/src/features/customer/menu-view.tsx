@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  applyColorMode,
+  configMode,
   presetConfig,
   resolveTheme,
   type MenuThemeConfig,
@@ -11,11 +13,12 @@ import { MapPin, Phone, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-re
 import Image from 'next/image';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, EmptyState } from '@/components/ui';
+import { useThemeMode } from '@/features/theme/theme-context';
+import { ThemeToggle } from '@/features/theme/theme-toggle';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
 import { CartProvider, useCart } from './cart';
 import {
-  hexToRgbChannels,
   scopeCustomCss,
   themeClasses,
   themeVariables,
@@ -42,8 +45,19 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
    * opened the customizer has no theme row yet, so the preset named on its
    * branding is used instead - the menu looks identical either way.
    */
-  const config: MenuThemeConfig =
+  const published: MenuThemeConfig =
     menu.theme?.config ?? presetConfig(restaurant.branding.menuTemplate);
+
+  /*
+   * A guest who has flipped the day/night switch gets their choice; everyone
+   * else gets the palette the restaurant designed. Only the neutral ramp is
+   * swapped, so the brand colour survives either way.
+   */
+  const { mode, chosen } = useThemeMode();
+  const config = useMemo(
+    () => (chosen ? applyColorMode(published, mode) : published),
+    [published, mode, chosen],
+  );
   const styles = themeClasses(config);
   const customCss = scopeCustomCss(menu.theme?.customCss);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.id ?? '');
@@ -107,7 +121,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
       className="min-h-dvh bg-canvas pb-28"
       // The theme carries its own colours, so the light/dark token set is
       // chosen from the theme's background rather than the legacy flag.
-      data-theme={isLightBackground(config.colors.background) ? 'light' : undefined}
+      data-theme={configMode(config) === 'light' ? 'light' : undefined}
       style={themeVariables(config)}
     >
       {/*
@@ -307,6 +321,13 @@ function RestaurantHeader({
 }) {
   return (
     <header className="relative">
+      {/*
+        Floated over the cover in the top-left corner (`end` is left in RTL).
+        The backdrop keeps it legible whether the photo behind it is dark or
+        blown out.
+      */}
+      <ThemeToggle className="absolute end-4 top-4 z-20 border-transparent bg-canvas/70 text-ink backdrop-blur-md" />
+
       {header.showCover ? (
       <div className="relative h-44 overflow-hidden bg-surface-sunken sm:h-56">
         {restaurant.branding.coverUrl ? (
@@ -605,13 +626,6 @@ function ProductCard({
  * Relative luminance rather than a stored flag: the owner picks a background
  * colour, and text has to stay readable on it whichever they choose.
  */
-function isLightBackground(hex: string): boolean {
-  const channels = hexToRgbChannels(hex);
-  if (!channels) return false;
-  const [r, g, b] = channels.split(' ').map(Number);
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.5;
-}
-
 /** Fallback art so a product without a photo still looks intentional. */
 function PlaceholderArt() {
   return (

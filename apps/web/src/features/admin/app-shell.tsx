@@ -31,6 +31,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { cn } from '@/lib/cn';
+import { ThemeToggle } from '@/features/theme/theme-toggle';
 import { restaurantService, subscriptionService } from '@/services';
 import { NotificationBell } from './notification-bell';
 
@@ -287,6 +288,9 @@ export function AppShell({ children }: { children: ReactNode }) {
               {user.fullName.charAt(0)}
             </span>
           </div>
+
+          {/* Last child, so in RTL it sits in the top-left corner. */}
+          <ThemeToggle />
         </header>
 
         <main className="px-4 pb-24 pt-5 lg:pb-8 lg:px-6">{children}</main>

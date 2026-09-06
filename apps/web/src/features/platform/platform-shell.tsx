@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { Spinner } from '@/components/ui';
+import { ThemeToggle } from '@/features/theme/theme-toggle';
 import { cn } from '@/lib/cn';
 import { usePlatformAuth, usePlatformGuard } from './platform-auth';
 
@@ -73,6 +74,8 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             <span className="hidden text-xs text-ink-subtle sm:inline">
               {admin?.fullName}
             </span>
+            {/* In RTL this trailing group is the top-left corner. */}
+            <ThemeToggle />
             <button
               onClick={async () => {
                 await logout();

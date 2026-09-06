@@ -9,7 +9,7 @@ import {
   type RestaurantSettings,
 } from '@restaurant-os/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Palette, Store, Truck } from 'lucide-react';
+import { ExternalLink, Store, Truck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Badge,
@@ -257,27 +257,12 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div>
-            <p className="mb-2 text-sm font-medium text-ink-muted">تم منو</p>
-            <div className="grid max-w-xs grid-cols-2 gap-2">
-              {(['dark', 'light'] as const).map((option) => (
-                <button
-                  key={option}
-                  disabled={!editable}
-                  onClick={() => setTheme(option)}
-                  className={cn(
-                    'flex items-center justify-center gap-2 rounded-xl border p-3 text-sm',
-                    theme === option
-                      ? 'border-gold/50 bg-gold/[0.08] text-ink'
-                      : 'border-line bg-surface-sunken text-ink-muted',
-                  )}
-                >
-                  <Palette className="size-4" />
-                  {option === 'dark' ? 'تیره' : 'روشن'}
-                </button>
-              ))}
-            </div>
-          </div>
+          {/*
+            Light/dark is no longer set here. It is a viewer preference now,
+            switched from the toggle in the top-left corner - by staff for the
+            panel, and by a guest for the menu. The palette itself still comes
+            from the customizer below.
+          */}
         </CardBody>
         {editable ? (
           <CardFooter>

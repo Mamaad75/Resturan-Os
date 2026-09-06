@@ -350,7 +350,13 @@ export function MenuThemeCustomizer({
         </div>
       ) : null}
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      {/*
+        The single-column template is not redundant. Without it the implicit
+        column is `auto`, which sizes to max-content - so one long Persian
+        description stretches the track past the viewport and the whole page
+        scrolls sideways on a phone.
+      */}
+      <div className="grid gap-4 grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-4">
           {/* ------------------------------------------------ presets */}
           <Card>

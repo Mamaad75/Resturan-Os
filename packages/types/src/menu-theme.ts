@@ -413,3 +413,132 @@ export function scopeCustomCss(css: string | null | undefined): string {
       .join('\n')
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Colour mode                                                         */
+/* ------------------------------------------------------------------ */
+
+/** "#C9A24B" -> "201 162 75", the channel form the design tokens expect. */
+export function hexToRgbChannels(hex: string): string | null {
+  const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex.trim());
+  if (!match) return null;
+  let value = match[1];
+  if (value.length === 3) {
+    value = value
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  }
+  const int = Number.parseInt(value, 16);
+  return `${(int >> 16) & 255} ${(int >> 8) & 255} ${int & 255}`;
+}
+
+function channels(hex: string): [number, number, number] | null {
+  const raw = hexToRgbChannels(hex);
+  if (!raw) return null;
+  const [r, g, b] = raw.split(' ').map(Number);
+  return [r, g, b];
+}
+
+/** Relative luminance, 0 (black) to 1 (white). */
+export function luminance(hex: string): number {
+  const rgb = channels(hex);
+  if (!rgb) return 0;
+  const [r, g, b] = rgb;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+}
+
+/** Whether a colour reads as light, which decides the token set to use. */
+export function isLightColor(hex: string): boolean {
+  return luminance(hex) > 0.5;
+}
+
+/** Which mode a theme's own palette already is. */
+export function configMode(config: MenuThemeConfig): ThemeMode {
+  return isLightColor(config.colors.background) ? 'light' : 'dark';
+}
+
+export type ThemeMode = 'dark' | 'light';
+
+function toHex(r: number, g: number, b: number): string {
+  const clamp = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${[r, g, b].map((v) => clamp(v).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Move a colour toward white (amount > 0) or black (amount < 0). */
+function shift(hex: string, amount: number): string {
+  const rgb = channels(hex);
+  if (!rgb) return hex;
+  const target = amount > 0 ? 255 : 0;
+  const t = Math.abs(amount);
+  return toHex(
+    rgb[0] + (target - rgb[0]) * t,
+    rgb[1] + (target - rgb[1]) * t,
+    rgb[2] + (target - rgb[2]) * t,
+  );
+}
+
+/**
+ * The neutral ramp for each mode.
+ *
+ * Deliberately fixed rather than derived: a restaurant picks a brand colour,
+ * not seven greys, and letting the greys drift per-tenant is how a menu ends
+ * up with unreadable body text.
+ */
+const NEUTRALS: Record<ThemeMode, Omit<ThemeColors, 'primary' | 'secondary'>> = {
+  dark: {
+    background: '#0b0b0d',
+    surface: '#131316',
+    text: '#f5f5f4',
+    textMuted: '#a1a1aa',
+    border: '#26262c',
+  },
+  light: {
+    background: '#fafaf9',
+    surface: '#ffffff',
+    text: '#18181b',
+    textMuted: '#52525b',
+    border: '#e4e4e7',
+  },
+};
+
+/**
+ * Re-render a theme in the requested light/dark mode.
+ *
+ * The brand colours survive the switch - a guest flipping to light mode is
+ * asking for a readable page, not for a different restaurant. Only the neutral
+ * ramp is replaced, and the accent is nudged if it would fail against the new
+ * background: a pale gold that reads well on charcoal is unreadable on white.
+ *
+ * Returns the config untouched when it is already in the requested mode, so
+ * the restaurant's own hand-picked palette is never second-guessed.
+ */
+export function applyColorMode(
+  config: MenuThemeConfig,
+  mode: ThemeMode,
+): MenuThemeConfig {
+  if (configMode(config) === mode) return config;
+
+  const neutrals = NEUTRALS[mode];
+  const backgroundLum = luminance(neutrals.background);
+
+  /*
+   * Accents carry price text, not just fills, so they need real separation
+   * from the background. The gold that reads well on charcoal is washed out
+   * on white at anything less than this.
+   */
+  const MIN_GAP = 0.45;
+  const readable = (hex: string) => {
+    if (Math.abs(luminance(hex) - backgroundLum) >= MIN_GAP) return hex;
+    return mode === 'light' ? shift(hex, -0.35) : shift(hex, 0.35);
+  };
+
+  return {
+    ...config,
+    colors: {
+      ...neutrals,
+      primary: readable(config.colors.primary),
+      secondary: readable(config.colors.secondary),
+    },
+  };
+}

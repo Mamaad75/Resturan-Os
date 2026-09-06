@@ -1,4 +1,5 @@
 export { scopeCustomCss } from '@restaurant-os/types';
+import { hexToRgbChannels } from '@restaurant-os/types';
 import type {
   MenuThemeConfig,
   ThemeFontFamily,
@@ -64,18 +65,6 @@ const WEIGHT: Record<MenuThemeConfig['typography']['headlineWeight'], string> = 
   medium: '600',
   bold: '800',
 };
-
-/** "#C9A24B" -> "201 162 75", the channel form the design tokens expect. */
-export function hexToRgbChannels(hex: string): string | null {
-  const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex.trim());
-  if (!match) return null;
-  let value = match[1];
-  if (value.length === 3) {
-    value = value.split('').map((c) => c + c).join('');
-  }
-  const int = Number.parseInt(value, 16);
-  return `${(int >> 16) & 255} ${(int >> 8) & 255} ${int & 255}`;
-}
 
 /**
  * The theme as CSS custom properties.
