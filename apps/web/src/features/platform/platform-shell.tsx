@@ -1,6 +1,12 @@
 'use client';
 
-import { Building2, LayoutDashboard, LogOut, Package } from 'lucide-react';
+import {
+  Building2,
+  LayoutDashboard,
+  LogOut,
+  Package,
+  Receipt,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -13,6 +19,7 @@ const NAV = [
   { href: '/superadmin', label: 'داشبورد', icon: LayoutDashboard },
   { href: '/superadmin/tenants', label: 'کسب‌وکارها', icon: Building2 },
   { href: '/superadmin/plans', label: 'پلن‌ها', icon: Package },
+  { href: '/superadmin/invoices', label: 'پرداخت‌ها', icon: Receipt },
 ];
 
 /**

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Ban,
   CalendarPlus,
+  CheckCircle2,
   Play,
   Power,
   Save,
@@ -55,6 +56,8 @@ function TenantDetail() {
   const [suspendOpen, setSuspendOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [extendDays, setExtendDays] = useState('30');
+  const [activatePlanId, setActivatePlanId] = useState('');
+  const [activateMonths, setActivateMonths] = useState('1');
   const [planId, setPlanId] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [trialEndsAt, setTrialEndsAt] = useState('');
@@ -74,6 +77,7 @@ function TenantDetail() {
     if (!data) return;
     setNotes(data.adminNotes ?? '');
     setPlanId(data.subscription?.plan.id ?? '');
+    setActivatePlanId((current) => current || (data.subscription?.plan.id ?? ''));
     setExpiresAt(toDateInput(data.subscription?.expiresAt));
     setTrialEndsAt(toDateInput(data.subscription?.trialEndsAt));
     setGraceUntil(toDateInput(data.subscription?.graceUntil));
@@ -146,6 +150,24 @@ function TenantDetail() {
     onError,
   });
 
+  const activatePlan = useMutation({
+    mutationFn: () =>
+      platformService.activatePlan(tenantId, {
+        planId: activatePlanId,
+        months: Number(activateMonths) || 1,
+      }),
+    onSuccess: (subscription) => {
+      toast.success(
+        `پلن ${subscription.plan.nameFa} فعال شد`,
+        subscription.expiresAt
+          ? `تا ${new Date(subscription.expiresAt).toLocaleDateString('fa-IR')}`
+          : undefined,
+      );
+      refresh();
+    },
+    onError,
+  });
+
   const extend = useMutation({
     mutationFn: () => platformService.extend(tenantId, Number(extendDays) || 30),
     onSuccess: (subscription) => {
@@ -170,6 +192,28 @@ function TenantDetail() {
   const tenant = query.data;
   const subscription = tenant.subscription;
   const suspended = subscription?.status === 'SUSPENDED';
+
+  /*
+   * What the button is about to do, spelled out before it is pressed.
+   * Mirrors the server: only the same plan carries remaining days over, so
+   * switching plans starts a fresh period.
+   */
+  const activationSummary = (() => {
+    const plan = plansQuery.data?.find((candidate) => candidate.id === activatePlanId);
+    if (!plan) return null;
+    const months = Number(activateMonths) || 1;
+    const now = new Date();
+    const currentExpiry = subscription?.expiresAt ? new Date(subscription.expiresAt) : null;
+    const carriesOver =
+      subscription?.plan.id === plan.id && !!currentExpiry && currentExpiry > now;
+    const base = carriesOver ? currentExpiry : now;
+    const until = new Date(base);
+    const day = until.getDate();
+    until.setMonth(until.getMonth() + months, 1);
+    const lastDay = new Date(until.getFullYear(), until.getMonth() + 1, 0).getDate();
+    until.setDate(Math.min(day, lastDay));
+    return { amount: plan.monthlyPrice * months, until, carriesOver };
+  })();
 
   return (
     <div className="space-y-4">
@@ -225,7 +269,69 @@ function TenantDetail() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <CardHeader title="اشتراک" />
+          <CardHeader
+            title="فعال‌سازی پلن"
+            description="پلن و مدت را انتخاب کنید؛ تاریخ انقضا خودکار حساب می‌شود."
+          />
+          <CardBody className="space-y-3">
+            <Select
+              label="پلن"
+              value={activatePlanId}
+              onChange={(e) => setActivatePlanId(e.target.value)}
+              options={(plansQuery.data ?? [])
+                .filter((plan) => plan.isActive)
+                .map((plan) => ({
+                  value: plan.id,
+                  label: `${plan.nameFa} — ماهانه ${formatMoney(plan.monthlyPrice, 'IRT', { withUnit: false })}`,
+                }))}
+            />
+
+            <div>
+              <p className="mb-2 text-sm font-medium text-ink-muted">مدت</p>
+              <div className="flex flex-wrap gap-2">
+                {['1', '3', '6', '12'].map((months) => (
+                  <button
+                    key={months}
+                    type="button"
+                    onClick={() => setActivateMonths(months)}
+                    className={cn(
+                      'rounded-xl border px-4 py-2 text-sm transition-colors',
+                      activateMonths === months
+                        ? 'border-gold/50 bg-gold/10 text-gold'
+                        : 'border-line bg-surface-sunken text-ink-muted hover:text-ink',
+                    )}
+                  >
+                    {toPersianDigits(months)} ماه
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {activationSummary ? (
+              <p className="rounded-xl border border-line bg-surface-sunken p-3 text-xs leading-relaxed text-ink-muted">
+                مبلغ: {formatMoney(activationSummary.amount, 'IRT')} · اعتبار تا{' '}
+                {activationSummary.until.toLocaleDateString('fa-IR')}
+                {activationSummary.carriesOver ? ' (شامل روزهای باقی‌مانده فعلی)' : ''}
+              </p>
+            ) : null}
+
+            <Button
+              variant="primary"
+              leftIcon={<CheckCircle2 className="size-4" />}
+              disabled={!activatePlanId}
+              loading={activatePlan.isPending}
+              onClick={() => activatePlan.mutate()}
+            >
+              فعال‌سازی
+            </Button>
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="ویرایش دستی اشتراک"
+            description="برای موارد استثنا؛ در حالت عادی از فعال‌سازی بالا استفاده کنید."
+          />
           <CardBody className="space-y-3">
             <Select
               label="پلن"

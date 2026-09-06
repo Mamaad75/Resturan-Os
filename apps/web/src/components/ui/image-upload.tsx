@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useRef, useState } from 'react';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
+import type { UploadFolder } from '@/lib/api-client';
 import { storageService } from '@/services';
 import { useToast } from './toast';
 
@@ -27,7 +28,7 @@ export function ImageUpload({
 }: {
   value: string | null;
   onChange: (url: string | null) => void;
-  folder?: 'products' | 'branding';
+  folder?: UploadFolder;
   label?: string;
   hint?: string;
   className?: string;

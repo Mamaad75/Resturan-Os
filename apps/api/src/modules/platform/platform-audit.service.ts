@@ -27,7 +27,18 @@ export const PlatformAction = {
   PLAN_CHANGE: 'subscription.plan_change',
   PLAN_CREATE: 'plan.create',
   PLAN_UPDATE: 'plan.update',
+  PLAN_ACTIVATE: 'subscription.activate',
+  INVOICE_APPROVE: 'invoice.approve',
+  INVOICE_REJECT: 'invoice.reject',
+  BANK_ACCOUNT_CREATE: 'bank_account.create',
+  BANK_ACCOUNT_UPDATE: 'bank_account.update',
 } as const;
+
+/** Request provenance carried onto every audit line. */
+export interface AuditMeta {
+  ipAddress: string | null;
+  userAgent: string | null;
+}
 
 /**
  * Append-only record of what the platform did to whom.

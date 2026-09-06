@@ -32,7 +32,12 @@ import type {
   StaffDto,
   TableDto,
 } from '@restaurant-os/types';
-import { api, uploadFile, type ListResult } from '@/lib/api-client';
+import {
+  api,
+  uploadFile,
+  type ListResult,
+  type UploadFolder,
+} from '@/lib/api-client';
 
 /* ------------------------------------------------------------------ */
 /* Auth                                                                */
@@ -61,7 +66,7 @@ export const authService = {
 
 export const storageService = {
   /** Returns an optimised WebP plus a square thumbnail. */
-  uploadImage: (file: File, folder: 'products' | 'branding' = 'products') =>
+  uploadImage: (file: File, folder: UploadFolder = 'products') =>
     uploadFile<{
       key: string;
       url: string;
@@ -527,4 +532,78 @@ export const platformService = {
     api.post<PlanDto>('/platform/plans', body),
   updatePlan: (id: string, body: Record<string, unknown>) =>
     api.patch<PlanDto>(`/platform/plans/${id}`, body),
+
+  /** One call: this tenant, this plan, this many months, starting now. */
+  activatePlan: (id: string, body: { planId: string; months: number; note?: string }) =>
+    api.post<SubscriptionDto>(`/platform/tenants/${id}/subscription/activate`, body),
+
+  bankAccounts: () => api.get<BankAccountDto[]>('/platform/bank-accounts'),
+  createBankAccount: (body: Record<string, unknown>) =>
+    api.post<BankAccountDto>('/platform/bank-accounts', body),
+  updateBankAccount: (id: string, body: Record<string, unknown>) =>
+    api.patch<BankAccountDto>(`/platform/bank-accounts/${id}`, body),
+
+  invoices: (params: { status?: string; page?: number; pageSize?: number }) =>
+    api.get<ListResult<PlatformInvoiceDto>>('/platform/invoices', { query: params }),
+  approveInvoice: (id: string, reviewNote?: string) =>
+    api.post<{ invoice: InvoiceDto; subscription: SubscriptionDto }>(
+      `/platform/invoices/${id}/approve`,
+      { reviewNote },
+    ),
+  rejectInvoice: (id: string, reviewNote: string) =>
+    api.post<InvoiceDto>(`/platform/invoices/${id}/reject`, { reviewNote }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Billing, from the tenant's side                                     */
+/* ------------------------------------------------------------------ */
+
+export interface BankAccountDto {
+  id: string;
+  bankName: string;
+  holderName: string;
+  cardNumber: string;
+  iban: string | null;
+  note: string | null;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface InvoiceDto {
+  id: string;
+  tenantId: string;
+  months: number;
+  amount: number;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  method: string;
+  payerName: string | null;
+  referenceCode: string | null;
+  paidAt: string | null;
+  receiptUrl: string | null;
+  note: string | null;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  createdAt: string;
+  plan: { id: string; nameFa: string; monthlyPrice: number } | null;
+  bankAccount: BankAccountDto | null;
+}
+
+export interface PlatformInvoiceDto extends InvoiceDto {
+  tenant: { id: string; name: string; slug: string };
+}
+
+export const billingService = {
+  bankAccounts: () => api.get<BankAccountDto[]>('/billing/bank-accounts'),
+  invoices: () => api.get<InvoiceDto[]>('/billing/invoices'),
+  submit: (body: {
+    planId: string;
+    months: number;
+    bankAccountId?: string;
+    payerName?: string | null;
+    referenceCode?: string | null;
+    paidAt?: string;
+    receiptUrl?: string | null;
+    note?: string | null;
+  }) => api.post<InvoiceDto>('/billing/invoices', body),
+  cancel: (id: string) => api.post<InvoiceDto>(`/billing/invoices/${id}/cancel`),
 };

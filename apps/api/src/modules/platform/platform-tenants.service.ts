@@ -20,7 +20,13 @@ import { tehranMonthStart } from '../../common/utils/time.util';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
 import { PlansService, effectiveStatus, toSubscriptionDto } from '../plans/plans.service';
-import { PlatformAction, PlatformAuditService } from './platform-audit.service';
+import {
+  PlatformAction,
+  PlatformAuditService,
+  type AuditMeta,
+} from './platform-audit.service';
+
+export type { AuditMeta };
 
 export interface TenantListQuery {
   page: number;
@@ -28,11 +34,6 @@ export interface TenantListQuery {
   search?: string | null;
   status?: string | null;
   planKey?: string | null;
-}
-
-export interface AuditMeta {
-  ipAddress: string | null;
-  userAgent: string | null;
 }
 
 /**

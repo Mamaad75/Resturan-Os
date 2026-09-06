@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthModule } from '../auth/auth.module';
+import { BillingService } from '../billing/billing.service';
 import { PlatformAuditService } from './platform-audit.service';
 import { PlatformAuthController } from './platform-auth.controller';
 import { PlatformAuthService } from './platform-auth.service';
@@ -26,7 +27,10 @@ import { PlatformTenantsService } from './platform-tenants.service';
     PlatformDashboardService,
     PlatformTenantsService,
     PlatformPlansService,
+    // Lives here rather than in BillingModule so the platform controller can
+    // inject it without the two modules importing each other.
+    BillingService,
   ],
-  exports: [PlatformAuditService],
+  exports: [PlatformAuditService, BillingService],
 })
 export class PlatformModule {}

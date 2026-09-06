@@ -28,6 +28,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { MenuThemeCustomizer } from '@/features/admin/menu-theme-customizer';
+import { SubscriptionPayment } from '@/features/admin/subscription-payment';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { toPersianDigits } from '@/lib/format';
@@ -466,6 +467,8 @@ export default function SettingsPage() {
       </div>
 
       <SubscriptionCard />
+
+      <SubscriptionPayment editable={editable} />
 
       <Card>
         <CardHeader title="عملیات سفارش" />

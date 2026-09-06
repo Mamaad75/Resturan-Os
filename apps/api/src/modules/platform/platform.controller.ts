@@ -1,15 +1,27 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
+  activatePlanSchema,
+  bankAccountSchema,
   createPlanSchema,
   extendSubscriptionSchema,
+  invoiceQuerySchema,
+  rejectInvoiceSchema,
+  reviewInvoiceSchema,
   suspendTenantSchema,
   tenantNotesSchema,
   updatePlanSchema,
+  updateBankAccountSchema,
   updateSubscriptionSchema,
   uuidSchema,
+  type ActivatePlanInput,
+  type BankAccountInput,
   type CreatePlanInput,
   type ExtendSubscriptionInput,
+  type InvoiceQueryInput,
+  type RejectInvoiceInput,
+  type ReviewInvoiceInput,
+  type UpdateBankAccountInput,
   type SuspendTenantInput,
   type TenantNotesInput,
   type UpdatePlanInput,
@@ -20,8 +32,13 @@ import {
   PlatformCtx,
   PlatformOnly,
 } from '../../common/decorators/auth.decorators';
-import { ZodBody, ZodParam } from '../../common/decorators/validation.decorators';
+import {
+  ZodBody,
+  ZodParam,
+  ZodQuery,
+} from '../../common/decorators/validation.decorators';
 import type { PlatformContext } from '../../common/types/request-context';
+import { BillingService } from '../billing/billing.service';
 import { PlansService } from '../plans/plans.service';
 import { PlatformAuditService } from './platform-audit.service';
 import { PlatformDashboardService } from './platform-dashboard.service';
@@ -45,6 +62,7 @@ export class PlatformController {
     private readonly plans: PlansService,
     private readonly platformPlans: PlatformPlansService,
     private readonly audit: PlatformAuditService,
+    private readonly billing: BillingService,
   ) {}
 
   /* ------------------------------------------------------------ dashboard */
@@ -190,5 +208,82 @@ export class PlatformController {
     @ClientInfo() meta: AuditMeta,
   ) {
     return this.platformPlans.update(admin, id, dto, meta);
+  }
+
+  /* ------------------------------------------------------ plan activation */
+
+  @Post('tenants/:id/subscription/activate')
+  @ApiOperation({ summary: 'Put a tenant on a plan for N months, starting now' })
+  activatePlan(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodParam('id', uuidSchema) id: string,
+    @ZodBody(activatePlanSchema) dto: ActivatePlanInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.billing.activatePlan(
+      id,
+      dto,
+      { adminId: admin.adminId, source: 'platform' },
+      meta,
+    );
+  }
+
+  /* ---------------------------------------------------------- bank accounts */
+
+  @Get('bank-accounts')
+  @ApiOperation({ summary: 'Every card tenants can transfer to' })
+  listBankAccounts() {
+    return this.billing.listBankAccounts();
+  }
+
+  @Post('bank-accounts')
+  @ApiOperation({ summary: 'Add a card' })
+  createBankAccount(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodBody(bankAccountSchema) dto: BankAccountInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.billing.createBankAccount(admin, dto, meta);
+  }
+
+  @Patch('bank-accounts/:id')
+  @ApiOperation({ summary: 'Edit or deactivate a card' })
+  updateBankAccount(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodParam('id', uuidSchema) id: string,
+    @ZodBody(updateBankAccountSchema) dto: UpdateBankAccountInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.billing.updateBankAccount(admin, id, dto, meta);
+  }
+
+  /* --------------------------------------------------------------- invoices */
+
+  @Get('invoices')
+  @ApiOperation({ summary: 'Card-to-card payment requests, pending first' })
+  listInvoices(@ZodQuery(invoiceQuerySchema) query: InvoiceQueryInput) {
+    return this.billing.listInvoices(query);
+  }
+
+  @Post('invoices/:id/approve')
+  @ApiOperation({ summary: 'Accept a receipt, which activates the plan' })
+  approveInvoice(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodParam('id', uuidSchema) id: string,
+    @ZodBody(reviewInvoiceSchema) dto: ReviewInvoiceInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.billing.approveInvoice(admin, id, dto, meta);
+  }
+
+  @Post('invoices/:id/reject')
+  @ApiOperation({ summary: 'Reject a receipt with a stated reason' })
+  rejectInvoice(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodParam('id', uuidSchema) id: string,
+    @ZodBody(rejectInvoiceSchema) dto: RejectInvoiceInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.billing.rejectInvoice(admin, id, dto, meta);
   }
 }

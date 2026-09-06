@@ -24,6 +24,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlansModule } from './modules/plans/plans.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -72,6 +73,7 @@ import { HealthController } from './health.controller';
     SmsModule,
     SignupModule,
     PlatformModule,
+    BillingModule,
     CrmModule,
     ThemeModule,
     NotificationsModule,

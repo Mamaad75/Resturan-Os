@@ -164,6 +164,24 @@ enum SubscriptionStatus {
   SUSPENDED
 }
 
+/// Where a subscription payment stands. Card-to-card is settled by a human
+/// reading a receipt, so an invoice waits in PENDING until someone looks.
+enum InvoiceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+/// How the tenant paid for its subscription. Distinct from PaymentMethod,
+/// which is how a guest paid for a meal. Only card-to-card is implemented; the
+/// enum exists so adding a gateway later needs no migration on every invoice.
+enum BillingMethod {
+  CARD_TO_CARD
+  GATEWAY
+  MANUAL
+}
+
 /// Transactional messages are part of an order and always send; marketing
 /// messages require consent and count against the plan's allowance.
 enum SmsKind {
@@ -236,6 +254,7 @@ model Tenant {
   subscription  Subscription?
   campaigns     Campaign[]
   platformAudit PlatformAuditLog[]
+  invoices      SubscriptionInvoice[]
 
   @@index([slug])
   @@map("tenants")
@@ -1191,6 +1210,7 @@ model Plan {
   updatedAt DateTime @updatedAt
 
   subscriptions Subscription[]
+  invoices      SubscriptionInvoice[]
 
   @@index([isActive, displayOrder])
   @@map("plans")
@@ -1306,4 +1326,76 @@ model MenuTheme {
 
   @@index([tenantId])
   @@map("menu_themes")
+}
+
+/// The card a tenant transfers to.
+///
+/// Held by the platform rather than per-tenant: every restaurant pays the same
+/// account, and an operator changing banks should not have to edit every row.
+model PlatformBankAccount {
+  id           String  @id @default(uuid()) @db.Uuid
+  bankName     String  @db.VarChar(60)
+  holderName   String  @db.VarChar(80)
+  /// Stored as typed, digits only. Not a secret: it is published to payers.
+  cardNumber   String  @db.VarChar(24)
+  iban         String? @db.VarChar(34)
+  note         String? @db.VarChar(300)
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoices SubscriptionInvoice[]
+
+  @@index([isActive, displayOrder])
+  @@map("platform_bank_accounts")
+}
+
+/// One request to pay for a plan, and the receipt backing it.
+///
+/// Deliberately append-only in spirit: approving an invoice writes the
+/// subscription, and the row stays as the record of why that subscription
+/// looks the way it does. Amount is captured at submission time so a later
+/// price change never rewrites what someone was asked to pay.
+model SubscriptionInvoice {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  planId   String @db.Uuid
+
+  /// Billed period in whole months; drives the expiry the approval writes.
+  months Int    @default(1)
+  /// Total in Toman, fixed when the tenant submitted.
+  amount Int
+
+  status InvoiceStatus @default(PENDING)
+  method BillingMethod @default(CARD_TO_CARD)
+
+  /// Which platform card the tenant says they paid into.
+  bankAccountId String? @db.Uuid
+
+  // What the payer submitted.
+  payerName     String?   @db.VarChar(80)
+  /// Bank reference / tracking number for the transfer.
+  referenceCode String?   @db.VarChar(60)
+  paidAt        DateTime?
+  receiptUrl    String?   @db.VarChar(500)
+  note          String?   @db.VarChar(500)
+
+  // What the platform decided.
+  reviewedByAdminId String?   @db.Uuid
+  reviewedAt        DateTime?
+  reviewNote        String?   @db.VarChar(300)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan        Plan                 @relation(fields: [planId], references: [id], onDelete: Restrict)
+  bankAccount PlatformBankAccount? @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  /// The platform queue: everything still waiting, oldest first.
+  @@index([status, createdAt])
+  @@map("subscription_invoices")
 }

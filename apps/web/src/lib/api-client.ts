@@ -224,6 +224,14 @@ export async function apiRequest<T>(
  * `Content-Type` with the multipart boundary - overriding it breaks the parse
  * on the server.
  */
+/**
+ * Where an upload is filed.
+ *
+ * One list, mirrored by the API's allowlist. Adding a folder means adding it
+ * in both places on purpose: the value becomes a path segment on the server.
+ */
+export type UploadFolder = 'products' | 'branding' | 'receipts';
+
 export async function uploadFile<T>(
   path: string,
   file: File,
