@@ -334,7 +334,7 @@ model Restaurant {
   /// Whether a guest must give a phone number to place an order. Takeaway
   /// needs one to send the "ready for pickup" message; dine-in usually does
   /// not, so this defaults off and onboarding turns it on for takeaway.
-  requireCustomerPhone    Boolean       @default(false)
+  requireCustomerPhone    Boolean       @default(true)
   /// Offer marketing opt-in at checkout. Off until the owner enables it.
   marketingOptInEnabled   Boolean       @default(false)
 

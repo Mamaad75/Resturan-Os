@@ -604,7 +604,29 @@ export const platformService = {
     api.get<SettlementListDto>('/platform/settlements', { query: params }),
   settle: (body: { ids: string[]; settlementRef?: string; note?: string }) =>
     api.post<{ settled: number }>('/platform/settlements/settle', body),
+
+  phoneBank: (params: {
+    search?: string;
+    consentOnly?: boolean;
+    page?: number;
+    pageSize?: number;
+  }) => api.get<PhoneBankDto>('/platform/phone-bank', { query: params }),
 };
+
+export interface PhoneBankRow {
+  phone: string;
+  name: string | null;
+  restaurantName: string;
+  ordersCount: number;
+  marketingConsent: boolean;
+  createdAt: string;
+}
+
+export interface PhoneBankDto {
+  items: PhoneBankRow[];
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
+  totals: { records: number; consenting: number; uniquePhones: number };
+}
 
 /* --- platform online-payment DTOs --- */
 

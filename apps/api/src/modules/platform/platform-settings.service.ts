@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type {
+  PhoneBankQueryInput,
   SettleSettlementsInput,
   SettlementQueryInput,
   UpdatePlatformPaymentConfigInput,
@@ -196,6 +197,58 @@ export class PlatformSettingsService {
       }),
     );
     return { settled: result.count };
+  }
+
+  /* --------------------------------------------------------- phone bank */
+
+  /**
+   * The platform-wide phone book: every customer number collected across all
+   * restaurants. Cross-tenant by design (superadmin only) — this is the one
+   * place customer phones are read outside their own tenant.
+   */
+  async phoneBank(query: PhoneBankQueryInput) {
+    const where = {
+      ...(query.search ? { phone: { contains: query.search } } : {}),
+      ...(query.consentOnly ? { marketingConsent: true } : {}),
+    };
+    const [rows, total, consenting, distinct] = await runAsSystem(
+      'platform: customer phone bank',
+      () =>
+        Promise.all([
+          this.prisma.customer.findMany({
+            where,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              phone: true,
+              name: true,
+              ordersCount: true,
+              marketingConsent: true,
+              createdAt: true,
+              tenant: { select: { name: true } },
+            },
+            ...paginationArgs(query.page, query.pageSize),
+          }),
+          this.prisma.customer.count({ where }),
+          this.prisma.customer.count({ where: { ...where, marketingConsent: true } }),
+          this.prisma.customer.findMany({
+            where,
+            select: { phone: true },
+            distinct: ['phone'],
+          }),
+        ]),
+    );
+    return {
+      items: rows.map((r) => ({
+        phone: r.phone,
+        name: r.name,
+        restaurantName: r.tenant.name,
+        ordersCount: r.ordersCount,
+        marketingConsent: r.marketingConsent,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      meta: buildPaginationMeta(query.page, query.pageSize, total),
+      totals: { records: total, consenting, uniquePhones: distinct.length },
+    };
   }
 
   private mergeCreds(existing: unknown, incoming: Creds | undefined): Creds {

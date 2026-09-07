@@ -43,6 +43,7 @@ export function CheckoutSheet({
   const toast = useToast();
 
   const modes = restaurant.settings.serviceModes;
+  const requirePhone = restaurant.settings.requireCustomerPhone;
   const dineInAvailable =
     modes.includes(ServiceMode.DINE_IN) && Boolean(restaurant.table);
   const takeawayAvailable = modes.includes(ServiceMode.TAKEAWAY);
@@ -131,6 +132,12 @@ export function CheckoutSheet({
         modifierOptionIds: line.modifiers.map((m) => m.id),
       })),
     };
+
+    // Dine-in phone is enforced by the restaurant setting, not the base schema.
+    if (requirePhone && !customerPhone.trim()) {
+      setErrors({ customerPhone: 'وارد کردن شمارهٔ موبایل الزامی است.' });
+      return;
+    }
 
     // Validate with the very schema the API will apply, for instant feedback.
     const parsed = createPublicOrderSchema.safeParse(payload);
@@ -425,13 +432,29 @@ export function CheckoutSheet({
               />
             </div>
           ) : (
-            <Input
-              label="نام (اختیاری)"
-              placeholder="برای صدا زدن هنگام سرو"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              error={errors.customerName}
-            />
+            <div className="space-y-3">
+              <Input
+                label="نام (اختیاری)"
+                placeholder="برای صدا زدن هنگام سرو"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                error={errors.customerName}
+              />
+              {requirePhone ? (
+                <Input
+                  label="شماره موبایل"
+                  type="tel"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder="۰۹۱۲۱۲۳۴۵۶۷"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  error={errors.customerPhone}
+                  hint="برای اطلاع‌رسانی و باشگاه مشتریان"
+                  required
+                />
+              ) : null}
+            </div>
           )}
 
           {/* Discount code */}

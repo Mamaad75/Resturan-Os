@@ -81,3 +81,11 @@ export const settleSettlementsSchema = z.object({
   note: optionalText(300, 'یادداشت'),
 });
 export type SettleSettlementsInput = z.infer<typeof settleSettlementsSchema>;
+
+export const phoneBankQuerySchema = z.object({
+  search: optionalText(20, 'جستجو'),
+  consentOnly: z.coerce.boolean().optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
+export type PhoneBankQueryInput = z.infer<typeof phoneBankQuerySchema>;

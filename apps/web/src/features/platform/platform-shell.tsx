@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   Package,
+  Phone,
   Receipt,
   Wallet,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ const NAV = [
   { href: '/superadmin/invoices', label: 'پرداخت‌ها', icon: Receipt },
   { href: '/superadmin/payments', label: 'درگاه و پیامک', icon: CreditCard },
   { href: '/superadmin/settlements', label: 'تسویه', icon: Wallet },
+  { href: '/superadmin/phone-bank', label: 'بانک شماره', icon: Phone },
 ];
 
 /**

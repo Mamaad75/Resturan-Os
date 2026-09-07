@@ -26,10 +26,12 @@ import {
   type TenantNotesInput,
   type UpdatePlanInput,
   type UpdateSubscriptionInput,
+  phoneBankQuerySchema,
   settleSettlementsSchema,
   settlementQuerySchema,
   updatePlatformPaymentConfigSchema,
   updatePlatformSmsConfigSchema,
+  type PhoneBankQueryInput,
   type SettleSettlementsInput,
   type SettlementQueryInput,
   type UpdatePlatformPaymentConfigInput,
@@ -117,6 +119,14 @@ export class PlatformController {
   @ApiOperation({ summary: 'Mark selected settlements as paid out' })
   settle(@ZodBody(settleSettlementsSchema) dto: SettleSettlementsInput) {
     return this.settings.settle(dto);
+  }
+
+  /* ------------------------------------------------------------ phone bank */
+
+  @Get('phone-bank')
+  @ApiOperation({ summary: 'Customer phone numbers collected across all restaurants' })
+  phoneBank(@ZodQuery(phoneBankQuerySchema) query: PhoneBankQueryInput) {
+    return this.settings.phoneBank(query);
   }
 
   /* ------------------------------------------------------------ dashboard */
