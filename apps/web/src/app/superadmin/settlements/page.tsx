@@ -87,12 +87,12 @@ function Settlements() {
           <SummaryCard
             icon={<Wallet className="size-5" />}
             label="مجموع در انتظار پرداخت به رستوران‌ها"
-            value={formatMoney(query.data.totals.pendingNet, 'IRT')}
+            value={formatMoney(query.data.totals?.pendingNet ?? 0, 'IRT')}
           />
           <SummaryCard
             icon={<Banknote className="size-5" />}
             label="مجموع کارمزد پلتفرم (در انتظار)"
-            value={formatMoney(query.data.totals.pendingCommission, 'IRT')}
+            value={formatMoney(query.data.totals?.pendingCommission ?? 0, 'IRT')}
             tone="gold"
           />
         </div>

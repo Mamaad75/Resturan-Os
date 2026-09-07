@@ -37,6 +37,8 @@ export class PaymentsConfigService {
         ownPaymentProvider: true,
         ownPaymentCredentials: true,
         ownPaymentSandbox: true,
+        payCashEnabled: true,
+        payCardOnSiteEnabled: true,
       },
     });
     if (!restaurant) throw AppException.notFound('رستوران');
@@ -54,6 +56,8 @@ export class PaymentsConfigService {
       ownProvider: restaurant.ownPaymentProvider,
       ownCredentials: maskCreds(restaurant.ownPaymentCredentials),
       ownSandbox: restaurant.ownPaymentSandbox,
+      cashEnabled: restaurant.payCashEnabled,
+      cardOnSiteEnabled: restaurant.payCardOnSiteEnabled,
       platformAvailable: platform?.enabled ?? false,
       platformCommissionBps: platform?.commissionBps ?? 400,
     };
@@ -74,6 +78,10 @@ export class PaymentsConfigService {
         ownPaymentProvider: input.mode === 'OWN' ? input.ownProvider ?? null : null,
         ownPaymentCredentials: input.mode === 'OWN' ? merged : merged,
         ownPaymentSandbox: input.ownSandbox ?? true,
+        ...(input.cashEnabled === undefined ? {} : { payCashEnabled: input.cashEnabled }),
+        ...(input.cardOnSiteEnabled === undefined
+          ? {}
+          : { payCardOnSiteEnabled: input.cardOnSiteEnabled }),
       },
     });
     return this.get(ctx);

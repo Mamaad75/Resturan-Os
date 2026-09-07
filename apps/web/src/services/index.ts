@@ -640,6 +640,38 @@ export interface SettlementListDto {
 }
 
 /* ------------------------------------------------------------------ */
+/* Tenant payment configuration (the restaurant owner's side)          */
+/* ------------------------------------------------------------------ */
+
+export type OnlinePaymentMode = 'OFF' | 'PLATFORM' | 'OWN';
+
+export interface TenantPaymentConfigDto {
+  mode: OnlinePaymentMode;
+  ownProvider: string | null;
+  ownCredentials: Record<string, string>;
+  ownSandbox: boolean;
+  cashEnabled: boolean;
+  cardOnSiteEnabled: boolean;
+  platformAvailable: boolean;
+  platformCommissionBps: number;
+}
+
+export interface UpdateTenantPaymentConfigBody {
+  mode: OnlinePaymentMode;
+  ownProvider?: string | null;
+  ownCredentials?: Record<string, string>;
+  ownSandbox?: boolean;
+  cashEnabled?: boolean;
+  cardOnSiteEnabled?: boolean;
+}
+
+export const paymentConfigService = {
+  get: () => api.get<TenantPaymentConfigDto>('/payment-config'),
+  update: (body: UpdateTenantPaymentConfigBody) =>
+    api.put<TenantPaymentConfigDto>('/payment-config', body),
+};
+
+/* ------------------------------------------------------------------ */
 /* Billing, from the tenant's side                                     */
 /* ------------------------------------------------------------------ */
 

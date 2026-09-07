@@ -30,6 +30,7 @@ import { useAuth } from '@/features/auth/auth-context';
 import { MenuThemeCustomizer } from '@/features/admin/menu-theme-customizer';
 import { DeliveryZones } from '@/features/admin/delivery-zones';
 import { LoyaltyProgram } from '@/features/admin/loyalty-program';
+import { PaymentMethods } from '@/features/admin/payment-methods';
 import { SubscriptionPayment } from '@/features/admin/subscription-payment';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
@@ -494,6 +495,8 @@ export default function SettingsPage() {
           editable={editable}
         />
       </div>
+
+      <PaymentMethods editable={editable} />
 
       <LoyaltyProgram editable={editable} />
 

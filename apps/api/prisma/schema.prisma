@@ -310,6 +310,11 @@ model Restaurant {
   /// The restaurant's own gateway credentials (merchant id, api key, ...).
   ownPaymentCredentials  Json?
   ownPaymentSandbox      Boolean @default(true)
+  /// Which in-person payment methods the owner offers customers. Online is
+  /// governed by onlinePaymentMode above (OFF = online off). A customer may
+  /// only pick a method that is enabled here.
+  payCashEnabled         Boolean @default(true)
+  payCardOnSiteEnabled   Boolean @default(true)
 
   // Service configuration
   /// What kind of business this is. Independent of `serviceModes`, which say

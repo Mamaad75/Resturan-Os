@@ -50,6 +50,9 @@ export const updateTenantPaymentConfigSchema = z
     ownProvider: z.string().trim().max(40).nullable().optional(),
     ownCredentials: credentialsSchema,
     ownSandbox: z.boolean().optional(),
+    // In-person methods the owner offers. Online is governed by `mode`.
+    cashEnabled: z.boolean().optional(),
+    cardOnSiteEnabled: z.boolean().optional(),
   })
   .superRefine((v, ctx) => {
     if (v.mode === 'OWN' && !v.ownProvider) {
