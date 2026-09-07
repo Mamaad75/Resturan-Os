@@ -100,9 +100,13 @@ export class LoyaltyService {
   ) {
     if (args.points === 0) return null;
 
-    const customer = await tx.customer.update({
-      where: { id: args.customerId, tenantId: args.tenantId },
+    const changed = await tx.customer.updateMany({
+      where: { id: args.customerId, tenantId: args.tenantId, ...(args.points < 0 ? { loyaltyPoints: { gte: -args.points } } : {}) },
       data: { loyaltyPoints: { increment: args.points } },
+    });
+    if (changed.count !== 1) throw AppException.validation('موجودی امتیاز کافی نیست.');
+    const customer = await tx.customer.findFirstOrThrow({
+      where: { id: args.customerId, tenantId: args.tenantId },
       select: { loyaltyPoints: true },
     });
 
@@ -162,6 +166,11 @@ export class LoyaltyService {
       points: -args.points,
       note: 'استفاده در سفارش',
     });
+  }
+
+  /** Game awards and coupon spends share the same wallet and append-only ledger. */
+  async gameMovement(tx: Tx, args: { tenantId: string; customerId: string; points: number; note: string }) {
+    return this.record(tx, { ...args, type: args.points > 0 ? LoyaltyEntryType.GAME_EARN : LoyaltyEntryType.GAME_REDEEM });
   }
 
   /** First order from this phone number, if the scheme offers a welcome bonus. */

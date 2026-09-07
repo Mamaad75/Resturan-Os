@@ -11,6 +11,7 @@ import {
 } from '@restaurant-os/types';
 import { MapPin, Phone, ShoppingBag, Sparkles, UtensilsCrossed } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge, EmptyState } from '@/components/ui';
 import { useThemeMode } from '@/features/theme/theme-context';
@@ -170,6 +171,9 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
       ) : null}
 
       <main className="mx-auto w-full max-w-[var(--menu-container)] px-4">
+        <Link href={`/r/${encodeURIComponent(slug)}/games`} className="my-5 flex items-center justify-between rounded-2xl border border-current/10 bg-current/5 p-4 text-sm">
+          <span>🎮 بازی‌های دور میز <span className="opacity-60">• حافظه، محاسبه و دوز دونفره</span></span><span>شروع ←</span>
+        </Link>
         {categories.length === 0 ? (
           <EmptyState
             icon={<UtensilsCrossed className="size-6" />}

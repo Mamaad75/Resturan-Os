@@ -24,6 +24,7 @@ import { PasswordService } from '../auth/password.service';
  */
 const BUSINESS_PRESETS = {
   cafe: {
+    businessType: 'CAFE',
     serviceModes: [ServiceMode.DINE_IN, ServiceMode.TAKEAWAY],
     estimatedPrepMinutes: 12,
     serviceChargeEnabled: true,
@@ -33,6 +34,7 @@ const BUSINESS_PRESETS = {
     starterCategories: ['نوشیدنی گرم', 'نوشیدنی سرد', 'دسر'],
   },
   restaurant: {
+    businessType: 'RESTAURANT',
     serviceModes: [ServiceMode.DINE_IN, ServiceMode.TAKEAWAY],
     estimatedPrepMinutes: 25,
     serviceChargeEnabled: true,
@@ -42,6 +44,7 @@ const BUSINESS_PRESETS = {
     starterCategories: ['پیش‌غذا', 'غذای اصلی', 'نوشیدنی'],
   },
   fastfood: {
+    businessType: 'FAST_FOOD',
     serviceModes: [ServiceMode.DINE_IN, ServiceMode.TAKEAWAY],
     estimatedPrepMinutes: 15,
     serviceChargeEnabled: false,
@@ -134,6 +137,7 @@ export class SignupService {
             accentColor: MENU_TEMPLATE_SPECS[preset.menuTemplate].defaultAccent,
             theme: MENU_TEMPLATE_SPECS[preset.menuTemplate].defaultTheme,
             serviceModes: [...preset.serviceModes],
+            businessType: preset.businessType,
             estimatedPrepMinutes: preset.estimatedPrepMinutes,
             serviceChargeEnabled: preset.serviceChargeEnabled,
             serviceChargeBps: preset.serviceChargeBps,

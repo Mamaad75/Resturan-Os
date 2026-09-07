@@ -44,13 +44,17 @@ export class ThemeService {
   /** The admin view: draft if there is one, otherwise what is published. */
   async getForAdmin(ctx: RequestContext): Promise<MenuThemeDto> {
     const row = await this.load(ctx.tenantId);
-    const overrides = (row.draft ?? row.published ?? {}) as DeepPartial<MenuThemeConfig>;
+    const hasDraft = row.draft !== null;
+    const preset = hasDraft
+      ? (row.draftPreset ?? row.publishedPreset)
+      : row.publishedPreset;
+    const overrides = (hasDraft ? row.draft : row.published ?? {}) as DeepPartial<MenuThemeConfig>;
     return {
-      preset: menuTemplateSpec(row.preset).id,
-      config: resolveTheme(row.preset, overrides),
+      preset: menuTemplateSpec(preset).id,
+      config: resolveTheme(preset, overrides),
       overrides,
-      customCss: row.customCss,
-      hasDraft: row.draft !== null,
+      customCss: hasDraft ? row.draftCustomCss : row.publishedCustomCss,
+      hasDraft,
       publishedAt: row.publishedAt?.toISOString() ?? null,
     };
   }
@@ -65,9 +69,12 @@ export class ThemeService {
     });
     if (!row) return null;
     return {
-      preset: menuTemplateSpec(row.preset).id,
-      config: resolveTheme(row.preset, row.published as DeepPartial<MenuThemeConfig>),
-      customCss: row.customCss,
+      preset: menuTemplateSpec(row.publishedPreset).id,
+      config: resolveTheme(
+        row.publishedPreset,
+        row.published as DeepPartial<MenuThemeConfig>,
+      ),
+      customCss: row.publishedCustomCss,
     };
   }
 
@@ -89,7 +96,11 @@ export class ThemeService {
       await this.plans.requireFeature(ctx.tenantId, 'customCssEnabled');
     }
 
-    const preset = input.preset ?? row.preset;
+    const hasDraft = row.draft !== null;
+    const currentPreset = hasDraft
+      ? (row.draftPreset ?? row.publishedPreset)
+      : row.publishedPreset;
+    const preset = input.preset ?? currentPreset;
 
     /*
      * Only the differences from the preset are stored. A theme saved against
@@ -102,9 +113,16 @@ export class ThemeService {
             preset,
             resolveTheme(preset, input.config as DeepPartial<MenuThemeConfig>),
           )
-        : ((input.preset !== undefined
-            ? (row.draft ?? row.published)
-            : (row.draft ?? row.published)) as DeepPartial<MenuThemeConfig> | null);
+        : ((hasDraft ? row.draft : row.published) as DeepPartial<MenuThemeConfig> | null);
+
+    const customCss =
+      input.customCss !== undefined
+        ? input.customCss === ''
+          ? null
+          : input.customCss
+        : hasDraft
+          ? row.draftCustomCss
+          : row.publishedCustomCss;
 
     const publishing = input.publish === true;
     const now = new Date();
@@ -112,27 +130,34 @@ export class ThemeService {
     const updated = await this.prisma.menuTheme.update({
       where: { id: row.id },
       data: {
-        preset,
         ...(publishing
           ? {
+              // Legacy mirrors only move when a draft is published.
+              preset,
+              customCss,
+              publishedPreset: preset,
               published: toJson(overrides),
+              publishedCustomCss: customCss,
               // Publishing consumes the draft: what is live and what is being
               // edited are the same thing again. `DbNull` is a real SQL NULL,
               // which is how "no draft" is distinguished from "a draft that
               // happens to be empty".
               draft: Prisma.DbNull,
+              draftPreset: null,
+              draftCustomCss: null,
               publishedAt: now,
             }
-          : { draft: toJson(overrides) }),
-        ...(input.customCss !== undefined
-          ? { customCss: input.customCss === '' ? null : input.customCss }
-          : {}),
+          : {
+              draft: toJson(overrides),
+              draftPreset: preset,
+              draftCustomCss: customCss,
+            }),
       },
     });
 
     // The legacy `menuTemplate` column still drives anything reading the
     // restaurant directly; keeping it in step avoids two sources of truth.
-    if (input.preset !== undefined) {
+    if (publishing) {
       const restaurant = await this.restaurants.getRestaurantEntity(ctx.tenantId);
       await this.prisma.restaurant.update({
         where: { id: restaurant.id, tenantId: ctx.tenantId },
@@ -156,13 +181,35 @@ export class ThemeService {
   async reset(ctx: RequestContext, publish = false): Promise<MenuThemeDto> {
     await this.plans.requireFeature(ctx.tenantId, 'customThemeEnabled');
     const row = await this.load(ctx.tenantId);
+    const preset =
+      row.draft !== null
+        ? (row.draftPreset ?? row.publishedPreset)
+        : row.publishedPreset;
 
     await this.prisma.menuTheme.update({
       where: { id: row.id },
       data: publish
-        ? { published: {}, draft: Prisma.DbNull, publishedAt: new Date() }
-        : { draft: {} },
+        ? {
+            preset,
+            customCss: null,
+            publishedPreset: preset,
+            published: {},
+            publishedCustomCss: null,
+            draft: Prisma.DbNull,
+            draftPreset: null,
+            draftCustomCss: null,
+            publishedAt: new Date(),
+          }
+        : { draft: {}, draftPreset: preset, draftCustomCss: null },
     });
+
+    if (publish) {
+      const restaurant = await this.restaurants.getRestaurantEntity(ctx.tenantId);
+      await this.prisma.restaurant.update({
+        where: { id: restaurant.id, tenantId: ctx.tenantId },
+        data: { menuTemplate: preset },
+      });
+    }
 
     this.audit.record({
       tenantId: ctx.tenantId,
@@ -180,7 +227,11 @@ export class ThemeService {
     const row = await this.load(ctx.tenantId);
     await this.prisma.menuTheme.update({
       where: { id: row.id },
-      data: { draft: Prisma.DbNull },
+      data: {
+        draft: Prisma.DbNull,
+        draftPreset: null,
+        draftCustomCss: null,
+      },
     });
     return this.getForAdmin(ctx);
   }
@@ -203,6 +254,7 @@ export class ThemeService {
         tenantId,
         restaurantId: restaurant.id,
         preset: restaurant.menuTemplate,
+        publishedPreset: restaurant.menuTemplate,
       },
     });
   }

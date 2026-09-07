@@ -474,6 +474,53 @@ describe('FoodOS tenant features', () => {
       expect(live.body.data.theme.config.colors.primary).not.toBe('#123456');
     });
 
+    it('keeps preset and custom CSS drafts off the public menu', async () => {
+      const before = await ctx
+        .http()
+        .get(`/api/public/restaurants/${tenant.restaurantSlug}/menu`)
+        .expect(200);
+
+      await ctx
+        .http()
+        .patch('/api/menu-theme')
+        .set(auth())
+        .send({
+          preset: 'MINIMAL',
+          customCss: '.draft-only { color: red; }',
+        })
+        .expect(200);
+
+      const whileDraft = await ctx
+        .http()
+        .get(`/api/public/restaurants/${tenant.restaurantSlug}/menu`)
+        .expect(200);
+      expect(whileDraft.body.data.theme.preset).toBe(before.body.data.theme.preset);
+      expect(whileDraft.body.data.theme.customCss).toBe(
+        before.body.data.theme.customCss,
+      );
+
+      await ctx
+        .http()
+        .patch('/api/menu-theme')
+        .set(auth())
+        .send({ publish: true })
+        .expect(200);
+
+      const published = await ctx
+        .http()
+        .get(`/api/public/restaurants/${tenant.restaurantSlug}/menu`)
+        .expect(200);
+      expect(published.body.data.theme.preset).toBe('MINIMAL');
+      expect(published.body.data.theme.customCss).toContain('.draft-only');
+
+      // Leave later tests on a clean preset without tenant CSS.
+      await ctx
+        .http()
+        .post('/api/menu-theme/reset?publish=true')
+        .set(auth())
+        .expect(201);
+    });
+
     it('rejects a colour that is not a hex value', async () => {
       await ctx
         .http()

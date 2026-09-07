@@ -68,6 +68,12 @@ describe('Loyalty points', () => {
         ...body,
       });
 
+  const placeWithPoints = (body: Record<string, unknown>) =>
+    ctx.http().post('/api/orders').set('Authorization', `Bearer ${token}`).send({
+      type: 'TAKEAWAY', customerName: 'احسان', customerPhone: PHONE,
+      items: [{ productId: tenant.productId, quantity: 1, modifierOptionIds: [] }], ...body,
+    });
+
   const move = (orderId: string, status: string) =>
     ctx
       .http()
@@ -135,9 +141,15 @@ describe('Loyalty points', () => {
     expect(after.ledger).toBe(after.cached);
   });
 
-  it('spends points at checkout and takes exactly what it quoted', async () => {
+  it('does not let an anonymous caller spend a wallet by knowing its phone number', async () => {
     const before = await balances();
-    const created = await place({ redeemPoints: 50 }).expect(201);
+    await place({ redeemPoints: 50 }).expect(403);
+    expect((await balances()).cached).toBe(before.cached);
+  });
+
+  it('spends points at staff checkout and takes exactly what it quoted', async () => {
+    const before = await balances();
+    const created = await placeWithPoints({ redeemPoints: 50 }).expect(201);
     const order = created.body.data.order;
 
     expect(order.discountTotal).toBe(50_000);
@@ -148,24 +160,24 @@ describe('Loyalty points', () => {
 
   it('refuses to spend points the customer does not hold', async () => {
     const before = await balances();
-    const res = await place({ redeemPoints: before.cached + 1_000 });
+    const res = await placeWithPoints({ redeemPoints: before.cached + 1_000 });
     expect(res.status).toBe(422);
     expect((await balances()).cached).toBe(before.cached);
   });
 
   it('refuses a redemption below the minimum', async () => {
-    const res = await place({ redeemPoints: 5 });
+    const res = await placeWithPoints({ redeemPoints: 5 });
     expect(res.status).toBe(422);
     expect(res.body.error.message).toContain('حداقل');
   });
 
   it('caps redemption at the configured share of the order', async () => {
     // maxRedeemBps is 50%, so points can never pay for more than half.
-    const created = await place({ redeemPoints: 1_000_000 });
+    const created = await placeWithPoints({ redeemPoints: 1_000_000 });
     expect(created.status).toBe(422);
 
     const affordable = Math.floor((productPrice * 0.5) / 1_000);
-    const ok = await place({ redeemPoints: affordable }).expect(201);
+    const ok = await placeWithPoints({ redeemPoints: affordable }).expect(201);
     expect(ok.body.data.order.discountTotal).toBeLessThanOrEqual(
       Math.floor(productPrice * 0.5),
     );
@@ -173,7 +185,7 @@ describe('Loyalty points', () => {
 
   it('returns points when the order that spent them is cancelled', async () => {
     const before = await balances();
-    const created = await place({ redeemPoints: 20 }).expect(201);
+    const created = await placeWithPoints({ redeemPoints: 20 }).expect(201);
     const orderId = created.body.data.order.id;
     expect((await balances()).cached).toBe(before.cached - 20);
 
