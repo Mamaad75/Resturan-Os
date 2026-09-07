@@ -96,6 +96,7 @@ export class LoyaltyService {
       points: number;
       note?: string | null;
       createdByUserId?: string | null;
+      gamePlayerKeyHash?: string;
     },
   ) {
     if (args.points === 0) return null;
@@ -120,6 +121,7 @@ export class LoyaltyService {
         balanceAfter: customer.loyaltyPoints,
         note: args.note ?? null,
         createdByUserId: args.createdByUserId ?? null,
+        gamePlayerKeyHash: args.gamePlayerKeyHash ?? null,
       },
     });
   }
@@ -169,7 +171,7 @@ export class LoyaltyService {
   }
 
   /** Game awards and coupon spends share the same wallet and append-only ledger. */
-  async gameMovement(tx: Tx, args: { tenantId: string; customerId: string; points: number; note: string }) {
+  async gameMovement(tx: Tx, args: { tenantId: string; customerId: string; points: number; note: string; gamePlayerKeyHash?: string }) {
     return this.record(tx, { ...args, type: args.points > 0 ? LoyaltyEntryType.GAME_EARN : LoyaltyEntryType.GAME_REDEEM });
   }
 

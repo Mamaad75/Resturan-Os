@@ -1,4 +1,4 @@
-import { Controller, Get, Header, Post, Put } from '@nestjs/common';
+import { Controller, Get, Header, Headers, Post, Put } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   Permission,
@@ -33,31 +33,37 @@ export class PublicGamesController {
   constructor(private readonly games: GamesService) {}
   @Get()
   @Header('Cache-Control', 'no-store')
-  profile(@ZodParam('token', tokenSchema) token: string) {
-    return this.games.profile(token);
+  profile(
+    @Headers('x-game-key') playerKey: string,
+    @ZodParam('token', tokenSchema) token: string,
+  ) {
+    return this.games.profile(token, playerKey);
   }
   @Post()
   start(
+    @Headers('x-game-key') playerKey: string,
     @ZodParam('token', tokenSchema) token: string,
     @ZodBody(gameStartSchema) dto: { kind: GameKind },
   ) {
-    return this.games.start(token, dto.kind);
+    return this.games.start(token, dto.kind, playerKey);
   }
   @Post(':id/moves')
   move(
+    @Headers('x-game-key') playerKey: string,
     @ZodParam('token', tokenSchema) token: string,
     @ZodParam('id', uuidSchema) id: string,
     @ZodBody(gameMoveSchema) dto: { revision: number; value: number },
   ) {
-    return this.games.move(token, id, dto);
+    return this.games.move(token, id, dto, playerKey);
   }
   @Post('reward')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
   reward(
+    @Headers('x-game-key') playerKey: string,
     @ZodParam('token', tokenSchema) token: string,
     @ZodBody(gameRewardSchema) dto: { requestId: string },
   ) {
-    return this.games.reward(token, dto.requestId);
+    return this.games.reward(token, dto.requestId, playerKey);
   }
 }
 

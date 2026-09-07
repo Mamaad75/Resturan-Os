@@ -998,6 +998,8 @@ model Coupon {
   /// Basis points for PERCENTAGE, a flat amount for FIXED.
   value    Int
 
+  rewardPlayerKeyHash String? @db.VarChar(64)
+  rewardPointsCost Int @default(0)
   rewardCustomerPhone String? @db.VarChar(20)
   rewardRequestId String? @unique @db.Uuid
   description String? @db.VarChar(200)
@@ -1025,6 +1027,7 @@ model Coupon {
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive])
+  @@index([tenantId, rewardPlayerKeyHash])
   @@map("coupons")
 }
 
@@ -1543,6 +1546,7 @@ model LoyaltyProgram {
 /// The customer's balance is a cache of this ledger's running total, so a
 /// disputed balance can always be explained line by line.
 model LoyaltyEntry {
+  gamePlayerKeyHash String? @db.VarChar(64)
   id         String @id @default(uuid()) @db.Uuid
   tenantId   String @db.Uuid
   customerId String @db.Uuid
@@ -1564,6 +1568,7 @@ model LoyaltyEntry {
 
   @@index([tenantId, customerId, createdAt])
   @@index([tenantId, createdAt])
+  @@index([tenantId, gamePlayerKeyHash])
   @@map("loyalty_entries")
 }
 
@@ -1582,6 +1587,7 @@ model GameProgram {
 }
 
 model GameSession {
+  playerKeyHash String @db.VarChar(64)
   id String @id @default(uuid()) @db.Uuid
   tenantId String @db.Uuid
   customerId String @db.Uuid
@@ -1597,6 +1603,7 @@ model GameSession {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([tenantId, playerKeyHash])
   @@unique([tenantId, orderId, kind])
   @@index([tenantId, customerId, createdAt])
   @@map("game_sessions")

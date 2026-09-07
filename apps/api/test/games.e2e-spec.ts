@@ -1,3 +1,4 @@
+import request from 'supertest';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { CouponsService } from '../src/modules/coupons/coupons.service';
 import { DEFAULT_GAME_RULES } from '@restaurant-os/types';
@@ -18,6 +19,9 @@ describe('Table games and wallet rewards', () => {
   let customerId: string;
   let token: string;
   let owner: string;
+  const playerKey = 'b'.repeat(64);
+  const http = () =>
+    request.agent(ctx.app.getHttpServer()).set('X-Game-Key', playerKey);
   const phone = '09121112233';
   const base = () => `/api/public/orders/track/${token}/games`;
   beforeAll(async () => {
@@ -57,29 +61,23 @@ describe('Table games and wallet rewards', () => {
     }
   });
   it('is disabled until the owner explicitly enables it', async () => {
-    await ctx.http().post(base()).send({ kind: 'MATH' }).expect(403);
-    await ctx
-      .http()
+    await http().post(base()).send({ kind: 'MATH' }).expect(403);
+    await http()
       .put('/api/games/program')
       .set('Authorization', `Bearer ${owner}`)
       .send({ ...DEFAULT_GAME_RULES, isEnabled: true })
       .expect(200);
   });
   it('rejects unknown tokens and client-supplied scores', async () => {
-    await ctx
-      .http()
+    await http()
       .get(`/api/public/orders/track/${'a'.repeat(48)}/games`)
       .expect(404);
-    await ctx
-      .http()
-      .post(base())
-      .send({ kind: 'MATH', score: 900 })
-      .expect(422);
+    await http().post(base()).send({ kind: 'MATH', score: 900 }).expect(422);
   });
   it('resumes one session and credits a completed game once despite concurrent retries', async () => {
     const starts = await Promise.all([
-      ctx.http().post(base()).send({ kind: 'MATH' }),
-      ctx.http().post(base()).send({ kind: 'MATH' }),
+      http().post(base()).send({ kind: 'MATH' }),
+      http().post(base()).send({ kind: 'MATH' }),
     ]);
     expect(starts[0].status).toBe(201);
     expect(starts[1].body.data.id).toBe(starts[0].body.data.id);
@@ -87,8 +85,7 @@ describe('Table games and wallet rewards', () => {
     for (let i = 0; i < 4; i++) {
       const q = s.question;
       s = (
-        await ctx
-          .http()
+        await http()
           .post(`${base()}/${s.id}/moves`)
           .send({
             revision: s.revision,
@@ -103,8 +100,8 @@ describe('Table games and wallet rewards', () => {
       value: q.operation === '+' ? q.a + q.b : q.a - q.b,
     };
     const results = await Promise.all([
-      ctx.http().post(`${base()}/${s.id}/moves`).send(dto),
-      ctx.http().post(`${base()}/${s.id}/moves`).send(dto),
+      http().post(`${base()}/${s.id}/moves`).send(dto),
+      http().post(`${base()}/${s.id}/moves`).send(dto),
     ]);
     expect(results.map((r) => r.status)).toEqual([201, 201]);
     expect(results[0].body.data.awardedPoints).toBe(10);
@@ -120,20 +117,17 @@ describe('Table games and wallet rewards', () => {
     ).toBe(1);
   });
   it('rejects sessions belonging to another order/tenant and expired sessions', async () => {
-    await ctx
-      .http()
+    await http()
       .post(`${base()}/${randomUUID()}/moves`)
       .send({ revision: 0, value: 1 })
       .expect(404);
-    const s = (
-      await ctx.http().post(base()).send({ kind: 'MEMORY' }).expect(201)
-    ).body.data;
+    const s = (await http().post(base()).send({ kind: 'MEMORY' }).expect(201))
+      .body.data;
     await ctx.prisma.gameSession.update({
       where: { id: s.id },
       data: { expiresAt: new Date(0) },
     });
-    await ctx
-      .http()
+    await http()
       .post(`${base()}/${s.id}/moves`)
       .send({ revision: 0, value: 1 })
       .expect(422);
@@ -163,8 +157,7 @@ describe('Table games and wallet rewards', () => {
         completedAt: new Date(),
       },
     });
-    await ctx
-      .http()
+    await http()
       .post(`/api/public/orders/track/${otherToken}/games/${s.id}/moves`)
       .send({ revision: 0, value: 1 })
       .expect(404);
@@ -187,28 +180,34 @@ describe('Table games and wallet rewards', () => {
       },
     });
     const next = `/api/public/orders/track/${nextToken}/games`;
-    await ctx.http().post(next).send({ kind: 'MATH' }).expect(403);
+    await http().post(next).send({ kind: 'MATH' }).expect(403);
     await ctx.prisma.order.update({
       where: { id: order.id },
       data: { paymentStatus: 'PAID' },
     });
-    await ctx.http().post(next).send({ kind: 'MATH' }).expect(422);
+    await http().post(next).send({ kind: 'MATH' }).expect(422);
   });
   it('atomically exchanges points for one phone-bound, capped coupon and retries safely', async () => {
     await ctx.prisma.customer.update({
       where: { id: customerId },
       data: { gameXp: 100 },
     });
-    await ctx
-      .http()
+    await http()
       .post(`/api/loyalty/customers/${customerId}/adjust`)
       .set('Authorization', `Bearer ${owner}`)
       .send({ points: 40, note: 'Test reward balance' })
       .expect(201);
+    const memory = await ctx.prisma.gameSession.findFirstOrThrow({
+      where: { tenantId: tenant.tenantId, customerId, kind: 'MEMORY' },
+    });
+    await ctx.prisma.gameSession.update({
+      where: { id: memory.id },
+      data: { finished: true, score: 60, awardedPoints: 40 },
+    });
     const requestId = randomUUID();
     const responses = await Promise.all([
-      ctx.http().post(`${base()}/reward`).send({ requestId }),
-      ctx.http().post(`${base()}/reward`).send({ requestId }),
+      http().post(`${base()}/reward`).send({ requestId }),
+      http().post(`${base()}/reward`).send({ requestId }),
     ]);
     expect(responses.map((r) => r.status)).toEqual([201, 201]);
     expect(responses[0].body.data.code).toEqual(responses[1].body.data.code);
@@ -237,8 +236,7 @@ describe('Table games and wallet rewards', () => {
         })
       ).loyaltyPoints,
     ).toBe(0);
-    await ctx
-      .http()
+    await http()
       .post(`${base()}/reward`)
       .send({ requestId: randomUUID() })
       .expect(422);
@@ -249,15 +247,13 @@ describe('Table games and wallet rewards', () => {
     ).toBe(1);
   });
   it('prevents concurrent manual debits from overdrawing the shared wallet', async () => {
-    await ctx
-      .http()
+    await http()
       .post(`/api/loyalty/customers/${customerId}/adjust`)
       .set('Authorization', `Bearer ${owner}`)
       .send({ points: 50, note: 'Race setup' })
       .expect(201);
     const debit = () =>
-      ctx
-        .http()
+      http()
         .post(`/api/loyalty/customers/${customerId}/adjust`)
         .set('Authorization', `Bearer ${owner}`)
         .send({ points: -40, note: 'Race debit' });
@@ -272,5 +268,49 @@ describe('Table games and wallet rewards', () => {
     });
     expect(customer.loyaltyPoints).toBe(10);
     expect(entries._sum.points).toBe(customer.loyaltyPoints);
+  });
+  it('does not expose or spend another browser player credits even with a valid order token', async () => {
+    const outsider = 'c'.repeat(64);
+    const profile = await ctx
+      .http()
+      .get(base())
+      .set('X-Game-Key', outsider)
+      .expect(200);
+    expect(profile.body.data.xp).toBe(0);
+    expect(profile.body.data.points).toBe(0);
+    expect(profile.body.data.coupons).toEqual([]);
+    await ctx
+      .http()
+      .post(`${base()}/reward`)
+      .set('X-Game-Key', outsider)
+      .send({ requestId: randomUUID() })
+      .expect(422);
+    await ctx
+      .http()
+      .post(base())
+      .set('X-Game-Key', outsider)
+      .send({ kind: 'MATH' })
+      .expect(403);
+    await ctx.http().get(base()).expect(401);
+  });
+  it('does not refund game spending when staff deletes an unused reward coupon', async () => {
+    await ctx.prisma.coupon.deleteMany({
+      where: { tenantId: tenant.tenantId, rewardCustomerPhone: phone },
+    });
+    await http()
+      .post(`/api/loyalty/customers/${customerId}/adjust`)
+      .set('Authorization', `Bearer ${owner}`)
+      .send({
+        points: 100,
+        note: 'Wallet refill does not restore spent game credits',
+      })
+      .expect(201);
+    await http()
+      .post(`${base()}/reward`)
+      .send({ requestId: randomUUID() })
+      .expect(422);
+    const profile = await http().get(base()).expect(200);
+    expect(profile.body.data.points).toBe(0);
+    expect(profile.body.data.xp).toBe(120);
   });
 });

@@ -6,7 +6,14 @@ const path = require('node:path');
 async function main() {
   const server = spawn(
     process.execPath,
-    [require.resolve('next/dist/bin/next'), 'start', '-H', '127.0.0.1', '-p', '3199'],
+    [
+      require.resolve('next/dist/bin/next'),
+      'start',
+      '-H',
+      '127.0.0.1',
+      '-p',
+      '3199',
+    ],
     {
       cwd: path.resolve(__dirname, '../apps/web'),
       env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' },
@@ -82,6 +89,53 @@ async function main() {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
       'Desktop overflow',
+    );
+    const keys = [];
+    await page.route('**/public/orders/track/*/games', async (route) => {
+      const key = route.request().headers()['x-game-key'];
+      assert.match(
+        key ?? '',
+        /^[a-f0-9]{64}$/,
+        'Reward profile requires the browser player credential',
+      );
+      keys.push(key);
+      await route.fulfill({
+        json: {
+          success: true,
+          data: {
+            restaurantName: 'رستوران آزمایشی',
+            slug: 'demo',
+            enabled: true,
+            eligible: true,
+            reason: null,
+            xp: 120,
+            level: 2,
+            points: 20,
+            remainingToday: 2,
+            sessions: [],
+            coupons: [],
+            rules: {
+              isEnabled: true,
+              dailyLimit: 2,
+              pointsPerWin: 10,
+              couponCost: 50,
+              couponMaxDiscount: 20000,
+              couponMinOrder: 100000,
+            },
+          },
+        },
+      });
+    });
+    await page.goto(
+      `http://localhost:3199/order/track/${'a'.repeat(48)}/games`,
+    );
+    await page.getByText('رستوران آزمایشی', { exact: false }).waitFor();
+    await page.reload();
+    await page.getByText('رستوران آزمایشی', { exact: false }).waitFor();
+    assert(keys.length >= 2);
+    assert(
+      keys.every((key) => key === keys[0]),
+      'Player credential must survive a reload',
     );
     assert.deepEqual(errors, [], 'Browser runtime errors');
     console.log(

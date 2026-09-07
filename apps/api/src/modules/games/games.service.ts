@@ -8,7 +8,7 @@ import {
   type GameRules,
   type GameView,
 } from '@restaurant-os/types';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { RequestContext } from '../../common/types/request-context';
 import {
@@ -111,7 +111,42 @@ export class GamesService {
       order.completedAt.getTime() > Date.now() - 7 * DAY
     );
   }
-  async profile(token: string): Promise<GameProfile> {
+  private playerHash(key: string) {
+    if (!/^[a-f0-9]{64}$/.test(key ?? ''))
+      throw AppException.unauthenticated('کلید بازیکن معتبر نیست.');
+    return createHash('sha256').update(key).digest('hex');
+  }
+  private async progress(
+    tx: PrismaTransaction | PrismaService,
+    tenantId: string,
+    customerId: string,
+    playerKeyHash: string,
+  ) {
+    const [earned, spent] = await Promise.all([
+      tx.gameSession.aggregate({
+        where: { tenantId, customerId, playerKeyHash, finished: true },
+        _sum: { score: true, awardedPoints: true },
+      }),
+      tx.loyaltyEntry.aggregate({
+        where: {
+          tenantId,
+          customerId,
+          type: 'GAME_REDEEM',
+          gamePlayerKeyHash: playerKeyHash,
+        },
+        _sum: { points: true },
+      }),
+    ]);
+    return {
+      xp: earned._sum.score ?? 0,
+      points: Math.max(
+        0,
+        (earned._sum.awardedPoints ?? 0) + (spent._sum.points ?? 0),
+      ),
+    };
+  }
+  async profile(token: string, playerKey: string): Promise<GameProfile> {
+    const playerKeyHash = this.playerHash(playerKey);
     const order = await this.order(token);
     const { tenantId, customerId } = order;
     const [
@@ -122,6 +157,7 @@ export class GamesService {
       today,
       coupons,
       entitlement,
+      progress,
     ] = await Promise.all([
       this.rules(tenantId),
       this.loyalty.rules(tenantId),
@@ -131,7 +167,7 @@ export class GamesService {
           })
         : null,
       this.prisma.gameSession.findMany({
-        where: { tenantId, orderId: order.id },
+        where: { tenantId, orderId: order.id, playerKeyHash },
         orderBy: { createdAt: 'asc' },
       }),
       customerId
@@ -144,6 +180,7 @@ export class GamesService {
             where: {
               tenantId,
               rewardCustomerPhone: order.customerPhone,
+              rewardPlayerKeyHash: playerKeyHash,
               isActive: true,
               usageCount: 0,
               endsAt: { gt: new Date() },
@@ -153,6 +190,9 @@ export class GamesService {
           })
         : [],
       this.plans.entitlements(tenantId),
+      customerId && order.customerPhone
+        ? this.progress(this.prisma, tenantId, customerId, playerKeyHash)
+        : { xp: 0, points: 0 },
     ]);
     const enabled =
       rules.isEnabled &&
@@ -170,9 +210,9 @@ export class GamesService {
         : !eligible
           ? 'پاداش تا ۷ روز پس از تکمیل و پرداخت سفارشِ دارای شماره همراه فعال است.'
           : null,
-      xp: customer?.gameXp ?? 0,
-      level: gameLevel(customer?.gameXp ?? 0),
-      points: customer?.loyaltyPoints ?? 0,
+      xp: progress.xp,
+      level: gameLevel(progress.xp),
+      points: Math.min(customer?.loyaltyPoints ?? 0, progress.points),
       remainingToday: Math.max(0, rules.dailyLimit - today),
       rules,
       sessions: sessions.map(view),
@@ -222,13 +262,18 @@ export class GamesService {
       return work(tx, { ...order, customerId: order.customerId }, rules);
     });
   }
-  async start(token: string, kind: GameKind) {
+  async start(token: string, kind: GameKind, playerKey: string) {
+    const playerKeyHash = this.playerHash(playerKey);
     return this.withPlayer(token, async (tx, order, rules) => {
       const { tenantId, customerId } = order;
       const existing = await tx.gameSession.findFirst({
         where: { tenantId, orderId: order.id, kind },
       });
-      if (existing) return view(existing);
+      if (existing) {
+        if (existing.playerKeyHash !== playerKeyHash)
+          throw AppException.forbidden('این نوبت متعلق به بازیکن دیگری است.');
+        return view(existing);
+      }
       const used = await tx.gameSession.count({
         where: { tenantId, customerId, createdAt: { gte: dayStart() } },
       });
@@ -243,6 +288,7 @@ export class GamesService {
             customerId,
             orderId: order.id,
             kind,
+            playerKeyHash,
             state: newGame(kind) as unknown as Prisma.InputJsonValue,
             expiresAt: new Date(Date.now() + 10 * 60000),
           },
@@ -254,7 +300,9 @@ export class GamesService {
     token: string,
     id: string,
     dto: { revision: number; value: number },
+    playerKey: string,
   ) {
+    const playerKeyHash = this.playerHash(playerKey);
     return this.withPlayer(token, async (tx, order, rules) => {
       const row = await tx.gameSession.findFirst({
         where: {
@@ -262,6 +310,7 @@ export class GamesService {
           tenantId: order.tenantId,
           orderId: order.id,
           customerId: order.customerId,
+          playerKeyHash,
         },
       });
       if (!row) throw AppException.notFound('بازی');
@@ -309,12 +358,14 @@ export class GamesService {
       );
     });
   }
-  async reward(token: string, requestId: string) {
+  async reward(token: string, requestId: string, playerKey: string) {
+    const playerKeyHash = this.playerHash(playerKey);
     return this.withPlayer(token, async (tx, order, rules) => {
       const existing = await tx.coupon.findFirst({
         where: {
           tenantId: order.tenantId,
           rewardRequestId: requestId,
+          rewardPlayerKeyHash: playerKeyHash,
           rewardCustomerPhone: order.customerPhone,
         },
       });
@@ -322,10 +373,16 @@ export class GamesService {
       const customer = await tx.customer.findFirstOrThrow({
         where: { id: order.customerId, tenantId: order.tenantId },
       });
-      const level = gameLevel(customer.gameXp);
+      const progress = await this.progress(
+        tx,
+        order.tenantId,
+        order.customerId,
+        playerKeyHash,
+      );
+      const level = gameLevel(progress.xp);
       if (level < 2)
         throw AppException.validation('برای دریافت کد تخفیف به سطح ۲ برسید.');
-      if (customer.loyaltyPoints < rules.couponCost)
+      if (Math.min(customer.loyaltyPoints, progress.points) < rules.couponCost)
         throw AppException.validation('امتیاز کافی برای دریافت کد ندارید.');
       const coupon = await tx.coupon.create({
         data: {
@@ -340,6 +397,8 @@ export class GamesService {
           endsAt: new Date(Date.now() + 7 * DAY),
           rewardCustomerPhone: order.customerPhone,
           rewardRequestId: requestId,
+          rewardPlayerKeyHash: playerKeyHash,
+          rewardPointsCost: rules.couponCost,
           description: `پاداش بازی سطح ${level}`,
         },
       });
@@ -348,6 +407,7 @@ export class GamesService {
         customerId: order.customerId,
         points: -rules.couponCost,
         note: `کد پاداش ${coupon.code}`,
+        gamePlayerKeyHash: playerKeyHash,
       });
       return { code: coupon.code };
     });

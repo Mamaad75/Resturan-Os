@@ -213,7 +213,11 @@ export function GameHub({ token, slug }: { token?: string; slug?: string }) {
                 value: profile?.xp ?? 0,
                 icon: Sparkles,
               },
-              { label: 'کیف امتیاز', value: profile?.points ?? 0, icon: Gift },
+              {
+                label: 'قابل تبدیل به کد',
+                value: profile?.points ?? 0,
+                icon: Gift,
+              },
             ].map((stat) => (
               <div
                 key={stat.label}
@@ -271,6 +275,13 @@ export function GameHub({ token, slug }: { token?: string; slug?: string }) {
             className="mt-5 rounded-xl bg-teal-300/10 p-4 text-sm text-teal-100"
           >
             {notice}
+          </p>
+        )}
+        {token && (
+          <p className="mt-5 rounded-xl border border-white/10 p-4 text-xs leading-6 text-white/60">
+            برای ادامه‌ی سابقه و دریافت پاداش، با همین مرورگر و شماره همراه
+            برگرد. پاک‌کردن داده‌های مرورگر، دسترسی به سابقه‌ی بازی را از بین
+            می‌برد. فقط امتیازهای بازیِ خودت قابل تبدیل به کد هستند.
           </p>
         )}
         <section className="mt-8 flex flex-wrap items-center justify-between gap-4">
