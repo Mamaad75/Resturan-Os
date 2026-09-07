@@ -48,7 +48,8 @@
     "rxjs": "^7.8.2",
     "sharp": "^0.34.4",
     "socket.io": "^4.8.3",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "prisma": "6.19.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
@@ -62,7 +63,6 @@
     "@types/qrcode": "^1.5.5",
     "@types/supertest": "^6.0.3",
     "jest": "^30.0.5",
-    "prisma": "6.19.3",
     "socket.io-client": "^4.8.3",
     "supertest": "^7.1.4",
     "ts-jest": "^29.4.1",

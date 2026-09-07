@@ -147,3 +147,6 @@ storage/
 apps/api/storage/
 packages/*/dist/
 .turbo/
+
+!apps/api/src/modules/storage/
+!apps/api/src/modules/storage/**

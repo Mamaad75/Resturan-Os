@@ -81,6 +81,12 @@ export class OrdersService {
     slug: string,
     input: CreatePublicOrderInput,
   ): Promise<{ order: OrderDto; trackingToken: string }> {
+    // A typed phone number is not proof of wallet ownership. Until guest OTP
+    // exists, guests redeem unguessable coupons; direct wallet spending is a
+    // staff-authorized operation at the counter.
+    if ((input.redeemPoints ?? 0) > 0) {
+      throw AppException.forbidden('برای استفاده مستقیم از امتیاز، از صندوق کمک بگیرید یا کد پاداش خود را وارد کنید.');
+    }
     const resolved = await this.restaurants.findPublicBySlug(slug);
     const settings = resolved.publicRestaurant.settings;
 

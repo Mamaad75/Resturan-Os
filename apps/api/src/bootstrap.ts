@@ -33,7 +33,7 @@ export function configureApp(app: NestExpressApplication, config: AppConfig): vo
     origin: config.corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Game-Key'],
   });
 
   // The local storage driver writes to disk and hands out

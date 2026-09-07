@@ -68,6 +68,9 @@ export class CouponsService {
     });
 
     if (!coupon) return reject('کد تخفیف معتبر نیست.');
+    if (coupon.rewardCustomerPhone && coupon.rewardCustomerPhone !== customerPhone) {
+      return reject('این پاداش متعلق به شماره همراه دیگری است.');
+    }
     if (!coupon.isActive) return reject('این کد تخفیف غیرفعال است.');
 
     const now = new Date();

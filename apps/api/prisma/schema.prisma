@@ -173,6 +173,8 @@ enum SubscriptionStatus {
 /// Why a customer's point balance moved. The ledger is the truth; the balance
 /// on the customer row is a cache of its running total.
 enum LoyaltyEntryType {
+  GAME_EARN
+  GAME_REDEEM
   EARN
   REDEEM
   /// Manual correction by staff, with a stated reason.
@@ -274,6 +276,8 @@ model Tenant {
   platformAudit PlatformAuditLog[]
   invoices       SubscriptionInvoice[]
   deliveryZones  DeliveryZone[]
+  gameProgram GameProgram?
+  gameSessions GameSession[]
   loyaltyProgram LoyaltyProgram?
   loyaltyEntries LoyaltyEntry[]
 
@@ -654,6 +658,8 @@ model Customer {
 
   /// Running balance, maintained alongside every ledger entry. Derivable from
   /// loyalty_entries, but every customer list shows it.
+  gameXp Int @default(0)
+  gameSessions GameSession[]
   loyaltyPoints Int @default(0)
 
   /// Used by the birthday campaign segment. Day and month are what matter;
@@ -752,6 +758,7 @@ model Order {
   smsMessages      SmsMessage[]
   couponRedemption CouponRedemption?
   feedback         OrderFeedback?
+  gameSessions     GameSession[]
   loyaltyEntries   LoyaltyEntry[]
 
   @@unique([tenantId, orderNumber])
@@ -991,6 +998,10 @@ model Coupon {
   /// Basis points for PERCENTAGE, a flat amount for FIXED.
   value    Int
 
+  rewardPlayerKeyHash String? @db.VarChar(64)
+  rewardPointsCost Int @default(0)
+  rewardCustomerPhone String? @db.VarChar(20)
+  rewardRequestId String? @unique @db.Uuid
   description String? @db.VarChar(200)
 
   /// Order must reach this subtotal before the coupon applies.
@@ -1016,6 +1027,7 @@ model Coupon {
 
   @@unique([tenantId, code])
   @@index([tenantId, isActive])
+  @@index([tenantId, rewardPlayerKeyHash])
   @@map("coupons")
 }
 
@@ -1362,16 +1374,25 @@ model MenuTheme {
   tenantId     String @db.Uuid
   restaurantId String @unique @db.Uuid
 
+  /// Legacy mirror of the published preset. Kept for backwards compatibility.
   preset String @default("CLASSIC") @db.VarChar(24)
+
+  /// Preset selection follows the same draft/publish lifecycle as overrides.
+  publishedPreset String  @default("CLASSIC") @db.VarChar(24)
+  draftPreset     String? @db.VarChar(24)
 
   /// What guests see. Null means "render the preset's defaults".
   published Json?
   /// Work in progress, visible only in the admin preview.
   draft     Json?
 
-  /// Tenant-authored CSS, injected into the menu page only and scoped to it.
-  /// Gated by the plan's customCssEnabled flag on write.
+  /// Legacy mirror of publishedCustomCss.
   customCss String? @db.VarChar(20000)
+
+  /// CSS follows the same draft/publish lifecycle as the visual config.
+  /// Gated by the plan's customCssEnabled flag on write.
+  publishedCustomCss String? @db.VarChar(20000)
+  draftCustomCss     String? @db.VarChar(20000)
 
   publishedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -1525,6 +1546,7 @@ model LoyaltyProgram {
 /// The customer's balance is a cache of this ledger's running total, so a
 /// disputed balance can always be explained line by line.
 model LoyaltyEntry {
+  gamePlayerKeyHash String? @db.VarChar(64)
   id         String @id @default(uuid()) @db.Uuid
   tenantId   String @db.Uuid
   customerId String @db.Uuid
@@ -1546,5 +1568,43 @@ model LoyaltyEntry {
 
   @@index([tenantId, customerId, createdAt])
   @@index([tenantId, createdAt])
+  @@index([tenantId, gamePlayerKeyHash])
   @@map("loyalty_entries")
+}
+
+model GameProgram {
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @db.Uuid
+  isEnabled Boolean @default(false)
+  dailyLimit Int @default(2)
+  pointsPerWin Int @default(10)
+  couponCost Int @default(50)
+  couponMaxDiscount Int @default(20000)
+  couponMinOrder Int @default(100000)
+  updatedAt DateTime @updatedAt
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  @@map("game_programs")
+}
+
+model GameSession {
+  playerKeyHash String @db.VarChar(64)
+  id String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  customerId String @db.Uuid
+  orderId String @db.Uuid
+  kind String @db.VarChar(12)
+  state Json
+  revision Int @default(0)
+  score Int @default(0)
+  awardedPoints Int @default(0)
+  finished Boolean @default(false)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([tenantId, playerKeyHash])
+  @@unique([tenantId, orderId, kind])
+  @@index([tenantId, customerId, createdAt])
+  @@map("game_sessions")
 }

@@ -5,6 +5,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  * these must be filtered by `tenantId`, and every write must set it.
  */
 export const TENANT_SCOPED_MODELS = new Set([
+  'GameProgram',
+  'GameSession',
   'Restaurant',
   'Branch',
   'User',

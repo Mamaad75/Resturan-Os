@@ -16,6 +16,7 @@ import {
   ReceiptText,
   UtensilsCrossed,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback } from 'react';
 import { Badge, Card, EmptyState, Skeleton } from '@/components/ui';
 import { useRealtime } from '@/hooks/use-realtime';
@@ -153,6 +154,7 @@ export function TrackingView({ token }: { token: string }) {
 
       <OrderItemsCard order={order} />
 
+      {!isCancelled && <Link href={`/order/track/${token}/games`} className="my-5 block rounded-2xl border border-amber-400/20 bg-amber-400/10 p-5 text-sm">🎮 بازی و پاداش — امتیاز بگیر، سطح بالاتر برو و کد تخفیف بساز ←</Link>}
       {!isCancelled ? <FeedbackCard token={token} status={order.status} /> : null}
 
       {order.branchPhone ? (
