@@ -4,6 +4,7 @@ import {
   MENU_TEMPLATE_SPECS,
   MenuTemplate,
   ServiceMode,
+  SubscriptionStatus,
   UserRole,
   type AuthSession,
 } from '@restaurant-os/types';
@@ -194,6 +195,27 @@ export class SignupService {
             targetPath: `/r/${restaurant.slug}`,
           },
         });
+
+        // Every tenant needs a subscription row from minute one, or the
+        // platform console cannot activate a plan for it ("اشتراک یافت نشد")
+        // and the admin settings page cannot read its subscription. New
+        // signups start on a trial of the default plan; if no plan is seeded
+        // yet the row is skipped rather than failing the whole signup.
+        const defaultPlan = await tx.plan.findFirst({
+          where: { isActive: true },
+          orderBy: [{ isDefault: 'desc' }, { displayOrder: 'asc' }],
+          select: { id: true },
+        });
+        if (defaultPlan) {
+          await tx.subscription.create({
+            data: {
+              tenantId: tenant.id,
+              planId: defaultPlan.id,
+              status: SubscriptionStatus.TRIAL,
+              trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
+            },
+          });
+        }
 
         return { tenant, restaurant, branch, owner };
       }),

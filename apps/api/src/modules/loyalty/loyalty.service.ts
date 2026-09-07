@@ -167,7 +167,12 @@ export class LoyaltyService {
   /** First order from this phone number, if the scheme offers a welcome bonus. */
   async grantWelcome(
     tx: Tx,
-    args: { tenantId: string; customerId: string; isFirstOrder: boolean },
+    args: {
+      tenantId: string;
+      customerId: string;
+      orderId?: string | null;
+      isFirstOrder: boolean;
+    },
   ) {
     if (!args.isFirstOrder) return;
     const rules = await this.rules(args.tenantId, tx);
@@ -175,6 +180,9 @@ export class LoyaltyService {
     await this.record(tx, {
       tenantId: args.tenantId,
       customerId: args.customerId,
+      // Tagged with the order so `reverseForOrder` claws the welcome bonus back
+      // if that first order is cancelled; an untagged bonus survived a cancel.
+      orderId: args.orderId ?? null,
       type: LoyaltyEntryType.EARN,
       points: rules.welcomePoints,
       note: 'هدیه خوش‌آمدگویی',

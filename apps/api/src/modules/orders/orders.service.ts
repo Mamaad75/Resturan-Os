@@ -316,7 +316,13 @@ export class OrdersService {
       const loyalty = await this.loyalty.quote(tx, tenantId, {
         customerId: customer?.id ?? null,
         requestedPoints: input.redeemPoints ?? 0,
-        orderTotal: beforeLoyalty.total,
+        // Redemption is capped against the food the discount will actually
+        // reduce (subtotal after manual + coupon discount), not the gross total
+        // that includes tax, service charge and the courier fee. Measuring on
+        // the gross total let a points redemption exceed the discountable base
+        // on delivery-heavy orders, so the ledger took points the customer
+        // never saw as a discount. This matches how points are *earned*.
+        orderTotal: Math.max(0, beforeLoyalty.subtotal - beforeLoyalty.discountTotal),
       });
       if ((input.redeemPoints ?? 0) > 0 && loyalty.points === 0 && loyalty.reason) {
         throw AppException.validation(loyalty.reason, {
@@ -472,6 +478,7 @@ export class OrdersService {
         await this.loyalty.grantWelcome(tx, {
           tenantId,
           customerId: customer.id,
+          orderId: order.id,
           isFirstOrder: !customer.firstOrderAt,
         });
       }
@@ -557,40 +564,39 @@ export class OrdersService {
       );
 
       /*
-       * Issued together rather than one await at a time. Each item is
-       * independent - nothing here reads what the previous insert wrote - so
-       * a table of eight additions costs one round trip's latency instead of
-       * eight. `createMany` is not an option: each item carries nested
-       * modifier rows.
+       * Inserted one await at a time. Prisma's interactive transaction runs
+       * over a single connection and does not support concurrent queries on
+       * the same `tx`; issuing these with `Promise.all` risked intermittent
+       * "Transaction already closed"/connection errors under load, especially
+       * with the nested modifier creates. `createMany` is not an option: each
+       * item carries nested modifier rows.
        */
-      await Promise.all(
-        lines.map((line) =>
-          tx.orderItem.create({
-            data: {
-              tenantId: ctx.tenantId,
-              orderId,
-              productId: line.productId,
-              productName: line.productName,
-              productNameFa: line.productNameFa,
-              imageUrl: line.imageUrl,
-              quantity: line.quantity,
-              unitPrice: line.unitPrice,
-              modifiersTotal: line.modifiersTotal,
-              lineTotal: line.lineTotal,
-              notes: line.notes,
-              modifiers: {
-                create: line.modifiers.map((modifier) => ({
-                  tenantId: ctx.tenantId,
-                  modifierOptionId: modifier.modifierOptionId,
-                  name: modifier.name,
-                  nameFa: modifier.nameFa,
-                  priceDelta: modifier.priceDelta,
-                })),
-              },
+      for (const line of lines) {
+        await tx.orderItem.create({
+          data: {
+            tenantId: ctx.tenantId,
+            orderId,
+            productId: line.productId,
+            productName: line.productName,
+            productNameFa: line.productNameFa,
+            imageUrl: line.imageUrl,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            modifiersTotal: line.modifiersTotal,
+            lineTotal: line.lineTotal,
+            notes: line.notes,
+            modifiers: {
+              create: line.modifiers.map((modifier) => ({
+                tenantId: ctx.tenantId,
+                modifierOptionId: modifier.modifierOptionId,
+                name: modifier.name,
+                nameFa: modifier.nameFa,
+                priceDelta: modifier.priceDelta,
+              })),
             },
-          }),
-        ),
-      );
+          },
+        });
+      }
 
       return recalculateTotals(tx, ctx.tenantId, orderId, restaurant);
     });

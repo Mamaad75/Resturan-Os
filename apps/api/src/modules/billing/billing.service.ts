@@ -89,33 +89,37 @@ export class BillingService {
       });
     }
 
+    // A subscription row may not exist yet (self-signed-up tenants never had
+    // one created), so this upserts rather than requiring an existing row.
     const before = await runAsSystem('billing: load subscription', () =>
       this.prisma.subscription.findUnique({ where: { tenantId } }),
     );
-    if (!before) throw AppException.notFound('اشتراک');
 
     const now = new Date();
-    const samePlan = before.planId === input.planId;
+    const samePlan = before?.planId === input.planId;
     // Only the same plan carries its remaining days over. Switching plans
     // starts a fresh period, or an upgrade would inherit a downgrade's runway.
     const base =
-      samePlan && before.expiresAt && before.expiresAt > now ? before.expiresAt : now;
+      samePlan && before?.expiresAt && before.expiresAt > now ? before.expiresAt : now;
     const expiresAt = addMonths(base, input.months);
 
+    const activeData = {
+      planId: input.planId,
+      status: SubscriptionStatus.ACTIVE,
+      expiresAt,
+      // A live paid period contradicts every reason the row was parked.
+      trialEndsAt: null,
+      graceUntil: null,
+      suspendedAt: null,
+      suspendedReason: null,
+      cancelledAt: null,
+    };
+
     const updated = await runAsSystem('billing: activate plan', () =>
-      this.prisma.subscription.update({
+      this.prisma.subscription.upsert({
         where: { tenantId },
-        data: {
-          planId: input.planId,
-          status: SubscriptionStatus.ACTIVE,
-          expiresAt,
-          // A live paid period contradicts every reason the row was parked.
-          trialEndsAt: null,
-          graceUntil: null,
-          suspendedAt: null,
-          suspendedReason: null,
-          cancelledAt: null,
-        },
+        create: { tenantId, ...activeData },
+        update: activeData,
         include: { plan: true },
       }),
     );
@@ -131,12 +135,14 @@ export class BillingService {
       tenantId,
       action: PlatformAction.PLAN_ACTIVATE,
       entity: 'Subscription',
-      entityId: before.id,
-      previousValue: {
-        planId: before.planId,
-        status: before.status,
-        expiresAt: before.expiresAt,
-      },
+      entityId: updated.id,
+      previousValue: before
+        ? {
+            planId: before.planId,
+            status: before.status,
+            expiresAt: before.expiresAt,
+          }
+        : null,
       newValue: {
         planId: input.planId,
         months: input.months,
@@ -376,6 +382,17 @@ export class BillingService {
   ) {
     const invoice = await this.requirePending(id);
 
+    // Activate first. If activation throws (e.g. the plan was deactivated
+    // between submit and review), the invoice stays PENDING and can be
+    // reviewed again — rather than being stuck APPROVED with no subscription
+    // behind it and no way to re-approve.
+    const subscription = await this.activatePlan(
+      invoice.tenantId,
+      { planId: invoice.planId, months: invoice.months, note: `فاکتور ${id}` },
+      { adminId: admin.adminId, source: 'invoice' },
+      meta,
+    );
+
     const updated = await runAsSystem('billing: approve invoice', () =>
       this.prisma.subscriptionInvoice.update({
         where: { id },
@@ -387,13 +404,6 @@ export class BillingService {
         },
         include: { plan: true, bankAccount: true },
       }),
-    );
-
-    const subscription = await this.activatePlan(
-      invoice.tenantId,
-      { planId: invoice.planId, months: invoice.months, note: `فاکتور ${id}` },
-      { adminId: admin.adminId, source: 'invoice' },
-      meta,
     );
 
     this.audit.record({
