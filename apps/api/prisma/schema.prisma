@@ -276,6 +276,7 @@ model Tenant {
   deliveryZones  DeliveryZone[]
   loyaltyProgram LoyaltyProgram?
   loyaltyEntries LoyaltyEntry[]
+  events         Event[]
 
   @@index([slug])
   @@map("tenants")
@@ -364,6 +365,7 @@ model Branch {
   waiterCalls       WaiterCall[]
   feedback          OrderFeedback[]
   lastSeenCustomers Customer[]
+  events            Event[]
 
   @@unique([restaurantId, slug])
   @@index([tenantId])
@@ -456,6 +458,7 @@ model Menu {
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   categories Category[]
+  events     Event[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -1547,4 +1550,68 @@ model LoyaltyEntry {
   @@index([tenantId, customerId, createdAt])
   @@index([tenantId, createdAt])
   @@map("loyalty_entries")
+}
+
+/// A cafe/restaurant event (live music night, launch, workshop...). Carries an
+/// optional per-event look and an optional dedicated menu, and can collect
+/// RSVPs up to a capacity. Its public page lives at /r/<slug>/e/<eventSlug> and
+/// gets a dedicated QR rendered on demand from that path.
+model Event {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @db.Uuid
+  branchId     String?   @db.Uuid
+  title        String    @db.VarChar(160)
+  /// Unique per tenant; the last segment of the public event URL.
+  slug         String    @db.VarChar(64)
+  description  String?   @db.VarChar(2000)
+  coverUrl     String?   @db.VarChar(500)
+  startsAt     DateTime
+  endsAt       DateTime?
+
+  // Optional per-event look. Null means "inherit the restaurant's look".
+  accentColor  String?   @db.VarChar(9)
+  theme        String?   @db.VarChar(10)
+  menuTemplate String?   @db.VarChar(24)
+
+  /// Optional per-event menu. Null falls back to the branch/restaurant menu.
+  menuId       String?   @db.Uuid
+
+  // Capacity + RSVP
+  capacity     Int?
+  rsvpEnabled  Boolean   @default(false)
+
+  isActive     Boolean   @default(true)
+  displayOrder Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  menu   Menu?       @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  rsvps  EventRsvp[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([branchId])
+  @@map("events")
+}
+
+/// A guest reservation for an event. Status is a plain string
+/// (PENDING/CONFIRMED/CANCELLED) so a new state ships without a migration.
+model EventRsvp {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  eventId   String   @db.Uuid
+  name      String   @db.VarChar(120)
+  phone     String   @db.VarChar(20)
+  guests    Int      @default(1)
+  status    String   @default("PENDING") @db.VarChar(20)
+  note      String?  @db.VarChar(300)
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("event_rsvps")
 }

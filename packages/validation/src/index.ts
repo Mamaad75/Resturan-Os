@@ -12,3 +12,4 @@ export * from './report';
 export * from './menu-theme';
 export * from './platform';
 export * from './crm';
+export * from './events';

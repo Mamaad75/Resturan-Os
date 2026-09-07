@@ -27,6 +27,7 @@ import { PlansModule } from './modules/plans/plans.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { EventsModule } from './modules/events/events.module';
 import { PlatformModule } from './modules/platform/platform.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { ReportsModule } from './modules/reports/reports.module';
@@ -78,6 +79,7 @@ import { HealthController } from './health.controller';
     BillingModule,
     DeliveryModule,
     LoyaltyModule,
+    EventsModule,
     CrmModule,
     ThemeModule,
     NotificationsModule,
