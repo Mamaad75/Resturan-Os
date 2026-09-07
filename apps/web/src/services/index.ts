@@ -559,7 +559,85 @@ export const platformService = {
     ),
   rejectInvoice: (id: string, reviewNote: string) =>
     api.post<InvoiceDto>(`/platform/invoices/${id}/reject`, { reviewNote }),
+
+  /* --- online payments: platform gateway, SMS service, settlements --- */
+  paymentConfig: () =>
+    api.get<PlatformPaymentConfigDto>('/platform/payment-config'),
+  updatePaymentConfig: (body: UpdatePlatformPaymentConfigBody) =>
+    api.put<PlatformPaymentConfigDto>('/platform/payment-config', body),
+
+  smsConfig: () => api.get<PlatformSmsConfigDto>('/platform/sms-config'),
+  updateSmsConfig: (body: UpdatePlatformSmsConfigBody) =>
+    api.put<PlatformSmsConfigDto>('/platform/sms-config', body),
+
+  settlements: (params: {
+    status?: string;
+    tenantId?: string;
+    page?: number;
+    pageSize?: number;
+  }) =>
+    api.get<SettlementListDto>('/platform/settlements', { query: params }),
+  settle: (body: { ids: string[]; settlementRef?: string; note?: string }) =>
+    api.post<{ settled: number }>('/platform/settlements/settle', body),
 };
+
+/* --- platform online-payment DTOs --- */
+
+export interface PlatformPaymentConfigDto {
+  provider: string;
+  credentials: Record<string, string>;
+  sandbox: boolean;
+  enabled: boolean;
+  commissionBps: number;
+  settleMinHours: number;
+  settleMaxHours: number;
+}
+
+export interface UpdatePlatformPaymentConfigBody {
+  provider: string;
+  credentials?: Record<string, string>;
+  sandbox?: boolean;
+  enabled?: boolean;
+  commissionBps: number;
+  settleMinHours: number;
+  settleMaxHours: number;
+}
+
+export interface PlatformSmsConfigDto {
+  provider: 'console' | 'kavenegar' | 'sms_ir';
+  apiKey: string;
+  sender: string;
+  enabled: boolean;
+}
+
+export interface UpdatePlatformSmsConfigBody {
+  provider: 'console' | 'kavenegar' | 'sms_ir';
+  apiKey?: string;
+  sender?: string;
+  enabled?: boolean;
+}
+
+export type SettlementStatus = 'PENDING' | 'SETTLED' | 'CANCELLED';
+
+export interface SettlementDto {
+  id: string;
+  tenant: { id: string; name: string; slug: string };
+  orderNumber: string | number;
+  grossAmount: number;
+  commissionAmount: number;
+  netAmount: number;
+  status: SettlementStatus;
+  eligibleAt: string;
+  dueAt: string;
+  settledAt: string | null;
+  createdAt: string;
+}
+
+export interface SettlementListDto {
+  items: SettlementDto[];
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
+  totals: { pendingNet: number; pendingCommission: number };
+}
 
 /* ------------------------------------------------------------------ */
 /* Billing, from the tenant's side                                     */

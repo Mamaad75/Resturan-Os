@@ -2,10 +2,12 @@
 
 import {
   Building2,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Package,
   Receipt,
+  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -20,6 +22,8 @@ const NAV = [
   { href: '/superadmin/tenants', label: 'کسب‌وکارها', icon: Building2 },
   { href: '/superadmin/plans', label: 'پلن‌ها', icon: Package },
   { href: '/superadmin/invoices', label: 'پرداخت‌ها', icon: Receipt },
+  { href: '/superadmin/payments', label: 'درگاه و پیامک', icon: CreditCard },
+  { href: '/superadmin/settlements', label: 'تسویه', icon: Wallet },
 ];
 
 /**
@@ -53,7 +57,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
             <span className="text-sm text-ink-muted">مدیریت پلتفرم</span>
           </div>
 
-          <nav className="flex flex-1 gap-1">
+          <nav className="no-scrollbar flex flex-1 gap-1 overflow-x-auto">
             {NAV.map((item) => {
               const active =
                 item.href === '/superadmin'
@@ -64,7 +68,7 @@ export function PlatformShell({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                    'flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                     active
                       ? 'bg-gold/10 text-gold'
                       : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
