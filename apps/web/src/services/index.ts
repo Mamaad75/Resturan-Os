@@ -624,7 +624,7 @@ export interface PhoneBankRow {
 
 export interface PhoneBankDto {
   items: PhoneBankRow[];
-  meta: { page: number; pageSize: number; total: number; totalPages: number };
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
   totals: { records: number; consenting: number; uniquePhones: number };
 }
 
@@ -682,7 +682,7 @@ export interface SettlementDto {
 
 export interface SettlementListDto {
   items: SettlementDto[];
-  meta: { page: number; pageSize: number; total: number; totalPages: number };
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
   totals: { pendingNet: number; pendingCommission: number };
 }
 

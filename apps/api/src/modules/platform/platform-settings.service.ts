@@ -176,7 +176,10 @@ export class PlatformSettingsService {
         settledAt: r.settledAt ? r.settledAt.toISOString() : null,
         createdAt: r.createdAt.toISOString(),
       })),
-      meta: buildPaginationMeta(query.page, query.pageSize, total),
+      // Named `pagination`, not `meta`: the response interceptor hoists any
+      // {items, meta} object and would drop `totals`. Keeping a different key
+      // makes the interceptor leave the whole object intact.
+      pagination: buildPaginationMeta(query.page, query.pageSize, total),
       totals: {
         pendingNet: pendingAgg._sum.netAmount ?? 0,
         pendingCommission: pendingAgg._sum.commissionAmount ?? 0,
@@ -246,7 +249,9 @@ export class PlatformSettingsService {
         marketingConsent: r.marketingConsent,
         createdAt: r.createdAt.toISOString(),
       })),
-      meta: buildPaginationMeta(query.page, query.pageSize, total),
+      // See note in listSettlements: keep this off the reserved `meta` key so
+      // the interceptor doesn't hoist it and strip `totals`.
+      pagination: buildPaginationMeta(query.page, query.pageSize, total),
       totals: { records: total, consenting, uniquePhones: distinct.length },
     };
   }
