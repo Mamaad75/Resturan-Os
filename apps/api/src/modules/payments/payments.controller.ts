@@ -8,10 +8,16 @@ import {
   type CreatePaymentInput,
   type RefundPaymentInput,
 } from '@restaurant-os/validation';
+import { z } from 'zod';
 import { Ctx, Public, RequirePermissions } from '../../common/decorators/auth.decorators';
 import { ZodBody, ZodParam } from '../../common/decorators/validation.decorators';
 import type { RequestContext } from '../../common/types/request-context';
 import { PaymentsService } from './payments.service';
+
+/** 48 hex characters, as produced by generateOpaqueToken(24). */
+const trackingTokenSchema = z
+  .string()
+  .regex(/^[a-f0-9]{48}$/, 'لینک پیگیری معتبر نیست.');
 
 @ApiTags('payments')
 @Controller('orders/:id/payment')
@@ -75,5 +81,24 @@ export class PublicPaymentsController {
     @Body('payload') payload?: Record<string, unknown>,
   ) {
     return this.payments.verifyOnlinePayment(providerRef, payload);
+  }
+
+  @Public()
+  @Get('options/:token')
+  @ApiOperation({
+    summary: 'The pay options a customer sees for one order (by tracking token)',
+  })
+  options(@ZodParam('token', trackingTokenSchema) token: string) {
+    return this.payments.getPublicPayOptions(token);
+  }
+
+  @Public()
+  @Post('start/:token')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Start an online payment the customer initiated from the tracking page',
+  })
+  start(@ZodParam('token', trackingTokenSchema) token: string) {
+    return this.payments.startPublicOnlinePayment(token);
   }
 }

@@ -23,6 +23,7 @@ import { cn } from '@/lib/cn';
 import { formatMoney, formatTimeFa, toPersianDigits } from '@/lib/format';
 import { publicService } from '@/services';
 import { FeedbackCard } from './feedback-card';
+import { PaymentPanel } from './payment-panel';
 
 /**
  * Customer order tracking.
@@ -152,6 +153,10 @@ export function TrackingView({ token }: { token: string }) {
       {!isCancelled ? <Timeline steps={order.steps} /> : null}
 
       <OrderItemsCard order={order} />
+
+      {!isCancelled ? (
+        <PaymentPanel token={token} paymentStatus={order.paymentStatus} />
+      ) : null}
 
       {!isCancelled ? <FeedbackCard token={token} status={order.status} /> : null}
 

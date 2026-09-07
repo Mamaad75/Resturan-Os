@@ -184,7 +184,32 @@ export const publicService = {
     api.get<NotificationDto[]>(`/public/orders/track/${token}/notifications`, {
       retryOnAuthFailure: false,
     }),
+  payOptions: (token: string) =>
+    api.get<PayOptionsDto>(`/public/payments/options/${token}`, {
+      retryOnAuthFailure: false,
+    }),
+  startOnlinePayment: (token: string) =>
+    api.post<{ redirectUrl: string | null }>(
+      `/public/payments/start/${token}`,
+      undefined,
+      { retryOnAuthFailure: false },
+    ),
+  verifyPayment: (providerRef: string) =>
+    api.post<{ verified: boolean; orderId: string | null; trackingToken: string | null }>(
+      '/public/payments/verify',
+      { providerRef },
+      { retryOnAuthFailure: false },
+    ),
 };
+
+export interface PayOptionsDto {
+  orderNumber: string;
+  total: number;
+  paidTotal: number;
+  outstanding: number;
+  paymentStatus: 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
+  methods: { cash: boolean; cardOnSite: boolean; online: boolean };
+}
 
 /* ------------------------------------------------------------------ */
 /* Catalogue                                                           */
