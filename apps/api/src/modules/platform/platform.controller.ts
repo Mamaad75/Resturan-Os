@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   activatePlanSchema,
@@ -26,6 +26,14 @@ import {
   type TenantNotesInput,
   type UpdatePlanInput,
   type UpdateSubscriptionInput,
+  settleSettlementsSchema,
+  settlementQuerySchema,
+  updatePlatformPaymentConfigSchema,
+  updatePlatformSmsConfigSchema,
+  type SettleSettlementsInput,
+  type SettlementQueryInput,
+  type UpdatePlatformPaymentConfigInput,
+  type UpdatePlatformSmsConfigInput,
 } from '@restaurant-os/validation';
 import {
   ClientInfo,
@@ -43,6 +51,7 @@ import { PlansService } from '../plans/plans.service';
 import { PlatformAuditService } from './platform-audit.service';
 import { PlatformDashboardService } from './platform-dashboard.service';
 import { PlatformPlansService } from './platform-plans.service';
+import { PlatformSettingsService } from './platform-settings.service';
 import { PlatformTenantsService, type AuditMeta } from './platform-tenants.service';
 
 /**
@@ -63,7 +72,52 @@ export class PlatformController {
     private readonly platformPlans: PlatformPlansService,
     private readonly audit: PlatformAuditService,
     private readonly billing: BillingService,
+    private readonly settings: PlatformSettingsService,
   ) {}
+
+  /* ------------------------------------------------- payment/SMS config */
+
+  @Get('payment-config')
+  @ApiOperation({ summary: 'Platform online-gateway configuration (secrets masked)' })
+  getPaymentConfig() {
+    return this.settings.getPaymentConfig();
+  }
+
+  @Put('payment-config')
+  @ApiOperation({ summary: 'Configure the platform online gateway' })
+  updatePaymentConfig(
+    @ZodBody(updatePlatformPaymentConfigSchema) dto: UpdatePlatformPaymentConfigInput,
+  ) {
+    return this.settings.updatePaymentConfig(dto);
+  }
+
+  @Get('sms-config')
+  @ApiOperation({ summary: 'Platform SMS provider configuration (key masked)' })
+  getSmsConfig() {
+    return this.settings.getSmsConfig();
+  }
+
+  @Put('sms-config')
+  @ApiOperation({ summary: 'Configure the platform SMS provider' })
+  updateSmsConfig(
+    @ZodBody(updatePlatformSmsConfigSchema) dto: UpdatePlatformSmsConfigInput,
+  ) {
+    return this.settings.updateSmsConfig(dto);
+  }
+
+  /* ---------------------------------------------------------- settlements */
+
+  @Get('settlements')
+  @ApiOperation({ summary: 'Public-gateway settlement ledger (what is owed to each restaurant)' })
+  listSettlements(@ZodQuery(settlementQuerySchema) query: SettlementQueryInput) {
+    return this.settings.listSettlements(query);
+  }
+
+  @Post('settlements/settle')
+  @ApiOperation({ summary: 'Mark selected settlements as paid out' })
+  settle(@ZodBody(settleSettlementsSchema) dto: SettleSettlementsInput) {
+    return this.settings.settle(dto);
+  }
 
   /* ------------------------------------------------------------ dashboard */
 

@@ -277,6 +277,7 @@ model Tenant {
   loyaltyProgram LoyaltyProgram?
   loyaltyEntries LoyaltyEntry[]
   events         Event[]
+  settlements    PlatformSettlement[]
 
   @@index([slug])
   @@map("tenants")
@@ -299,6 +300,16 @@ model Restaurant {
   // Which customer-menu layout this restaurant renders. Stored as a string
   // rather than an enum so a new template ships without a migration.
   menuTemplate String  @default("CLASSIC") @db.VarChar(24)
+
+  // Online payment routing. OFF = online disabled (cash at counter only);
+  // PLATFORM = pay through the platform's shared gateway (commission +
+  // settlement apply); OWN = the restaurant's own gateway (no commission).
+  // Stored as strings so a new mode/provider ships without a migration.
+  onlinePaymentMode      String  @default("OFF") @db.VarChar(12)
+  ownPaymentProvider     String? @db.VarChar(40)
+  /// The restaurant's own gateway credentials (merchant id, api key, ...).
+  ownPaymentCredentials  Json?
+  ownPaymentSandbox      Boolean @default(true)
 
   // Service configuration
   /// What kind of business this is. Independent of `serviceModes`, which say
@@ -881,6 +892,7 @@ model Payment {
   tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   order      Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   recordedBy User?  @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  settlement PlatformSettlement?
 
   @@index([tenantId])
   @@index([orderId])
@@ -1614,4 +1626,72 @@ model EventRsvp {
   @@index([tenantId])
   @@index([eventId])
   @@map("event_rsvps")
+}
+
+/// Platform-wide online payment gateway configuration, edited from the
+/// superadmin console. A single row (id is a fixed sentinel). Credentials are
+/// provider-agnostic so any gateway that has an adapter can be configured.
+model PlatformPaymentConfig {
+  id            String   @id @db.Uuid
+  /// Adapter name, e.g. "zarinpal". Empty until configured.
+  provider      String   @default("") @db.VarChar(40)
+  /// Merchant id / api key / extra fields for the chosen provider.
+  credentials   Json?
+  sandbox       Boolean  @default(true)
+  /// The public gateway stays OFF until an operator enables it after testing.
+  enabled       Boolean  @default(false)
+  /// Platform commission on public-gateway payments, in basis points (400 = 4%).
+  commissionBps Int      @default(400)
+  /// Settlement window: net is payable to the restaurant between these hours
+  /// after the payment is captured.
+  settleMinHours Int     @default(1)
+  settleMaxHours Int     @default(48)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("platform_payment_config")
+}
+
+/// Platform-wide SMS provider configuration, edited from the superadmin
+/// console. Single row. Falls back to the console provider when disabled.
+model PlatformSmsConfig {
+  id        String   @id @db.Uuid
+  provider  String   @default("console") @db.VarChar(20)
+  apiKey    String?  @db.VarChar(200)
+  sender    String?  @db.VarChar(40)
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_sms_config")
+}
+
+/// One row per captured public-gateway (PLATFORM) payment: the money landed in
+/// the platform account and this records what is owed back to the restaurant
+/// (gross minus commission) and when it may be settled.
+model PlatformSettlement {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  orderId          String    @db.Uuid
+  paymentId        String    @unique @db.Uuid
+  grossAmount      Int
+  commissionBps    Int
+  commissionAmount Int
+  netAmount        Int
+  /// PENDING | SETTLED | CANCELLED
+  status           String    @default("PENDING") @db.VarChar(12)
+  /// Net becomes payable between eligibleAt and dueAt (the 1-48h window).
+  eligibleAt       DateTime
+  dueAt            DateTime
+  settledAt        DateTime?
+  settlementRef    String?   @db.VarChar(120)
+  note             String?   @db.VarChar(300)
+  createdAt        DateTime  @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([status, eligibleAt])
+  @@map("platform_settlements")
 }

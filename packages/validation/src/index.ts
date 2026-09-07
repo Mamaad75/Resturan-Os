@@ -13,3 +13,4 @@ export * from './menu-theme';
 export * from './platform';
 export * from './crm';
 export * from './events';
+export * from './platform-settings';
