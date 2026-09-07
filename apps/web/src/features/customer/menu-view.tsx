@@ -25,6 +25,7 @@ import {
   type ThemeClasses,
 } from './theme-runtime';
 import { CheckoutSheet } from './checkout-sheet';
+import { EventsRail } from './events-rail';
 import { ProductSheet } from './product-sheet';
 import { WaiterCallButton } from './waiter-call';
 
@@ -224,6 +225,8 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
             </div>
           </section>
         ) : null}
+
+        <EventsRail slug={slug} headingClassName={styles.heading} />
 
         {categories.map((category) => {
           /*
