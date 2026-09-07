@@ -54,6 +54,8 @@ services:
 
       API_PORT: "4000"
       API_PREFIX: api
+      PLATFORM_ADMIN_EMAIL: ${PLATFORM_ADMIN_EMAIL}
+      PLATFORM_ADMIN_PASSWORD: ${PLATFORM_ADMIN_PASSWORD}
 
       API_URL: https://foodos.bymer.ir
       APP_URL: https://foodos.bymer.ir
