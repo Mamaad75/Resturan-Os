@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BarChart3,
   Bell,
+  CalendarDays,
   ChefHat,
   ClipboardList,
   LayoutDashboard,
@@ -109,6 +110,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'کدهای تخفیف',
     icon: Tag,
     permissions: [Permission.SETTINGS_MANAGE],
+  },
+  {
+    href: '/admin/events',
+    label: 'رویدادها',
+    icon: CalendarDays,
+    permissions: [Permission.SETTINGS_READ],
   },
   {
     href: '/admin/reports',

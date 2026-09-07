@@ -31,6 +31,7 @@ import type {
   SmsMessageDto,
   StaffDto,
   TableDto,
+  PublicRestaurant,
 } from '@restaurant-os/types';
 import {
   api,
@@ -705,4 +706,83 @@ export const billingService = {
     note?: string | null;
   }) => api.post<InvoiceDto>('/billing/invoices', body),
   cancel: (id: string) => api.post<InvoiceDto>(`/billing/invoices/${id}/cancel`),
+};
+
+/* ------------------------------------------------------------------ */
+/* Events                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface EventDto {
+  id: string;
+  branchId: string | null;
+  title: string;
+  slug: string;
+  description: string | null;
+  coverUrl: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  accentColor: string | null;
+  theme: string | null;
+  menuTemplate: string | null;
+  menuId: string | null;
+  capacity: number | null;
+  rsvpEnabled: boolean;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventRsvpItem {
+  id: string;
+  name: string;
+  phone: string;
+  guests: number;
+  status: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface EventRsvpsResult {
+  capacity: number | null;
+  reserved: number;
+  spotsLeft: number | null;
+  items: EventRsvpItem[];
+}
+
+export interface PublicEventsResult {
+  restaurant: PublicRestaurant;
+  events: EventDto[];
+}
+
+export interface PublicEventDetail {
+  restaurant: PublicRestaurant;
+  event: EventDto;
+  spotsLeft: number | null;
+}
+
+export const eventService = {
+  list: () => api.get<EventDto[]>('/events'),
+  create: (body: Record<string, unknown>) => api.post<EventDto>('/events', body),
+  update: (id: string, body: Record<string, unknown>) =>
+    api.patch<EventDto>(`/events/${id}`, body),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/events/${id}`),
+  rsvps: (id: string) => api.get<EventRsvpsResult>(`/events/${id}/rsvps`),
+  qr: (id: string) => api.get<{ targetPath: string; dataUrl: string }>(`/events/${id}/qr`),
+};
+
+export const publicEventService = {
+  list: (slug: string) =>
+    api.get<PublicEventsResult>(`/public/restaurants/${slug}/events`),
+  get: (slug: string, eventSlug: string) =>
+    api.get<PublicEventDetail>(`/public/restaurants/${slug}/events/${eventSlug}`),
+  rsvp: (
+    slug: string,
+    eventSlug: string,
+    body: { name: string; phone: string; guests: number; note?: string | null },
+  ) =>
+    api.post<{ id: string; status: string }>(
+      `/public/restaurants/${slug}/events/${eventSlug}/rsvp`,
+      body,
+    ),
 };

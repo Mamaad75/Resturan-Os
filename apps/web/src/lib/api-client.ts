@@ -230,7 +230,7 @@ export async function apiRequest<T>(
  * One list, mirrored by the API's allowlist. Adding a folder means adding it
  * in both places on purpose: the value becomes a path segment on the server.
  */
-export type UploadFolder = 'products' | 'branding' | 'receipts';
+export type UploadFolder = 'products' | 'branding' | 'receipts' | 'events';
 
 export async function uploadFile<T>(
   path: string,

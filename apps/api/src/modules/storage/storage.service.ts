@@ -50,7 +50,13 @@ export class StorageService {
   async saveImage(
     file: UploadedImage,
     folder: UploadFolder,
-  ): Promise<{ url: string }> {
+  ): Promise<{
+    key: string;
+    url: string;
+    thumbnailUrl: string;
+    size: number;
+    contentType: string;
+  }> {
     if (!file || !file.buffer?.length) {
       throw AppException.validation('فایلی دریافت نشد.', {
         file: ['فایلی ارسال نشده است.'],
@@ -79,8 +85,17 @@ export class StorageService {
     await writeFile(join(dir, fileName), file.buffer);
 
     const base = this.config.storage.publicUrl.replace(/\/+$/, '');
-    const url = `${base}/${folder}/${fileName}`;
-    this.logger.log(`stored image ${folder}/${fileName} (${file.size} bytes)`);
-    return { url };
+    const key = `${folder}/${fileName}`;
+    const url = `${base}/${key}`;
+    this.logger.log(`stored image ${key} (${file.size} bytes)`);
+    // No separate thumbnail is generated (the local driver serves the original);
+    // thumbnailUrl mirrors url so callers that expect the richer shape work.
+    return {
+      key,
+      url,
+      thumbnailUrl: url,
+      size: file.size,
+      contentType: file.mimetype,
+    };
   }
 }
