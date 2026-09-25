@@ -75,6 +75,9 @@ services:
       THROTTLE_PUBLIC_ORDER_LIMIT: "12"
 
       SMS_PROVIDER: console
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
 
       PAYMENT_PROVIDER: manual
       PAYMENT_CALLBACK_URL: https://foodos.bymer.ir/payment/callback

@@ -421,6 +421,11 @@ export const notificationService = {
     ),
   markRead: (body: { ids?: string[]; all?: boolean }) =>
     api.post<{ updated: number }>('/notifications/read', body),
+  pushConfig: () => api.get<{ enabled: boolean; publicKey: string | null }>('/notifications/push/config'),
+  subscribePush: (body: { endpoint: string; keys: { p256dh: string; auth: string }; userAgent?: string | null }) =>
+    api.post<{ enabled: boolean; subscribed: boolean }>('/notifications/push/subscribe', body),
+  unsubscribePush: (endpoint: string) =>
+    api.delete<{ unsubscribed: number }>('/notifications/push/subscribe', { query: { endpoint } }),
 };
 
 export const smsService = {
@@ -928,6 +933,232 @@ export const eventService = {
   qr: (id: string) => api.get<{ targetPath: string; dataUrl: string }>(`/events/${id}/qr`),
 };
 
+/* ------------------------------------------------------------------ */
+/* Games (loyalty game)                                                */
+/* ------------------------------------------------------------------ */
+
+export type GameRewardType = 'NONE' | 'PERCENTAGE' | 'FIXED';
+export type GameModel = 'SPIN' | 'KITCHEN_RUSH' | 'THRESHOLD' | 'LEADERBOARD';
+export type GameConfigModel = 'ARCADE' | GameModel;
+
+export interface SpinSegmentDto {
+  label: string;
+  weight: number;
+  rewardType: GameRewardType;
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface SpinConfig {
+  segments: SpinSegmentDto[];
+  cooldownHours: number;
+  scorePerPlay: number;
+}
+
+export interface ThresholdTierDto {
+  label: string;
+  points: number;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface ThresholdConfig {
+  scorePerPlay: number;
+  cooldownHours: number;
+  tiers: ThresholdTierDto[];
+}
+
+export interface LeaderboardRewardDto {
+  rank: number;
+  label: string;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface LeaderboardConfig {
+  scorePerPlay: number;
+  cooldownHours: number;
+  periodDays: number;
+  topN: number;
+  rewards: LeaderboardRewardDto[];
+}
+
+export interface KitchenRushRewardDto {
+  label: string;
+  minScore: number;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface KitchenRushConfig {
+  durationSeconds: number;
+  lives: number;
+  scorePerCorrect: number;
+  comboStep: number;
+  feverThreshold: number;
+  cooldownHours: number;
+  scorePerPlay: number;
+  itemLabels: string[];
+  rewards: KitchenRushRewardDto[];
+}
+
+export type AnyGameConfig = SpinConfig | KitchenRushConfig | ThresholdConfig | LeaderboardConfig;
+export interface ArcadeConfig {
+  spinEnabled: boolean;
+  spin: SpinConfig;
+  kitchenRushEnabled: boolean;
+  kitchenRush: KitchenRushConfig;
+}
+
+
+export interface GameConfigDto {
+  isEnabled: boolean;
+  model: GameConfigModel;
+  config: ArcadeConfig | AnyGameConfig;
+}
+
+export interface GamePlayRow {
+  id: string;
+  phone: string;
+  name: string | null;
+  model?: string;
+  label: string | null;
+  couponCode: string | null;
+  createdAt: string;
+}
+
+export const gameService = {
+  get: () => api.get<GameConfigDto>('/game'),
+  update: (body: { isEnabled: boolean; model: GameConfigModel; config: ArcadeConfig | AnyGameConfig }) =>
+    api.put<GameConfigDto>('/game', body),
+  plays: () => api.get<GamePlayRow[]>('/game/plays'),
+};
+
+/* --- public game (customer) --- */
+
+export interface PublicGameState {
+  enabled: boolean;
+  player?: { score: number; level: number; playsCount: number } | null;
+  spin?: {
+    enabled: boolean;
+    cooldownHours: number;
+    canPlay: boolean;
+    nextPlayAt: string | null;
+    segments: Array<{ label: string }>;
+  };
+  kitchenRush?: {
+    enabled: boolean;
+    cooldownHours: number;
+    canPlay: boolean;
+    nextPlayAt: string | null;
+    durationSeconds: number;
+    lives: number;
+    scorePerCorrect: number;
+    comboStep: number;
+    feverThreshold: number;
+    itemLabels: string[];
+    rewards: Array<{ label: string; minScore: number }>;
+  };
+}
+
+export interface GameRewardResult {
+  label: string | null;
+  rewardType: GameRewardType;
+  rewardValue: number;
+  couponCode: string | null;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface PlayResultDto {
+  model: GameModel;
+  score: number;
+  level: number;
+  // SPIN
+  segmentIndex?: number;
+  label?: string;
+  rewardType?: GameRewardType;
+  rewardValue?: number;
+  couponCode?: string | null;
+  minOrderTotal?: number;
+  expiryDays?: number;
+  // KITCHEN_RUSH
+  runScore?: number;
+  correct?: number;
+  mistakes?: number;
+  comboMax?: number;
+  // THRESHOLD
+  reached?: GameRewardResult[];
+  nextTierPoints?: number | null;
+  nextTierLabel?: string | null;
+  scoreDelta?: number;
+  // LEADERBOARD
+  rank?: number;
+  reward?: GameRewardResult | null;
+}
+
+export interface KitchenRushSessionDto {
+  sessionToken: string;
+  seed: number;
+  durationSeconds: number;
+  lives: number;
+  scorePerCorrect: number;
+  comboStep: number;
+  feverThreshold: number;
+  itemLabels: string[];
+  startedAt: string;
+  expiresAt: string;
+  resumes: boolean;
+}
+
+export interface FinishKitchenRushPayload {
+  sessionToken: string;
+  score: number;
+  correct: number;
+  mistakes: number;
+  comboMax: number;
+  durationMs: number;
+}
+
+export const publicGameService = {
+  state: (slug: string, phone?: string) =>
+    api.get<PublicGameState>(`/public/restaurants/${slug}/game`, {
+      query: phone ? { phone } : {},
+      retryOnAuthFailure: false,
+    }),
+  play: (slug: string, body: { phone: string; name?: string | null }) =>
+    api.post<PlayResultDto>(`/public/restaurants/${slug}/game/play`, body, {
+      retryOnAuthFailure: false,
+    }),
+  stateByToken: (token: string) =>
+    api.get<PublicGameState>(`/public/orders/track/${token}/game`, {
+      retryOnAuthFailure: false,
+    }),
+  playByToken: (token: string, body?: { phone?: string; name?: string | null }) =>
+    api.post<PlayResultDto>(`/public/orders/track/${token}/game/play`, body ?? {}, {
+      retryOnAuthFailure: false,
+    }),
+  startKitchenRushByToken: (token: string) =>
+    api.post<KitchenRushSessionDto>(`/public/orders/track/${token}/game/kitchen-rush/start`, {}, {
+      retryOnAuthFailure: false,
+    }),
+  finishKitchenRushByToken: (token: string, body: FinishKitchenRushPayload) =>
+    api.post<PlayResultDto>(`/public/orders/track/${token}/game/kitchen-rush/finish`, body, {
+      retryOnAuthFailure: false,
+    }),
+  startKitchenRush: (slug: string, body: { phone: string; name?: string | null }) =>
+    api.post<KitchenRushSessionDto>(`/public/restaurants/${slug}/game/kitchen-rush/start`, body, { retryOnAuthFailure: false }),
+  finishKitchenRush: (slug: string, phone: string, body: FinishKitchenRushPayload) =>
+    api.post<PlayResultDto>(`/public/restaurants/${slug}/game/kitchen-rush/finish`, { ...body, phone }, { retryOnAuthFailure: false }),
+};
+
 export const publicEventService = {
   list: (slug: string) =>
     api.get<PublicEventsResult>(`/public/restaurants/${slug}/events`),
@@ -942,4 +1173,103 @@ export const publicEventService = {
       `/public/restaurants/${slug}/events/${eventSlug}/rsvp`,
       body,
     ),
+};
+
+/* ------------------------------------------------------------------ */
+/* Inventory / memberships / terminal hardware                         */
+/* ------------------------------------------------------------------ */
+
+export interface InventoryItemDto {
+  id: string;
+  sku: string | null;
+  name: string;
+  unit: string;
+  unitCost: number;
+  lowStockThreshold: number;
+  trackStock: boolean;
+  isActive: boolean;
+  quantity: number;
+  low: boolean;
+  stockValue: number;
+  warehouseId: string;
+}
+
+export const inventoryService = {
+  summary: (branchId?: string) => api.get<Record<string, unknown>>('/inventory/summary', { query: { branchId } }),
+  items: (branchId?: string, warehouseId?: string) => api.get<InventoryItemDto[]>('/inventory/items', { query: { branchId, warehouseId } }),
+  createItem: (body: Record<string, unknown>) => api.post('/inventory/items', body),
+  updateItem: (id: string, body: Record<string, unknown>) => api.patch(`/inventory/items/${id}`, body),
+  warehouses: (branchId?: string) => api.get<Array<{ id: string; name: string; branchId: string; isDefault: boolean }>>('/inventory/warehouses', { query: { branchId } }),
+  createWarehouse: (body: Record<string, unknown>) => api.post('/inventory/warehouses', body),
+  adjust: (body: Record<string, unknown>) => api.post<{ itemId: string; quantity: number }>('/inventory/adjust', body),
+  transfer: (body: Record<string, unknown>) => api.post('/inventory/transfer', body),
+  movements: (branchId?: string, itemId?: string) => api.get<Array<Record<string, unknown>>>('/inventory/movements', { query: { branchId, itemId } }),
+  recipe: (productId: string) => api.get<Array<{ id: string; itemId: string; quantity: number; item: { id: string; name: string; unit: string } }>>(`/inventory/products/${productId}/recipe`),
+  setRecipe: (productId: string, items: Array<{ itemId: string; quantity: number }>) => api.put(`/inventory/products/${productId}/recipe`, { items }),
+  suppliers: () => api.get<Array<Record<string, unknown>>>('/inventory/suppliers'),
+  createSupplier: (body: Record<string, unknown>) => api.post('/inventory/suppliers', body),
+  purchaseOrders: (branchId?: string) => api.get<Array<Record<string, unknown>>>('/inventory/purchase-orders', { query: { branchId } }),
+  createPurchaseOrder: (body: Record<string, unknown>) => api.post('/inventory/purchase-orders', body),
+  receivePurchaseOrder: (id: string, body: Record<string, unknown>) => api.post(`/inventory/purchase-orders/${id}/receive`, body),
+};
+
+export interface MembershipPlanDto {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  durationDays: number;
+  discountBps: number;
+  loyaltyMultiplierBps: number;
+  freeDelivery: boolean;
+  monthlyFreeDrinks: number;
+  isActive: boolean;
+}
+
+export interface CustomerMembershipDto {
+  id: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  gifted: boolean;
+  customer: { id: string; phone: string; name: string | null; loyaltyPoints: number };
+  plan: MembershipPlanDto;
+  payments: Array<{ id: string; amount: number; method: string; reference: string | null; createdAt: string }>;
+}
+
+export const membershipService = {
+  plans: () => api.get<MembershipPlanDto[]>('/memberships/plans'),
+  createPlan: (body: Record<string, unknown>) => api.post<MembershipPlanDto>('/memberships/plans', body),
+  updatePlan: (id: string, body: Record<string, unknown>) => api.patch<MembershipPlanDto>(`/memberships/plans/${id}`, body),
+  list: (status?: string) => api.get<CustomerMembershipDto[]>('/memberships', { query: { status } }),
+  grant: (body: Record<string, unknown>) => api.post<CustomerMembershipDto>('/memberships', body),
+  cancel: (id: string, reason?: string) => api.post<CustomerMembershipDto>(`/memberships/${id}/cancel`, { reason }),
+};
+
+export interface PosTerminalDto {
+  id: string;
+  branchId: string;
+  name: string;
+  provider: string;
+  terminalKey: string | null;
+  bridgeUrl: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+export interface TerminalIntentDto {
+  intentId: string;
+  orderId: string;
+  orderNumber: string;
+  amount: number;
+  currency: string;
+  expiresAt: string;
+  terminal: Pick<PosTerminalDto, 'id' | 'name' | 'provider' | 'terminalKey' | 'bridgeUrl'>;
+}
+
+export const terminalService = {
+  list: (branchId?: string) => api.get<PosTerminalDto[]>('/terminals', { query: { branchId } }),
+  create: (body: Record<string, unknown>) => api.post<PosTerminalDto>('/terminals', body),
+  update: (id: string, body: Record<string, unknown>) => api.patch<PosTerminalDto>(`/terminals/${id}`, body),
+  intent: (orderId: string, body: { terminalId: string; amount?: number }) => api.post<TerminalIntentDto>(`/terminals/orders/${orderId}/intents`, body),
 };

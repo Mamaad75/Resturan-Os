@@ -1,0 +1,13 @@
+{
+  "name": "@restaurant-os/terminal-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local POS/ECR bridge for Restaurant OS card terminals",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

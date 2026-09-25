@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
+  CreditCard,
   Minus,
   Plus,
   Search,
@@ -38,7 +39,7 @@ import { useRealtime } from '@/hooks/use-realtime';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { menuService, orderService, tableService } from '@/services';
+import { menuService, orderService, paymentService, restaurantService, tableService, terminalService } from '@/services';
 
 interface TicketLine {
   key: string;
@@ -75,6 +76,8 @@ export default function PosPage() {
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [modifierProduct, setModifierProduct] = useState<PublicProduct | null>(null);
+  const [terminalOrder, setTerminalOrder] = useState<{ id: string; orderNumber: string; total: number } | null>(null);
+  const [terminalId, setTerminalId] = useState('');
 
   const menuQuery = useQuery({
     queryKey: ['pos-menu'],
@@ -87,6 +90,25 @@ export default function PosPage() {
     queryFn: () => tableService.list(),
     refetchInterval: 45_000,
   });
+
+  const restaurantQuery = useQuery({
+    queryKey: ['restaurant'],
+    queryFn: () => restaurantService.get(),
+    staleTime: 60_000,
+  });
+  const terminalsQuery = useQuery({
+    queryKey: ['pos-terminals'],
+    queryFn: () => terminalService.list(),
+    enabled: restaurantQuery.data?.settings.posTerminalEnabled === true,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (terminalId || !terminalsQuery.data?.length) return;
+    const preferred = terminalsQuery.data.find((terminal) => terminal.isDefault && terminal.isActive)
+      ?? terminalsQuery.data.find((terminal) => terminal.isActive);
+    if (preferred) setTerminalId(preferred.id);
+  }, [terminalId, terminalsQuery.data]);
 
   const refreshTables = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
@@ -210,7 +232,13 @@ export default function PosPage() {
       setCustomerPhone('');
       setCartOpen(false);
       refreshTables();
-      router.push(`/admin/orders/${result.order.id}`);
+      const terminalReady = restaurantQuery.data?.settings.posTerminalEnabled === true &&
+        (terminalsQuery.data ?? []).some((terminal) => terminal.isActive && terminal.bridgeUrl);
+      if (terminalReady) {
+        setTerminalOrder({ id: result.order.id, orderNumber: result.order.orderNumber, total: result.order.total });
+      } else {
+        router.push(`/admin/orders/${result.order.id}`);
+      }
     },
     onError: (error) => {
       toast.error(
@@ -218,6 +246,55 @@ export default function PosPage() {
         error instanceof ApiError ? error.message : undefined,
       );
     },
+  });
+
+  const terminalPayment = useMutation({
+    mutationFn: async () => {
+      if (!terminalOrder || !terminalId) throw new Error('کارتخوان انتخاب نشده است.');
+      const intent = await terminalService.intent(terminalOrder.id, { terminalId });
+      if (!intent.terminal.bridgeUrl) throw new Error('Terminal Bridge برای این دستگاه تنظیم نشده است.');
+
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 100_000);
+      try {
+        const bridgeResponse = await fetch(`${intent.terminal.bridgeUrl.replace(/\/$/, '')}/v1/pay`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(intent.terminal.terminalKey ? { 'X-Bridge-Key': intent.terminal.terminalKey } : {}),
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            intentId: intent.intentId,
+            amount: intent.amount,
+            currency: intent.currency,
+            orderId: intent.orderId,
+            orderNumber: intent.orderNumber,
+            terminalId: intent.terminal.id,
+            provider: intent.terminal.provider,
+          }),
+        });
+        const bridge = await bridgeResponse.json().catch(() => ({})) as { success?: boolean; trace?: string; rrn?: string; message?: string };
+        if (!bridgeResponse.ok || !bridge.success) throw new Error(bridge.message || 'پرداخت کارتخوان ناموفق بود.');
+        const reference = bridge.trace ?? bridge.rrn ?? intent.intentId;
+        return paymentService.create(intent.orderId, {
+          method: 'CARD',
+          amount: intent.amount,
+          reference,
+          note: `POS ${intent.terminal.name} / ${intent.terminal.provider}`,
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    },
+    onSuccess: () => {
+      if (!terminalOrder) return;
+      toast.success('پرداخت کارتخوان ثبت شد', `سفارش #${toPersianDigits(terminalOrder.orderNumber)}`);
+      const id = terminalOrder.id;
+      setTerminalOrder(null);
+      router.push(`/admin/orders/${id}`);
+    },
+    onError: (error) => toast.error('پرداخت کارتخوان انجام نشد', error instanceof Error ? error.message : undefined),
   });
 
   const canSubmit =
@@ -409,6 +486,35 @@ export default function PosPage() {
           setTablePickerOpen(false);
         }}
       />
+
+      <Modal
+        open={terminalOrder !== null}
+        onClose={() => {
+          const id = terminalOrder?.id;
+          setTerminalOrder(null);
+          if (id) router.push(`/admin/orders/${id}`);
+        }}
+        title={terminalOrder ? `پرداخت سفارش #${toPersianDigits(terminalOrder.orderNumber)}` : 'پرداخت کارتخوان'}
+        size="sm"
+        footer={
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => { const id = terminalOrder?.id; setTerminalOrder(null); if (id) router.push(`/admin/orders/${id}`); }}>بعداً پرداخت</Button>
+            <Button loading={terminalPayment.isPending} disabled={!terminalId} onClick={() => terminalPayment.mutate()}><CreditCard className="size-4" />ارسال مبلغ</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-gold/20 bg-gold/[0.06] p-4 text-center">
+            <p className="text-xs text-ink-muted">مبلغ قابل پرداخت</p>
+            <p className="mt-1 text-2xl font-bold text-gold">{terminalOrder ? formatMoney(terminalOrder.total) : '—'}</p>
+          </div>
+          <select value={terminalId} onChange={(e) => setTerminalId(e.target.value)} className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink">
+            <option value="">انتخاب کارتخوان</option>
+            {(terminalsQuery.data ?? []).filter((terminal) => terminal.isActive).map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}{terminal.isDefault ? ' — پیش‌فرض' : ''}</option>)}
+          </select>
+          <p className="text-xs leading-6 text-ink-muted">FoodOS مبلغ را به Terminal Bridge محلی می‌فرستد. اطلاعات کارت وارد FoodOS نمی‌شود؛ پس از تأیید دستگاه، شماره پیگیری در پرداخت سفارش ثبت می‌شود.</p>
+        </div>
+      </Modal>
 
       <ModifierPicker
         product={modifierProduct}

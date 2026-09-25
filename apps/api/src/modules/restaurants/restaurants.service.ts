@@ -230,6 +230,18 @@ export class RestaurantsService {
         ...(input.autoConfirmOrders !== undefined
           ? { autoConfirmOrders: input.autoConfirmOrders }
           : {}),
+        ...(input.inventoryEnabled !== undefined
+          ? { inventoryEnabled: input.inventoryEnabled }
+          : {}),
+        ...(input.customerMembershipEnabled !== undefined
+          ? { customerMembershipEnabled: input.customerMembershipEnabled }
+          : {}),
+        // Push notifications are a core operational channel and are no longer
+        // tenant-toggleable. Keep the legacy column true for older clients.
+        pushNotificationsEnabled: true,
+        ...(input.posTerminalEnabled !== undefined
+          ? { posTerminalEnabled: input.posTerminalEnabled }
+          : {}),
       },
     });
     this.audit.record({
@@ -505,6 +517,10 @@ export function toSettings(row: {
   estimatedPrepMinutes: number;
   smsNotificationsEnabled: boolean;
   autoConfirmOrders: boolean;
+  inventoryEnabled: boolean;
+  customerMembershipEnabled: boolean;
+  pushNotificationsEnabled: boolean;
+  posTerminalEnabled: boolean;
 }): RestaurantSettings {
   return {
     businessType: row.businessType as RestaurantSettings['businessType'],
@@ -520,5 +536,9 @@ export function toSettings(row: {
     estimatedPrepMinutes: row.estimatedPrepMinutes,
     smsNotificationsEnabled: row.smsNotificationsEnabled,
     autoConfirmOrders: row.autoConfirmOrders,
+    inventoryEnabled: row.inventoryEnabled,
+    customerMembershipEnabled: row.customerMembershipEnabled,
+    pushNotificationsEnabled: row.pushNotificationsEnabled,
+    posTerminalEnabled: row.posTerminalEnabled,
   };
 }

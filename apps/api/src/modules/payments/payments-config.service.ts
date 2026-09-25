@@ -71,8 +71,10 @@ export class PaymentsConfigService {
     if (!restaurant) throw AppException.notFound('رستوران');
 
     const merged = this.mergeCreds(restaurant.ownPaymentCredentials, input.ownCredentials);
-    await this.prisma.restaurant.update({
-      where: { id: restaurant.id },
+    // updateMany (not update) so the tenantId stays in the where clause — the
+    // tenant-isolation guard rejects a bare `where: { id }`.
+    await this.prisma.restaurant.updateMany({
+      where: { id: restaurant.id, tenantId: ctx.tenantId },
       data: {
         onlinePaymentMode: input.mode,
         ownPaymentProvider: input.mode === 'OWN' ? input.ownProvider ?? null : null,

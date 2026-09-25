@@ -203,6 +203,8 @@ export class LoyaltyService {
       customerId: string | null;
       orderId: string;
       eligibleSpend: number;
+      /** Membership multiplier in basis points; 10000 = normal earning. */
+      multiplierBps?: number;
     },
   ) {
     if (!args.customerId) return 0;
@@ -219,7 +221,9 @@ export class LoyaltyService {
     if (already) return 0;
 
     const rules = await this.rules(args.tenantId, tx);
-    const points = pointsEarned(rules, args.eligibleSpend);
+    const basePoints = pointsEarned(rules, args.eligibleSpend);
+    const multiplierBps = Math.max(10_000, args.multiplierBps ?? 10_000);
+    const points = Math.floor((basePoints * multiplierBps) / 10_000);
     if (points <= 0) return 0;
 
     await this.record(tx, {
@@ -228,7 +232,7 @@ export class LoyaltyService {
       orderId: args.orderId,
       type: LoyaltyEntryType.EARN,
       points,
-      note: 'خرید',
+      note: multiplierBps > 10_000 ? `خرید ×${(multiplierBps / 10_000).toFixed(1)}` : 'خرید',
     });
     return points;
   }

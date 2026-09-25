@@ -1,12 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TablesModule } from '../tables/tables.module';
+import { MembershipsModule } from '../memberships/memberships.module';
 import { OrderPricingService } from './order-pricing.service';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
 import { PublicOrdersController } from './public-orders.controller';
 
 @Module({
-  imports: [TablesModule],
+  imports: [TablesModule, MembershipsModule],
   controllers: [OrdersController, PublicOrdersController],
   providers: [OrdersService, OrderPricingService],
   exports: [OrdersService],

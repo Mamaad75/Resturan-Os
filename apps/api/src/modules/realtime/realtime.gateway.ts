@@ -210,9 +210,10 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     reason: string;
     note: string | null;
     createdAt: string;
+    recipientUserIds?: string[];
+    escalationLevel?: number;
   }): void {
-    // Floor staff only - the kitchen has no use for a table service request.
-    this.server?.to(RealtimeRoom.branch(event.branchId)).emit(RealtimeEvent.WAITER_CALLED, {
+    const payload = {
       callId: event.callId,
       branchId: event.branchId,
       tableId: event.tableId,
@@ -220,7 +221,16 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       reason: event.reason,
       note: event.note,
       createdAt: event.createdAt,
-    });
+      escalationLevel: event.escalationLevel ?? 0,
+    };
+    if (event.recipientUserIds?.length) {
+      for (const userId of event.recipientUserIds) {
+        this.server?.to(RealtimeRoom.user(userId)).emit(RealtimeEvent.WAITER_CALLED, payload);
+      }
+      return;
+    }
+    // Backward-compatible fallback for legacy emitters.
+    this.server?.to(RealtimeRoom.branch(event.branchId)).emit(RealtimeEvent.WAITER_CALLED, payload);
   }
 
   @OnEvent(RealtimeEvent.WAITER_CALL_RESOLVED)

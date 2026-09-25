@@ -13,6 +13,11 @@ export const metadata: Metadata = {
     'فوداواس: منوی دیجیتال، سفارش‌گیری با QR، صندوق، آشپزخانه، باشگاه مشتریان و گزارش‌های رشد فروش برای کافه، رستوران و فست‌فود.',
   applicationName: 'FoodOS',
   formatDetection: { telephone: false },
+  manifest: '/manifest.webmanifest',
+  icons: {
+    icon: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }, { url: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
+    apple: '/icons/apple-touch-icon.png',
+  },
   // PWA-facing identity, so an installed shortcut says FoodOS too.
   appleWebApp: { capable: true, title: 'FoodOS', statusBarStyle: 'black-translucent' },
 };

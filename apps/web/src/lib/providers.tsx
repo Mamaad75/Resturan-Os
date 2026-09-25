@@ -6,6 +6,8 @@ import { ApiError } from '@/lib/api-client';
 import { ToastProvider } from '@/components/ui';
 import { AuthProvider } from '@/features/auth/auth-context';
 import { ThemeProvider } from '@/features/theme/theme-context';
+import { PwaBootstrap } from '@/features/pwa-bootstrap';
+import { TenantThemeBootstrap } from '@/features/tenant-theme-bootstrap';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -33,7 +35,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider><PwaBootstrap /><TenantThemeBootstrap />{children}</AuthProvider>
         </ToastProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -32,6 +32,8 @@ import { DeliveryZones } from '@/features/admin/delivery-zones';
 import { LoyaltyProgram } from '@/features/admin/loyalty-program';
 import { PaymentMethods } from '@/features/admin/payment-methods';
 import { SubscriptionPayment } from '@/features/admin/subscription-payment';
+import { PwaDeviceCard } from '@/features/admin/pwa-device-card';
+import { PosTerminalSettings } from '@/features/admin/pos-terminal-settings';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { toPersianDigits } from '@/lib/format';
@@ -481,6 +483,41 @@ export default function SettingsPage() {
           />
         </CardBody>
       </Card>
+
+
+      <Card>
+        <CardHeader
+          title="ماژول‌های اختیاری Restaurant OS"
+          description="هر ماژول هم در رابط کاربری و هم در API فعال/غیرفعال می‌شود."
+        />
+        <CardBody className="space-y-3">
+          <Switch
+            checked={settings.inventoryEnabled}
+            onChange={(value) => updateSetting('inventoryEnabled', value)}
+            disabled={!editable}
+            label="انبارداری کامل"
+            description="مواد اولیه، موجودی شعبه، Recipe/BOM، گردش کالا، تأمین‌کننده، سفارش خرید و هشدار کمبود."
+          />
+          <Switch
+            checked={settings.customerMembershipEnabled}
+            onChange={(value) => updateSetting('customerMembershipEnabled', value)}
+            disabled={!editable}
+            label="اشتراک مشتریان"
+            description="فروش یا هدیه اشتراک، تخفیف دائمی، ارسال رایگان و ضریب امتیاز وفاداری."
+          />
+          <Switch
+            checked={settings.posTerminalEnabled}
+            onChange={(value) => updateSetting('posTerminalEnabled', value)}
+            disabled={!editable}
+            label="اتصال کارتخوان POS"
+            description="ارسال مبلغ از صندوق به Terminal Bridge و ثبت خودکار نتیجه پرداخت."
+          />
+        </CardBody>
+      </Card>
+
+      <PwaDeviceCard />
+
+      {settings.posTerminalEnabled ? <PosTerminalSettings editable={editable} /> : null}
 
       <div>
         <div className="mb-3">

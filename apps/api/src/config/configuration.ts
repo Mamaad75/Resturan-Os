@@ -35,6 +35,11 @@ export interface AppConfig {
     apiKey: string | null;
     callbackUrl: string;
   };
+  push: {
+    vapidPublicKey: string | null;
+    vapidPrivateKey: string | null;
+    subject: string;
+  };
   storage: {
     driver: 'local' | 's3';
     localDir: string;
@@ -154,6 +159,11 @@ export function loadConfiguration(): AppConfig {
       apiKey: optional('PAYMENT_API_KEY'),
       callbackUrl:
         process.env.PAYMENT_CALLBACK_URL ?? 'http://localhost:3000/payment/callback',
+    },
+    push: {
+      vapidPublicKey: optional('VAPID_PUBLIC_KEY'),
+      vapidPrivateKey: optional('VAPID_PRIVATE_KEY'),
+      subject: process.env.VAPID_SUBJECT ?? 'mailto:admin@foodos.local',
     },
     storage: {
       driver: storageDriver,

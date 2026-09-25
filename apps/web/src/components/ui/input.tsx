@@ -161,12 +161,12 @@ export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label?: ReactNode;
   hint?: ReactNode;
   error?: string;
-  options: Array<{ value: string; label: string; disabled?: boolean }>;
+  options?: Array<{ value: string; label: string; disabled?: boolean }>;
   placeholder?: string;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
-  { label, hint, error, options, placeholder, className, containerClassName, id, ...props },
+  { label, hint, error, options, placeholder, children, className, containerClassName, id, ...props },
   ref,
 ) {
   const generatedId = useId();
@@ -201,11 +201,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
             {placeholder}
           </option>
         ) : null}
-        {options.map((option) => (
+        {options?.map((option) => (
           <option key={option.value} value={option.value} disabled={option.disabled}>
             {option.label}
           </option>
         ))}
+        {children}
       </select>
     </FieldShell>
   );

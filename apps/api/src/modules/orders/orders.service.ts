@@ -54,6 +54,7 @@ import {
 } from './order.mappers';
 import { CouponsService } from '../coupons/coupons.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MembershipsService } from '../memberships/memberships.service';
 import { OrderPricingService, type ResolvedLine } from './order-pricing.service';
 
 @Injectable()
@@ -67,6 +68,7 @@ export class OrdersService {
     private readonly pricing: OrderPricingService,
     private readonly coupons: CouponsService,
     private readonly loyalty: LoyaltyService,
+    private readonly memberships: MembershipsService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
     private readonly plans: PlansService,
@@ -294,6 +296,22 @@ export class OrdersService {
         appliedCouponId = evaluation.couponId;
       }
 
+      const customer = input.customerPhone
+        ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
+        : null;
+
+      // Membership pricing is computed server-side. The browser only supplies
+      // identity (phone); it cannot choose its own discount or free delivery.
+      const discountBeforeMembership = (input.discountAmount ?? 0) + couponDiscount;
+      const membership = await this.memberships.quote(
+        tx,
+        tenantId,
+        customer?.id ?? null,
+        Math.max(0, subtotal - discountBeforeMembership),
+      );
+      const originalDeliveryFee = deliveryZone?.fee ?? 0;
+      const effectiveDeliveryFee = membership.freeDelivery ? 0 : originalDeliveryFee;
+
       /*
        * Loyalty is priced against the bill the customer would otherwise pay,
        * so the points cap is measured on a real number rather than on the raw
@@ -301,17 +319,13 @@ export class OrdersService {
        * to try, never what they are worth.
        */
       const beforeLoyalty = computeOrderTotals(lines, {
-        discountAmount: (input.discountAmount ?? 0) + couponDiscount,
+        discountAmount: discountBeforeMembership + membership.discount,
         taxEnabled: restaurant.taxEnabled,
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
         serviceChargeBps: restaurant.serviceChargeBps,
-        deliveryFee: deliveryZone?.fee ?? 0,
+        deliveryFee: effectiveDeliveryFee,
       });
-
-      const customer = input.customerPhone
-        ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
-        : null;
 
       const loyalty = await this.loyalty.quote(tx, tenantId, {
         customerId: customer?.id ?? null,
@@ -332,12 +346,12 @@ export class OrdersService {
 
       const totals = computeOrderTotals(lines, {
         discountAmount:
-          (input.discountAmount ?? 0) + couponDiscount + loyalty.discount,
+          discountBeforeMembership + membership.discount + loyalty.discount,
         taxEnabled: restaurant.taxEnabled,
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
         serviceChargeBps: restaurant.serviceChargeBps,
-        deliveryFee: deliveryZone?.fee ?? 0,
+        deliveryFee: effectiveDeliveryFee,
       });
 
       const orderNumber = await nextOrderNumber(tx, branchId);
@@ -378,7 +392,7 @@ export class OrdersService {
           loyaltyPointsUsed: loyalty.points,
           loyaltyDiscount: loyalty.discount,
           deliveryZoneId: deliveryZone?.id ?? null,
-          deliveryFee: deliveryZone?.fee ?? 0,
+          deliveryFee: effectiveDeliveryFee,
           deliveryAddress: input.deliveryAddress ?? null,
           deliveryNotes: input.deliveryNotes ?? null,
           subtotal: totals.subtotal,
@@ -416,6 +430,14 @@ export class OrdersService {
           },
         },
         include: ORDER_DETAIL_INCLUDE,
+      });
+
+      await this.memberships.recordUsage(tx, {
+        tenantId,
+        membershipId: membership.membershipId,
+        orderId: order.id,
+        discount: membership.discount,
+        freeDeliverySaved: membership.freeDelivery ? originalDeliveryFee : 0,
       });
 
       if (appliedCouponId) {
@@ -691,11 +713,15 @@ export class OrdersService {
          * already have spent. Measured on the food after discounts - never on
          * tax, service charge or the courier fee.
          */
+        const loyaltyMultiplierBps = await this.memberships.loyaltyMultiplierTx(
+          tx, ctx.tenantId, existing.customerId,
+        );
         await this.loyalty.earnForOrder(tx, {
           tenantId: ctx.tenantId,
           customerId: existing.customerId,
           orderId,
           eligibleSpend: Math.max(0, existing.subtotal - existing.discountTotal),
+          multiplierBps: loyaltyMultiplierBps,
         });
       }
 

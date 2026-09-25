@@ -1,0 +1,125 @@
+import { randomBytes } from 'node:crypto';
+import { Inject, Injectable } from '@nestjs/common';
+import type { PosTerminalInput } from '@restaurant-os/validation';
+import { AppException } from '../../common/exceptions/app.exception';
+import type { RequestContext } from '../../common/types/request-context';
+import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
+
+@Injectable()
+export class TerminalsService {
+  constructor(@Inject(PRISMA) private readonly prisma: PrismaService) {}
+
+  async assertEnabled(tenantId: string) {
+    const restaurant = await this.prisma.restaurant.findFirst({
+      where: { tenantId }, select: { posTerminalEnabled: true },
+    });
+    if (!restaurant?.posTerminalEnabled) {
+      throw AppException.forbidden('اتصال کارتخوان برای این مجموعه فعال نشده است.');
+    }
+  }
+
+  private async branchId(ctx: RequestContext, requested?: string) {
+    const branchId = requested ?? ctx.branchId;
+    if (!branchId) {
+      const branch = await this.prisma.branch.findFirst({
+        where: { tenantId: ctx.tenantId, isActive: true }, orderBy: { createdAt: 'asc' }, select: { id: true },
+      });
+      if (!branch) throw AppException.notFound('شعبه');
+      return branch.id;
+    }
+    const branch = await this.prisma.branch.findFirst({ where: { id: branchId, tenantId: ctx.tenantId, isActive: true }, select: { id: true } });
+    if (!branch) throw AppException.notFound('شعبه');
+    if (ctx.branchId && ctx.branchId !== branch.id) throw AppException.forbidden('این کارتخوان متعلق به شعبه شما نیست.');
+    return branch.id;
+  }
+
+  async list(ctx: RequestContext, requestedBranchId?: string) {
+    await this.assertEnabled(ctx.tenantId);
+    const branchId = await this.branchId(ctx, requestedBranchId);
+    return this.prisma.posTerminal.findMany({
+      where: { tenantId: ctx.tenantId, branchId },
+      orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
+    });
+  }
+
+  async create(ctx: RequestContext, input: PosTerminalInput) {
+    await this.assertEnabled(ctx.tenantId);
+    const branchId = await this.branchId(ctx, input.branchId);
+    if (input.isDefault) {
+      await this.prisma.posTerminal.updateMany({
+        where: { tenantId: ctx.tenantId, branchId }, data: { isDefault: false },
+      });
+    }
+    return this.prisma.posTerminal.create({
+      data: {
+        tenantId: ctx.tenantId,
+        branchId,
+        name: input.name,
+        provider: input.provider,
+        terminalKey: input.terminalKey ?? null,
+        bridgeUrl: input.bridgeUrl ?? null,
+        isDefault: input.isDefault,
+        isActive: input.isActive,
+        metadata: input.metadata ?? undefined,
+      },
+    });
+  }
+
+  async update(ctx: RequestContext, id: string, input: Partial<PosTerminalInput>) {
+    await this.assertEnabled(ctx.tenantId);
+    const existing = await this.prisma.posTerminal.findFirst({ where: { id, tenantId: ctx.tenantId } });
+    if (!existing) throw AppException.notFound('کارتخوان');
+    if (ctx.branchId && ctx.branchId !== existing.branchId) throw AppException.forbidden('این کارتخوان متعلق به شعبه شما نیست.');
+    const branchId = input.branchId ? await this.branchId(ctx, input.branchId) : existing.branchId;
+    if (input.isDefault) {
+      await this.prisma.posTerminal.updateMany({
+        where: { tenantId: ctx.tenantId, branchId, id: { not: id } }, data: { isDefault: false },
+      });
+    }
+    return this.prisma.posTerminal.update({ where: { id, tenantId: ctx.tenantId }, data: { ...input, branchId } });
+  }
+
+  /**
+   * Build an authoritative payment request for a local terminal bridge. No card
+   * data crosses FoodOS. The bridge/vendor SDK performs the EMV transaction and
+   * the cashier records the successful trace through the existing payment API.
+   */
+  async paymentIntent(ctx: RequestContext, orderId: string, terminalId: string, requestedAmount?: number) {
+    await this.assertEnabled(ctx.tenantId);
+    const [order, terminal] = await Promise.all([
+      this.prisma.order.findFirst({
+        where: { id: orderId, tenantId: ctx.tenantId },
+        select: { id: true, branchId: true, orderNumber: true, total: true, paidTotal: true, currency: true, paymentStatus: true },
+      }),
+      this.prisma.posTerminal.findFirst({
+        where: { id: terminalId, tenantId: ctx.tenantId, isActive: true },
+      }),
+    ]);
+    if (!order) throw AppException.notFound('سفارش');
+    if (!terminal) throw AppException.notFound('کارتخوان');
+    if (terminal.branchId !== order.branchId) throw AppException.validation('کارتخوان و سفارش متعلق به یک شعبه نیستند.');
+    if (ctx.branchId && order.branchId !== ctx.branchId) throw AppException.forbidden('این سفارش متعلق به شعبه شما نیست.');
+
+    const outstanding = Math.max(0, order.total - order.paidTotal);
+    if (outstanding <= 0) throw AppException.conflict('این سفارش قبلاً تسویه شده است.');
+    const amount = requestedAmount ?? outstanding;
+    if (amount <= 0 || amount > outstanding) throw AppException.validation('مبلغ کارتخوان از مانده سفارش بیشتر است.');
+    if (!terminal.bridgeUrl) throw AppException.validation('برای این کارتخوان آدرس Terminal Bridge تنظیم نشده است.');
+
+    return {
+      intentId: randomBytes(18).toString('hex'),
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      amount,
+      currency: order.currency,
+      terminal: {
+        id: terminal.id,
+        name: terminal.name,
+        provider: terminal.provider,
+        terminalKey: terminal.terminalKey,
+        bridgeUrl: terminal.bridgeUrl,
+      },
+      expiresAt: new Date(Date.now() + 2 * 60_000).toISOString(),
+    };
+  }
+}

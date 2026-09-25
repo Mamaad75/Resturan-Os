@@ -10,6 +10,9 @@ import {
   BarChart3,
   Bell,
   CalendarDays,
+  Dices,
+  Crown,
+  Warehouse,
   ChefHat,
   ClipboardList,
   LayoutDashboard,
@@ -54,6 +57,8 @@ interface NavItem {
 interface NavContext {
   hasTables: boolean;
   crmEnabled: boolean;
+  inventoryEnabled: boolean;
+  customerMembershipEnabled: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -106,6 +111,20 @@ const NAV_ITEMS: NavItem[] = [
     visible: (context) => context.crmEnabled,
   },
   {
+    href: '/admin/inventory',
+    label: 'انبارداری',
+    icon: Warehouse,
+    permissions: [Permission.INVENTORY_READ],
+    visible: (context) => context.inventoryEnabled,
+  },
+  {
+    href: '/admin/memberships',
+    label: 'اشتراک مشتریان',
+    icon: Crown,
+    permissions: [Permission.MEMBERSHIP_READ],
+    visible: (context) => context.customerMembershipEnabled,
+  },
+  {
     href: '/admin/coupons',
     label: 'کدهای تخفیف',
     icon: Tag,
@@ -115,6 +134,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/admin/events',
     label: 'رویدادها',
     icon: CalendarDays,
+    permissions: [Permission.SETTINGS_READ],
+  },
+  {
+    href: '/admin/games',
+    label: 'بازی',
+    icon: Dices,
     permissions: [Permission.SETTINGS_READ],
   },
   {
@@ -197,6 +222,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? tablesEnabled(restaurantQuery.data.settings.serviceModes)
       : true,
     crmEnabled: subscriptionQuery.data?.entitlements.features.crmEnabled ?? false,
+    inventoryEnabled: restaurantQuery.data?.settings.inventoryEnabled ?? false,
+    customerMembershipEnabled: restaurantQuery.data?.settings.customerMembershipEnabled ?? false,
   };
 
   const visibleItems = NAV_ITEMS.filter(

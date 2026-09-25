@@ -14,3 +14,8 @@ export * from './platform';
 export * from './crm';
 export * from './events';
 export * from './platform-settings';
+export * from './games';
+export * from './inventory';
+export * from './membership';
+export * from './terminal';
+export * from './push';

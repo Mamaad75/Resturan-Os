@@ -75,6 +75,26 @@ export class GuestService {
         return { callId: existing.id, alreadyOpen: true, tableNumber: table.number };
       }
 
+      // Route the first alert to one waiter. If nobody acknowledges it, the
+      // scheduler widens the circle: other waiters -> managers/cashier -> owner.
+      const waiters = await this.prisma.user.findMany({
+        where: {
+          tenantId: resolved.tenantId,
+          isActive: true,
+          role: 'WAITER',
+          OR: [{ branchId: resolved.branchId }, { branchId: null }],
+        },
+        orderBy: [{ lastLoginAt: 'desc' }, { createdAt: 'asc' }],
+        select: { id: true },
+        take: 20,
+      });
+      let recipients = waiters.slice(0, 1).map((user) => user.id);
+      if (!recipients.length) {
+        recipients = await this.notifications.staffRecipients(
+          resolved.tenantId, resolved.branchId, ['MANAGER', 'CASHIER', 'OWNER'],
+        );
+      }
+
       const call = await this.prisma.waiterCall.create({
         data: {
           tenantId: resolved.tenantId,
@@ -82,13 +102,13 @@ export class GuestService {
           tableId: table.id,
           reason: input.reason,
           note: input.note ?? null,
+          assignedToId: recipients[0] ?? null,
         },
       });
 
       const label = WAITER_CALL_REASON_LABELS_FA[input.reason];
       const title = `میز ${toPersianDigits(table.number)}: ${label}`;
 
-      // Push to whoever is on the floor right now...
       this.events.emit(RealtimeEvent.WAITER_CALLED, {
         tenantId: resolved.tenantId,
         branchId: resolved.branchId,
@@ -98,20 +118,16 @@ export class GuestService {
         reason: input.reason,
         note: call.note,
         createdAt: call.createdAt.toISOString(),
+        recipientUserIds: recipients,
+        escalationLevel: 0,
       });
 
-      // ...and leave a durable record for anyone who was not looking.
-      const recipients = await this.notifications.staffRecipients(
-        resolved.tenantId,
-        resolved.branchId,
-        ['OWNER', 'MANAGER', 'CASHIER', 'WAITER'],
-      );
       await this.notifications.createMany(
         recipients.map((userId) => ({
           tenantId: resolved.tenantId,
           branchId: resolved.branchId,
           userId,
-          type: NotificationType.SYSTEM,
+          type: NotificationType.WAITER_CALLED,
           title,
           body: call.note ?? label,
           entityId: call.id,
@@ -149,6 +165,8 @@ export class GuestService {
       reason: row.reason,
       status: row.status,
       note: row.note,
+      assignedToId: row.assignedToId,
+      escalationLevel: row.escalationLevel,
       acknowledgedByName: null,
       createdAt: row.createdAt.toISOString(),
       waitingMinutes: minutesBetween(row.createdAt, now),

@@ -1,0 +1,119 @@
+'use client';
+
+import { BellRing, Download, Smartphone } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Button, Card, CardBody, CardHeader, useToast } from '@/components/ui';
+import { notificationService } from '@/services';
+
+interface InstallPromptEvent extends Event {
+  prompt(): Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+}
+
+export function PwaDeviceCard({ pushEnabled }: { pushEnabled: boolean }) {
+  const toast = useToast();
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  const [installed, setInstalled] = useState(false);
+  const [pushState, setPushState] = useState<'idle' | 'loading' | 'on' | 'unsupported'>('idle');
+
+  useEffect(() => {
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    setInstalled(standalone);
+    const handler = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  async function install() {
+    if (!installPrompt) {
+      toast.toast({ tone: 'info', title: installed ? 'FoodOS روی این دستگاه نصب است' : 'نصب از منوی مرورگر', description: 'در iPhone/iPad از Share → Add to Home Screen و در مرورگرهای دسکتاپ از Install app استفاده کنید.' });
+      return;
+    }
+    await installPrompt.prompt();
+    const result = await installPrompt.userChoice;
+    if (result.outcome === 'accepted') setInstalled(true);
+    setInstallPrompt(null);
+  }
+
+  async function enablePush() {
+    if (!pushEnabled) {
+      toast.error('اعلان Push در تنظیمات مجموعه خاموش است');
+      return;
+    }
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      setPushState('unsupported');
+      toast.error('این مرورگر Push Notification را پشتیبانی نمی‌کند');
+      return;
+    }
+    setPushState('loading');
+    try {
+      const config = await notificationService.pushConfig();
+      if (!config.enabled || !config.publicKey) {
+        toast.error('کلیدهای VAPID روی سرور تنظیم نشده‌اند');
+        setPushState('idle');
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') {
+        toast.error('مجوز اعلان روی این دستگاه داده نشد');
+        setPushState('idle');
+        return;
+      }
+      const registration = await navigator.serviceWorker.ready;
+      let subscription = await registration.pushManager.getSubscription();
+      subscription ??= await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToArrayBuffer(config.publicKey),
+      });
+      const json = subscription.toJSON();
+      if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) throw new Error('Push subscription ناقص است');
+      await notificationService.subscribePush({
+        endpoint: json.endpoint,
+        keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
+        userAgent: navigator.userAgent,
+      });
+      setPushState('on');
+      toast.success('اعلان‌های واقعی این دستگاه فعال شد');
+    } catch (error) {
+      setPushState('idle');
+      toast.error('فعال‌سازی اعلان انجام نشد', error instanceof Error ? error.message : undefined);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader title="نصب روی دستگاه و اعلان واقعی" description="FoodOS را مثل اپ روی دسکتاپ، تبلت یا موبایل نصب کنید و اعلان سفارش/پرداخت/گارسون را بیرون از تب مرورگر هم بگیرید." />
+      <CardBody className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-line p-4">
+          <div className="mb-3 flex items-center gap-2"><Smartphone className="size-5 text-gold" /><p className="font-medium text-ink">وب‌اپ قابل نصب</p></div>
+          <p className="mb-4 text-xs leading-6 text-ink-muted">حالت Standalone، میانبر صندوق/KDS/سفارش‌ها و Service Worker فعال است.</p>
+          <Button onClick={install} variant="secondary"><Download className="size-4" />{installed ? 'نصب شده' : 'نصب FoodOS'}</Button>
+        </div>
+        <div className="rounded-xl border border-line p-4">
+          <div className="mb-3 flex items-center gap-2"><BellRing className="size-5 text-gold" /><p className="font-medium text-ink">Push Notification دستگاه</p></div>
+          <p className="mb-4 text-xs leading-6 text-ink-muted">برای هر کاربر و هر دستگاه جدا ثبت می‌شود؛ اعلان‌های عملیاتی حتی وقتی تب باز نیست نمایش داده می‌شوند.</p>
+          <Button onClick={enablePush} loading={pushState === 'loading'} variant="secondary">{pushState === 'on' ? 'اعلان فعال است' : 'فعال‌کردن اعلان'}</Button>
+        </div>
+      </CardBody>
+    </Card>
+  );
+}
+
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+
+  const buffer = new ArrayBuffer(rawData.length);
+  const bytes = new Uint8Array(buffer);
+
+  for (let i = 0; i < rawData.length; i += 1) {
+    bytes[i] = rawData.charCodeAt(i);
+  }
+
+  return buffer;
+}

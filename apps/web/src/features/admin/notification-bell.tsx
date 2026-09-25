@@ -1,11 +1,13 @@
 'use client';
 
-import { RealtimeEvent } from '@restaurant-os/types';
+import { RealtimeEvent, type NotificationDto } from '@restaurant-os/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, CheckCheck } from 'lucide-react';
+import { Bell, CheckCheck, ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Button, EmptyState } from '@/components/ui';
+import { Button, EmptyState, useToast } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
+import { useAlertSound } from '@/hooks/use-alert-sound';
 import { useRealtime } from '@/hooks/use-realtime';
 import { cn } from '@/lib/cn';
 import { formatRelativeFa, toPersianDigits } from '@/lib/format';
@@ -14,6 +16,8 @@ import { notificationService } from '@/services';
 export function NotificationBell() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
+  const toast = useToast();
+  const playAlert = useAlertSound(true);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -28,9 +32,30 @@ export function NotificationBell() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
   });
 
-  const onNotification = useCallback(() => {
+  const markOneRead = useMutation({
+    mutationFn: (id: string) => notificationService.markRead({ ids: [id] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const onNotification = useCallback((payload: unknown) => {
     void queryClient.invalidateQueries({ queryKey: ['notifications'] });
-  }, [queryClient]);
+
+    const notification = payload as Partial<NotificationDto>;
+    // WaiterCallBar owns the waiter-call alert path (sound + escalation toast),
+    // so do not double-ring for the same call. Every other operational event
+    // rings immediately while the staff panel is open.
+    if (notification.type !== 'WAITER_CALLED') {
+      playAlert();
+      if (notification.title) {
+        toast.toast({
+          tone: notification.type === 'ORDER_CANCELLED' ? 'error' : 'info',
+          title: notification.title,
+          description: notification.body,
+          durationMs: 8_000,
+        });
+      }
+    }
+  }, [queryClient, playAlert, toast]);
 
   useRealtime({
     token: accessToken,
@@ -94,28 +119,35 @@ export function NotificationBell() {
             ) : (
               <ul className="divide-y divide-line">
                 {items.map((notification) => (
-                  <li
-                    key={notification.id}
-                    className={cn(
-                      'flex gap-3 px-4 py-3',
-                      !notification.readAt && 'bg-gold/[0.04]',
-                    )}
-                  >
-                    <span
+                  <li key={notification.id}>
+                    <Link
+                      href={notification.url || '/admin'}
+                      onClick={() => {
+                        setOpen(false);
+                        if (!notification.readAt) markOneRead.mutate(notification.id);
+                      }}
                       className={cn(
-                        'mt-1.5 size-1.5 shrink-0 rounded-full',
-                        notification.readAt ? 'bg-line-strong' : 'bg-gold',
+                        'flex gap-3 px-4 py-3 transition-colors hover:bg-surface-hover',
+                        !notification.readAt && 'bg-gold/[0.04]',
                       )}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-ink">{notification.title}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
-                        {notification.body}
-                      </p>
-                      <time className="mt-1 block text-[0.7rem] text-ink-subtle">
-                        {formatRelativeFa(notification.createdAt)}
-                      </time>
-                    </div>
+                    >
+                      <span
+                        className={cn(
+                          'mt-1.5 size-1.5 shrink-0 rounded-full',
+                          notification.readAt ? 'bg-line-strong' : 'bg-gold',
+                        )}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-ink">{notification.title}</p>
+                        <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-ink-muted">
+                          {notification.body}
+                        </p>
+                        <time className="mt-1 block text-[0.7rem] text-ink-subtle">
+                          {formatRelativeFa(notification.createdAt)}
+                        </time>
+                      </div>
+                      <ChevronLeft className="mt-2 size-4 shrink-0 text-ink-subtle" />
+                    </Link>
                   </li>
                 ))}
               </ul>

@@ -23,6 +23,8 @@ import { cn } from '@/lib/cn';
 import { formatMoney, formatTimeFa, toPersianDigits } from '@/lib/format';
 import { publicService } from '@/services';
 import { FeedbackCard } from './feedback-card';
+import { BillGame } from './bill-game';
+import { GamePanel } from './game-panel';
 import { PaymentPanel } from './payment-panel';
 
 /**
@@ -156,6 +158,12 @@ export function TrackingView({ token }: { token: string }) {
 
       {!isCancelled ? (
         <PaymentPanel token={token} paymentStatus={order.paymentStatus} />
+      ) : null}
+
+      {!isCancelled ? <GamePanel token={token} /> : null}
+
+      {!isCancelled && order.tableNumber != null ? (
+        <BillGame total={order.total} currency={order.currency} />
       ) : null}
 
       {!isCancelled ? <FeedbackCard token={token} status={order.status} /> : null}
