@@ -159,7 +159,7 @@ export class AccountingService {
       ...(query.branchId ? { branchId: query.branchId } : {}),
     };
 
-    const [rows, total, sum] = await Promise.all([
+    const [rows, total] = await Promise.all([
       this.prisma.expense.findMany({
         where,
         include: {
@@ -170,12 +170,15 @@ export class AccountingService {
         ...paginationArgs(query.page, query.pageSize),
       }),
       this.prisma.expense.count({ where }),
-      this.prisma.expense.aggregate({ where, _sum: { amount: true } }),
     ]);
 
+    /*
+     * No range total here on purpose. The envelope interceptor only carries
+     * `data` and `meta`, so an extra field would be silently dropped - and
+     * `/accounting/summary` already owns that number.
+     */
     return {
       items: rows.map(toExpenseDto),
-      total: n(sum._sum.amount),
       meta: buildPaginationMeta(query.page, query.pageSize, total),
     };
   }

@@ -1273,3 +1273,105 @@ export const terminalService = {
   update: (id: string, body: Record<string, unknown>) => api.patch<PosTerminalDto>(`/terminals/${id}`, body),
   intent: (orderId: string, body: { terminalId: string; amount?: number }) => api.post<TerminalIntentDto>(`/terminals/orders/${orderId}/intents`, body),
 };
+
+
+/* ------------------------------------------------------------------ */
+/* Accounting                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface ExpenseCategoryDto {
+  id: string;
+  name: string;
+  icon: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface ExpenseDto {
+  id: string;
+  title: string;
+  amount: number;
+  spentAt: string;
+  method: 'CASH' | 'CARD' | 'TRANSFER' | 'CHEQUE' | 'OTHER';
+  reference: string | null;
+  note: string | null;
+  attachmentUrl: string | null;
+  recurrence: 'ONCE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  nextDueAt: string | null;
+  branchId: string | null;
+  category: { id: string; name: string; icon: string | null } | null;
+  supplier: { id: string; name: string } | null;
+}
+
+export interface AccountingSummaryDto {
+  range: { from: string; to: string };
+  revenue: { total: number; orderCount: number; deliveryFees: number };
+  purchases: { total: number; movementCount: number };
+  expenses: {
+    total: number;
+    byCategory: Array<{
+      categoryId: string;
+      name: string;
+      icon: string | null;
+      total: number;
+    }>;
+  };
+  costs: number;
+  profit: number;
+  marginBps: number;
+}
+
+/** One line read off a photographed invoice, before anyone confirms it. */
+export interface ScannedLine {
+  name: string;
+  unit: string | null;
+  quantity: number;
+  unitCost: number;
+}
+
+export interface InvoiceReviewDto {
+  supplierName: string | null;
+  invoiceNumber: string | null;
+  purchasedAt: string | null;
+  lines: ScannedLine[];
+  statedTotal: number | null;
+  confidence: number | null;
+  computedTotal: number;
+  totalMismatch: number | null;
+}
+
+export const accountingService = {
+  categories: () => api.get<ExpenseCategoryDto[]>('/accounting/categories'),
+  createCategory: (body: Record<string, unknown>) =>
+    api.post<ExpenseCategoryDto>('/accounting/categories', body),
+  updateCategory: (id: string, body: Record<string, unknown>) =>
+    api.patch<ExpenseCategoryDto>(`/accounting/categories/${id}`, body),
+  deleteCategory: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/accounting/categories/${id}`),
+
+  expenses: (params: Record<string, unknown>) =>
+    api.get<ListResult<ExpenseDto>>('/accounting/expenses', { query: params }),
+  createExpense: (body: Record<string, unknown>) =>
+    api.post<ExpenseDto>('/accounting/expenses', body),
+  updateExpense: (id: string, body: Record<string, unknown>) =>
+    api.patch<ExpenseDto>(`/accounting/expenses/${id}`, body),
+  deleteExpense: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/accounting/expenses/${id}`),
+
+  purchase: (body: Record<string, unknown>) =>
+    api.post<{
+      id: string;
+      number: string;
+      total: number;
+      lineCount: number;
+      purchasedAt: string;
+    }>('/accounting/purchases', body),
+
+  summary: (params: Record<string, unknown>) =>
+    api.get<AccountingSummaryDto>('/accounting/summary', { query: params }),
+
+  scanStatus: () => api.get<{ available: boolean }>('/accounting/scan/status'),
+  scanInvoice: (file: File) =>
+    uploadFile<InvoiceReviewDto>('/accounting/scan', file),
+};

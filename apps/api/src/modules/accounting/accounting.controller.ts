@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@restaurant-os/types';
 import {
@@ -26,6 +38,7 @@ import {
 } from '../../common/decorators/validation.decorators';
 import type { RequestContext } from '../../common/types/request-context';
 import { AccountingService } from './accounting.service';
+import { InvoiceScanService } from './invoice-scan.service';
 
 /**
  * The books.
@@ -37,7 +50,10 @@ import { AccountingService } from './accounting.service';
 @ApiTags('accounting')
 @Controller('accounting')
 export class AccountingController {
-  constructor(private readonly accounting: AccountingService) {}
+  constructor(
+    private readonly accounting: AccountingService,
+    private readonly scanner: InvoiceScanService,
+  ) {}
 
   /* ------------------------------------------------------------ categories */
 
@@ -132,6 +148,29 @@ export class AccountingController {
     @ZodBody(quickPurchaseSchema) dto: QuickPurchaseInput,
   ) {
     return this.accounting.quickPurchase(ctx, dto);
+  }
+
+  /* ---------------------------------------------------------- invoice scan */
+
+  @Get('scan/status')
+  @RequirePermissions(Permission.ACCOUNTING_READ)
+  @ApiOperation({ summary: 'Whether invoice scanning is configured on this server' })
+  scanStatus() {
+    return { available: this.scanner.isConfigured };
+  }
+
+  @Post('scan')
+  @RequirePermissions(Permission.ACCOUNTING_MANAGE)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: 'Read a photographed invoice into purchase lines for review',
+  })
+  scan(
+    @UploadedFile() file: { buffer: Buffer; mimetype: string; size: number },
+  ) {
+    // Deliberately does not write anything: the owner confirms the lines and
+    // then posts them to /accounting/purchases.
+    return this.scanner.scan(file);
   }
 
   /* --------------------------------------------------------------- summary */

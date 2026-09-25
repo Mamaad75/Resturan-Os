@@ -40,6 +40,19 @@ export interface AppConfig {
     vapidPrivateKey: string | null;
     subject: string;
   };
+  /**
+   * Reading a photographed supplier invoice.
+   *
+   * Off until an API key is supplied: the feature degrades to manual entry
+   * rather than failing, so a restaurant without a key still has a working
+   * purchases screen.
+   */
+  vision: {
+    provider: 'anthropic' | 'none';
+    apiKey: string | null;
+    model: string;
+    baseUrl: string;
+  };
   storage: {
     driver: 'local' | 's3';
     localDir: string;
@@ -164,6 +177,12 @@ export function loadConfiguration(): AppConfig {
       vapidPublicKey: optional('VAPID_PUBLIC_KEY'),
       vapidPrivateKey: optional('VAPID_PRIVATE_KEY'),
       subject: process.env.VAPID_SUBJECT ?? 'mailto:admin@foodos.local',
+    },
+    vision: {
+      provider: process.env.VISION_API_KEY || process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'none',
+      apiKey: process.env.VISION_API_KEY ?? process.env.ANTHROPIC_API_KEY ?? null,
+      model: process.env.VISION_MODEL ?? 'claude-sonnet-5',
+      baseUrl: process.env.VISION_BASE_URL ?? 'https://api.anthropic.com',
     },
     storage: {
       driver: storageDriver,

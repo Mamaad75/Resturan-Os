@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Dices,
   Crown,
+  Wallet,
   Warehouse,
   ChefHat,
   ClipboardList,
@@ -109,6 +110,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: Users,
     permissions: [Permission.REPORT_READ],
     visible: (context) => context.crmEnabled,
+  },
+  {
+    href: '/admin/accounting',
+    label: 'حسابداری',
+    icon: Wallet,
+    permissions: [Permission.ACCOUNTING_READ],
   },
   {
     href: '/admin/inventory',
