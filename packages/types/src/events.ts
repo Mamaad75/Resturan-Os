@@ -20,6 +20,14 @@ export type RealtimeEvent = (typeof RealtimeEvent)[keyof typeof RealtimeEvent];
 /** Room naming helpers - shared so server and client can never disagree. */
 export const RealtimeRoom = {
   branch: (branchId: string) => `branch:${branchId}`,
+  /**
+   * Every signed-in staff member of a tenant, pinned to a branch or not.
+   *
+   * Unpinned admins carry no branch in their token, so they can never join a
+   * branch room - without this they are unreachable by any branch broadcast,
+   * even though they are exactly the people expected to be watching.
+   */
+  tenant: (tenantId: string) => `tenant:${tenantId}`,
   kitchen: (branchId: string) => `kitchen:${branchId}`,
   order: (orderId: string) => `order:${orderId}`,
   user: (userId: string) => `user:${userId}`,

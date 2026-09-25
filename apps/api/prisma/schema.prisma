@@ -300,6 +300,9 @@ model Tenant {
   pushSubscriptions PushSubscription[]
   posTerminals   PosTerminal[]
 
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
+
   @@index([slug])
   @@map("tenants")
 }
@@ -470,6 +473,7 @@ model Branch {
   orders            Order[]
   qrCodes           QrCode[]
   deliveryZones     DeliveryZone[]
+  expenses          Expense[]
   notifications     Notification[]
   waiterCalls       WaiterCall[]
   feedback          OrderFeedback[]
@@ -1967,6 +1971,8 @@ model Supplier {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   purchaseOrders PurchaseOrder[]
 
+  expenses Expense[]
+
   @@index([tenantId, isActive])
   @@map("suppliers")
 }
@@ -2154,3 +2160,99 @@ model PosTerminal {
   @@map("pos_terminals")
 }
 
+
+/**
+ * ------------------------------------------------------------------
+ * Accounting
+ * ------------------------------------------------------------------
+ *
+ * Money leaving the business that is not stock. Purchases already live in
+ * the inventory domain - a purchase order that is received both costs money
+ * and raises stock - so accounting reads those rather than keeping a second,
+ * divergent copy of the same event.
+ */
+
+/// How an expense was settled. Mirrors how a small restaurant actually pays.
+enum ExpensePaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  CHEQUE
+  OTHER
+}
+
+/// How often a fixed cost repeats. ONCE is an ordinary one-off bill.
+enum ExpenseRecurrence {
+  ONCE
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+/// A heading on the expense report: rent, utilities, wages, repairs.
+model ExpenseCategory {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @db.Uuid
+  name     String  @db.VarChar(80)
+  /// Lucide icon name, so the list reads at a glance.
+  icon     String? @db.VarChar(40)
+  /// Marks the rows created by the seed, which may not be deleted while in use.
+  isSystem Boolean @default(false)
+  isActive Boolean @default(true)
+  displayOrder Int  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive, displayOrder])
+  @@map("expense_categories")
+}
+
+/// One payment out. Rent, the electricity bill, a plumber, wages.
+model Expense {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  /// Null means the cost belongs to the business rather than one branch.
+  branchId   String? @db.Uuid
+  categoryId String @db.Uuid
+  supplierId String? @db.Uuid
+
+  title  String @db.VarChar(160)
+  /// Toman. Stored as an integer like every other amount in the system.
+  amount Int
+  /// The day the money left, which is the day the report counts it on.
+  spentAt DateTime
+
+  method ExpensePaymentMethod @default(CASH)
+  /// Bank reference, cheque number, tracking code.
+  reference String? @db.VarChar(80)
+  note      String? @db.VarChar(500)
+  /// Photo of the bill or receipt.
+  attachmentUrl String? @db.VarChar(500)
+
+  /// Set on the template row of a repeating cost. Each occurrence is its own
+  /// row, so editing next month's rent never rewrites last month's books.
+  recurrence   ExpenseRecurrence @default(ONCE)
+  /// When the next occurrence is due, for the reminder list.
+  nextDueAt    DateTime?
+
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch   Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  supplier Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  /// The report's main query: one tenant, one date range.
+  @@index([tenantId, spentAt])
+  @@index([tenantId, categoryId, spentAt])
+  @@index([branchId, spentAt])
+  @@map("expenses")
+}

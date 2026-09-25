@@ -45,6 +45,10 @@ export const Permission = {
   INVENTORY_READ: 'inventory:read',
   INVENTORY_MANAGE: 'inventory:manage',
 
+  // Accounting
+  ACCOUNTING_READ: 'accounting:read',
+  ACCOUNTING_MANAGE: 'accounting:manage',
+
   // Customer memberships
   MEMBERSHIP_READ: 'membership:read',
   MEMBERSHIP_MANAGE: 'membership:manage',
@@ -99,6 +103,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.MEMBERSHIP_MANAGE,
     Permission.REPORT_READ,
     Permission.REPORT_FINANCIAL,
+    Permission.ACCOUNTING_READ,
+    Permission.ACCOUNTING_MANAGE,
     Permission.STAFF_READ,
     Permission.SETTINGS_READ,
     Permission.QR_MANAGE,
@@ -164,6 +170,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.MEMBERSHIP_READ,
     Permission.REPORT_READ,
     Permission.REPORT_FINANCIAL,
+    Permission.ACCOUNTING_READ,
+    Permission.ACCOUNTING_MANAGE,
   ],
 };
 

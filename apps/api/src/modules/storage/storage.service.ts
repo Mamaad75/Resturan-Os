@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { extname, join, resolve } from 'node:path';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import sharp from 'sharp';
 import { AppException } from '../../common/exceptions/app.exception';
 import { APP_CONFIG, type AppConfig } from '../../config/configuration';
 
@@ -25,6 +26,26 @@ export const UPLOAD_FOLDERS = [
 export type UploadFolder = (typeof UPLOAD_FOLDERS)[number];
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Re-encoding targets.
+ *
+ * A menu is opened on a phone, usually on mobile data, and the photo that
+ * arrives is whatever the owner's camera produced - often several megabytes.
+ * Serving that untouched is the single most expensive thing the guest menu
+ * can do, so every raster upload is re-encoded once on the way in.
+ */
+const MAX_EDGE = 1600;
+const THUMB_EDGE = 400;
+const WEBP_QUALITY = 82;
+
+/**
+ * Formats that are stored as they arrive.
+ *
+ * SVG is already small and rasterising a logo would ruin it; GIF would lose
+ * its animation. Everything else becomes WebP.
+ */
+const PASSTHROUGH_MIME = new Set(['image/svg+xml', 'image/gif']);
 const ALLOWED_MIME: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -50,6 +71,11 @@ export class StorageService {
   async saveImage(
     file: UploadedImage,
     folder: UploadFolder,
+    /**
+     * Namespaces the key. Every asset lives under the tenant that uploaded
+     * it, so a guessed key can never reach another restaurant's files.
+     */
+    tenantId: string,
   ): Promise<{
     key: string;
     url: string;
@@ -79,23 +105,76 @@ export class StorageService {
       throw AppException.validation('درایور ذخیره‌سازی فعلی از آپلود پشتیبانی نمی‌کند.');
     }
 
-    const fileName = `${randomUUID()}${ext}`;
-    const dir = resolve(process.cwd(), this.config.storage.localDir, folder);
+    const scope = `${tenantId}/${folder}`;
+    const dir = resolve(process.cwd(), this.config.storage.localDir, tenantId, folder);
     await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, fileName), file.buffer);
-
     const base = this.config.storage.publicUrl.replace(/\/+$/, '');
-    const key = `${folder}/${fileName}`;
+    const id = randomUUID();
+
+    if (PASSTHROUGH_MIME.has(file.mimetype)) {
+      const fileName = `${id}${ext}`;
+      await writeFile(join(dir, fileName), file.buffer);
+      const key = `${scope}/${fileName}`;
+      const url = `${base}/${key}`;
+      this.logger.log(`stored ${file.mimetype} ${key} (${file.size} bytes)`);
+      return {
+        key,
+        url,
+        thumbnailUrl: url,
+        size: file.size,
+        contentType: file.mimetype,
+      };
+    }
+
+    /*
+     * `rotate()` with no argument applies the EXIF orientation and then drops
+     * the tag. Without it a photo taken in portrait arrives sideways, because
+     * the tag that said "turn me" is stripped by the re-encode.
+     */
+    const pipeline = sharp(file.buffer, { failOn: 'none' }).rotate();
+
+    let full: Buffer;
+    let thumb: Buffer;
+    try {
+      [full, thumb] = await Promise.all([
+        pipeline
+          .clone()
+          .resize({ width: MAX_EDGE, height: MAX_EDGE, fit: 'inside', withoutEnlargement: true })
+          .webp({ quality: WEBP_QUALITY })
+          .toBuffer(),
+        pipeline
+          .clone()
+          .resize({ width: THUMB_EDGE, height: THUMB_EDGE, fit: 'cover' })
+          .webp({ quality: WEBP_QUALITY })
+          .toBuffer(),
+      ]);
+    } catch (error) {
+      // A file that passed the MIME check but is not decodable is a bad
+      // upload, not a server fault.
+      this.logger.warn(`could not decode upload: ${(error as Error).message}`);
+      throw AppException.validation('تصویر قابل پردازش نیست.', {
+        file: ['فایل تصویر معتبر نیست.'],
+      });
+    }
+
+    const fileName = `${id}.webp`;
+    const thumbName = `${id}-thumb.webp`;
+    await Promise.all([
+      writeFile(join(dir, fileName), full),
+      writeFile(join(dir, thumbName), thumb),
+    ]);
+
+    const key = `${scope}/${fileName}`;
     const url = `${base}/${key}`;
-    this.logger.log(`stored image ${key} (${file.size} bytes)`);
-    // No separate thumbnail is generated (the local driver serves the original);
-    // thumbnailUrl mirrors url so callers that expect the richer shape work.
+    this.logger.log(
+      `stored image ${key} (${file.size} -> ${full.length} bytes, ${Math.round((1 - full.length / file.size) * 100)}% smaller)`,
+    );
     return {
       key,
       url,
-      thumbnailUrl: url,
-      size: file.size,
-      contentType: file.mimetype,
+      thumbnailUrl: `${base}/${scope}/${thumbName}`,
+      size: full.length,
+      contentType: 'image/webp',
     };
   }
 }

@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Permission } from '@restaurant-os/types';
+import { Ctx, RequirePermissions } from '../../common/decorators/auth.decorators';
+import type { RequestContext } from '../../common/types/request-context';
 import {
   StorageService,
   UPLOAD_FOLDERS,
@@ -17,10 +20,10 @@ import {
 /**
  * Image upload for logos, cover images, product photos and payment receipts.
  *
- * Authenticated (no `@Public`), so any signed-in staff member can upload; the
- * folder is an allowlisted path segment. This endpoint was missing entirely —
- * the frontend posted to `/uploads/image` and got a 404 — so every image
- * upload in the admin failed.
+ * Uploading is a privileged action: it writes to disk and publishes a URL, so
+ * it needs a permission that implies managing content rather than merely being
+ * signed in. The folder is an allowlisted path segment and the key is
+ * namespaced per tenant, so one restaurant can never address another's assets.
  */
 @ApiTags('uploads')
 @Controller('uploads')
@@ -28,9 +31,15 @@ export class UploadsController {
   constructor(private readonly storage: StorageService) {}
 
   @Post('image')
+  @RequirePermissions(
+    Permission.PRODUCT_MANAGE,
+    Permission.BRANDING_MANAGE,
+    Permission.ACCOUNTING_MANAGE,
+  )
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload an image and receive its public URL' })
   async uploadImage(
+    @Ctx() ctx: RequestContext,
     @UploadedFile() file: UploadedImage,
     @Query('folder') folder?: string,
   ) {
@@ -38,7 +47,9 @@ export class UploadsController {
       folder ?? '',
     )
       ? (folder as UploadFolder)
-      : 'misc';
-    return this.storage.saveImage(file, resolved);
+      // Anything unrecognised - including a traversal attempt like
+      // `../../etc` - falls back to the common case rather than being obeyed.
+      : 'products';
+    return this.storage.saveImage(file, resolved, ctx.tenantId);
   }
 }

@@ -91,6 +91,15 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.data.branchId = payload.bid;
 
       await client.join(RealtimeRoom.user(payload.sub));
+      /*
+       * Staff who can read orders also join a tenant-wide room. An admin who
+       * is not pinned to a branch has no branch in their token and so can
+       * never join a branch room - they were silently cut off from every
+       * branch broadcast, which is how a waiter call reached nobody.
+       */
+      if (permissions.includes(Permission.ORDER_READ)) {
+        await client.join(RealtimeRoom.tenant(payload.tid));
+      }
       if (payload.bid) {
         // Branch feed requires the ability to read orders at all.
         if (permissions.includes(Permission.ORDER_READ)) {
@@ -103,6 +112,24 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       client.emit('connected', { scope: 'staff', branchId: payload.bid });
     } catch (error) {
       this.reject(client, `handshake failed: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Branch feed plus the unpinned admins watching the whole tenant.
+   *
+   * Socket.IO de-duplicates across rooms, so a client in both receives one
+   * copy.
+   */
+  private toBranchAndTenant(
+    tenantId: string | undefined,
+    branchId: string,
+    event: string,
+    payload: unknown,
+  ): void {
+    this.server?.to(RealtimeRoom.branch(branchId)).emit(event, payload);
+    if (tenantId) {
+      this.server?.to(RealtimeRoom.tenant(tenantId)).emit(event, payload);
     }
   }
 
@@ -203,6 +230,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   @OnEvent(RealtimeEvent.WAITER_CALLED)
   onWaiterCalled(event: {
+    tenantId?: string;
     branchId: string;
     callId: string;
     tableId: string;
@@ -223,28 +251,30 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       createdAt: event.createdAt,
       escalationLevel: event.escalationLevel ?? 0,
     };
-    if (event.recipientUserIds?.length) {
-      for (const userId of event.recipientUserIds) {
-        this.server?.to(RealtimeRoom.user(userId)).emit(RealtimeEvent.WAITER_CALLED, payload);
-      }
-      return;
+    /*
+     * The page and the floor view are different jobs. Naming recipients used
+     * to *replace* the branch broadcast, so a call routed to one waiter was
+     * invisible to the owner watching the panel - which read as "no
+     * notification arrives". Recipients still get their personal alert; the
+     * floor always sees the call as well.
+     */
+    for (const userId of event.recipientUserIds ?? []) {
+      this.server?.to(RealtimeRoom.user(userId)).emit(RealtimeEvent.WAITER_CALLED, payload);
     }
-    // Backward-compatible fallback for legacy emitters.
-    this.server?.to(RealtimeRoom.branch(event.branchId)).emit(RealtimeEvent.WAITER_CALLED, payload);
+    this.toBranchAndTenant(event.tenantId, event.branchId, RealtimeEvent.WAITER_CALLED, payload);
   }
 
   @OnEvent(RealtimeEvent.WAITER_CALL_RESOLVED)
   onWaiterCallResolved(event: {
+    tenantId?: string;
     branchId: string;
     callId: string;
     status: string;
   }): void {
-    this.server
-      ?.to(RealtimeRoom.branch(event.branchId))
-      .emit(RealtimeEvent.WAITER_CALL_RESOLVED, {
-        callId: event.callId,
-        status: event.status,
-      });
+    this.toBranchAndTenant(event.tenantId, event.branchId, RealtimeEvent.WAITER_CALL_RESOLVED, {
+      callId: event.callId,
+      status: event.status,
+    });
   }
 
   @OnEvent(RealtimeEvent.NOTIFICATION_CREATED)
