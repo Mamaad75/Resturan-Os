@@ -27,6 +27,7 @@ import {
 import { CheckoutSheet } from './checkout-sheet';
 import { EventsRail } from './events-rail';
 import { ProductSheet } from './product-sheet';
+import { UsualOrderCard } from './usual-order-card';
 import { WaiterCallButton } from './waiter-call';
 
 export function MenuView({ menu, slug }: { menu: PublicMenu; slug: string }) {
@@ -67,13 +68,17 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
+  const allProducts = useMemo(
+    () => categories.flatMap((category) => category.products),
+    [categories],
+  );
+
   const featured = useMemo(
     () =>
-      categories
-        .flatMap((category) => category.products)
+      allProducts
         .filter((product) => product.isFeatured && product.isAvailable)
         .slice(0, 6),
-    [categories],
+    [allProducts],
   );
 
   /*
@@ -179,6 +184,19 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
             className="mt-10"
           />
         ) : null}
+
+        {/*
+          Above everything else, including the featured rail: a regular opened
+          the menu to order the same thing again, and anything they have to
+          scroll past is friction this card exists to remove. It renders nothing
+          for a first-time guest.
+        */}
+        <UsualOrderCard
+          slug={slug}
+          products={allProducts}
+          headingClassName={styles.heading}
+          onAdded={() => setCheckoutOpen(true)}
+        />
 
         {featured.length > 0 && config.showFeaturedRail ? (
           <section

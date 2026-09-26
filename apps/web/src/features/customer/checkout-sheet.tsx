@@ -24,6 +24,7 @@ import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
 import { couponService, publicService, type CheckoutOfferDto } from '@/services';
 import { useCart } from './cart';
+import { rememberLastOrder } from './last-order-token';
 import { OfferPopup } from './offer-popup';
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
@@ -222,6 +223,8 @@ export function CheckoutSheet({
     setSubmitting(true);
     try {
       const result = await publicService.createOrder(slug, payload);
+      // Remembered so the menu can offer this basket back next time.
+      rememberLastOrder(slug, result.trackingToken);
       cart.clear();
       onClose();
       // The tracking token is the customer's only handle on this order.

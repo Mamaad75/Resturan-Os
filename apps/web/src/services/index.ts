@@ -195,6 +195,18 @@ export const publicService = {
         retryOnAuthFailure: false,
       },
     ),
+  /**
+   * What this returning guest usually orders, or null when they are new.
+   *
+   * Identified by the tracking token of one of their own past orders, held in
+   * this browser - never by a phone number, which would let anyone read a
+   * stranger's habits by guessing.
+   */
+  usualOrder: (slug: string, trackingToken: string) =>
+    api.get<UsualOrderDto | null>(`/public/restaurants/${slug}/usual`, {
+      query: { token: trackingToken },
+      retryOnAuthFailure: false,
+    }),
   track: (token: string) =>
     api.get<OrderTrackingDto>(`/public/orders/track/${token}`, {
       retryOnAuthFailure: false,
@@ -220,6 +232,18 @@ export const publicService = {
       { retryOnAuthFailure: false },
     ),
 };
+
+/** A returning guest's usual basket, in ids the live menu resolves. */
+export interface UsualOrderDto {
+  /** How many of their recent orders were this exact basket. */
+  repeatCount: number;
+  lastOrderedAt: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    modifierOptionIds: string[];
+  }>;
+}
 
 /** One live checkout offer, priced by the server. */
 export interface CheckoutOfferDto {
