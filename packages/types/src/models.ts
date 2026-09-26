@@ -320,6 +320,8 @@ export interface OrderTrackingDto {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   restaurantName: string;
+  /** So the tracking page can reach the restaurant's own public routes. */
+  restaurantSlug: string;
   branchName: string;
   branchPhone: string | null;
   tableNumber: number | null;

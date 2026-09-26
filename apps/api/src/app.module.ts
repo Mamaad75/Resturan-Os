@@ -31,6 +31,7 @@ import { EventsModule } from './modules/events/events.module';
 import { GamesModule } from './modules/games/games.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
 import { OffersModule } from './modules/offers/offers.module';
+import { ReferralsModule } from './modules/referrals/referrals.module';
 import { RegularsModule } from './modules/regulars/regulars.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
@@ -90,6 +91,7 @@ import { HealthController } from './health.controller';
     GamesModule,
     AccountingModule,
     OffersModule,
+    ReferralsModule,
     RegularsModule,
     InventoryModule,
     MembershipsModule,

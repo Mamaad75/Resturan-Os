@@ -22,9 +22,14 @@ import { Button, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { couponService, publicService, type CheckoutOfferDto } from '@/services';
+import {
+  couponService,
+  publicService,
+  type CheckoutOfferDto,
+  type ReferralPanelDto,
+} from '@/services';
 import { useCart } from './cart';
-import { rememberLastOrder } from './last-order-token';
+import { lastOrderToken, rememberLastOrder } from './last-order-token';
 import { OfferPopup } from './offer-popup';
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
@@ -89,10 +94,37 @@ export function CheckoutSheet({
    * that comes back after being declined is the kind of thing that loses a
    * customer rather than sells a croissant.
    */
+  /*
+   * The referral side of checkout: a code from a friend, and any reward this
+   * guest has already earned. Both are sent as identifiers - the server decides
+   * what a reward is worth and whether a code is real, so neither field can set
+   * a price.
+   */
+  const [referralCode, setReferralCode] = useState('');
+  const [referral, setReferral] = useState<ReferralPanelDto | null>(null);
+  const [rewardId, setRewardId] = useState<string | null>(null);
+
   const [offer, setOffer] = useState<CheckoutOfferDto | null>(null);
   const [offerAsked, setOfferAsked] = useState(false);
   const [offerOpen, setOfferOpen] = useState(false);
   const [acceptedOffer, setAcceptedOffer] = useState<CheckoutOfferDto | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const token = lastOrderToken(slug);
+    if (!token) return;
+    let cancelled = false;
+    publicService
+      .referral(slug, token)
+      .then((result) => {
+        if (!cancelled) setReferral(result);
+      })
+      // A guest with no rewards is the normal case, so this stays silent.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, slug]);
 
   useEffect(() => {
     if (!open) return;
@@ -122,6 +154,7 @@ export function CheckoutSheet({
     setOfferAsked(false);
     setOfferOpen(false);
     setAcceptedOffer(null);
+    setRewardId(null);
   }, [open]);
 
   async function applyCoupon() {
@@ -189,6 +222,8 @@ export function CheckoutSheet({
       couponCode: appliedCoupon?.code ?? null,
       // The offer, not its price: the server decides what it is worth.
       offerId: accepted?.id ?? null,
+      referralCode: referralCode.trim() || null,
+      referralRewardId: rewardId,
       deliveryZoneId: orderType === 'DELIVERY' ? deliveryZoneId || null : null,
       deliveryAddress:
         orderType === 'DELIVERY' ? deliveryAddress.trim() || null : null,
@@ -223,7 +258,8 @@ export function CheckoutSheet({
     setSubmitting(true);
     try {
       const result = await publicService.createOrder(slug, payload);
-      // Remembered so the menu can offer this basket back next time.
+      // Remembered so the menu can offer this basket back next time, and so
+      // the invitation panel can recognise them.
       rememberLastOrder(slug, result.trackingToken);
       cart.clear();
       onClose();
@@ -602,6 +638,66 @@ export function CheckoutSheet({
               </div>
             )}
           </div>
+
+          {/*
+            Rewards this guest has earned. Offered rather than applied: a free
+            latte is worth spending on a day they ordered a latte, and only the
+            guest knows that.
+          */}
+          {referral && referral.rewards.length > 0 ? (
+            <div className="space-y-2 rounded-xl border border-positive/30 bg-positive/[0.08] p-3">
+              <p className="text-sm font-medium text-positive">پاداش‌های شما</p>
+              {referral.rewards.map((reward) => (
+                <label
+                  key={reward.id}
+                  className="flex items-center gap-2.5 text-sm text-ink"
+                >
+                  <input
+                    type="radio"
+                    name="referral-reward"
+                    className="size-4 accent-[var(--color-gold)]"
+                    checked={rewardId === reward.id}
+                    onChange={() => setRewardId(reward.id)}
+                  />
+                  <span className="min-w-0 flex-1">{reward.labelFa}</span>
+                </label>
+              ))}
+              {rewardId ? (
+                <button
+                  type="button"
+                  onClick={() => setRewardId(null)}
+                  className="text-xs text-ink-muted underline"
+                >
+                  استفاده نکن
+                </button>
+              ) : null}
+              <p className="text-[0.7rem] leading-relaxed text-ink-subtle">
+                مبلغ دقیق تخفیف هنگام ثبت سفارش توسط سیستم محاسبه می‌شود.
+              </p>
+            </div>
+          ) : null}
+
+          {/*
+            A friend's code, only offered to someone this browser has never
+            ordered with: the welcome is for new customers, and asking a regular
+            for an invitation code is a question with no right answer.
+          */}
+          {referral == null ? (
+            <Input
+              label="کد معرفی دوست (اختیاری)"
+              dir="ltr"
+              placeholder="ABCD34"
+              maxLength={16}
+              value={referralCode}
+              onChange={(e) =>
+                setReferralCode(
+                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                )
+              }
+              hint="اگر دوستی شما را معرفی کرده، کدش را وارد کنید."
+              error={errors.referralCode}
+            />
+          ) : null}
 
           <Textarea
             label="توضیحات سفارش (اختیاری)"

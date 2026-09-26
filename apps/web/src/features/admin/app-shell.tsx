@@ -12,6 +12,7 @@ import {
   Bell,
   CalendarDays,
   Dices,
+  Gift,
   Crown,
   Wallet,
   Warehouse,
@@ -142,6 +143,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/admin/offers',
     label: 'پیشنهاد ویژه',
     icon: BadgePercent,
+    permissions: [Permission.SETTINGS_MANAGE],
+  },
+  {
+    href: '/admin/referrals',
+    label: 'دعوت از دوستان',
+    icon: Gift,
     permissions: [Permission.SETTINGS_MANAGE],
   },
   {

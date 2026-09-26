@@ -56,6 +56,7 @@ import { CouponsService } from '../coupons/coupons.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MembershipsService } from '../memberships/memberships.service';
 import { OffersService } from '../offers/offers.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { OrderPricingService, type ResolvedLine } from './order-pricing.service';
 
 @Injectable()
@@ -71,6 +72,7 @@ export class OrdersService {
     private readonly loyalty: LoyaltyService,
     private readonly memberships: MembershipsService,
     private readonly offers: OffersService,
+    private readonly referrals: ReferralsService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
     private readonly plans: PlansService,
@@ -130,6 +132,8 @@ export class OrdersService {
           sendToKitchen: false,
           couponCode: input.couponCode,
           offerId: input.offerId ?? null,
+          referralCode: input.referralCode ?? null,
+          referralRewardId: input.referralRewardId ?? null,
         },
         actor: 'customer',
         actorUserId: null,
@@ -199,6 +203,8 @@ export class OrdersService {
       sendToKitchen?: boolean;
       couponCode?: string | null;
       offerId?: string | null;
+      referralCode?: string | null;
+      referralRewardId?: string | null;
     };
     actor: 'customer' | 'staff';
     actorUserId: string | null;
@@ -329,10 +335,27 @@ export class OrdersService {
         ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
         : null;
 
+      /*
+       * A referral reward the guest is spending. Consumed here, inside the
+       * transaction that prices it, so the same reward cannot be spent twice
+       * on two simultaneous orders; the order it was spent on is linked below,
+       * once that row exists.
+       */
+      const beforeReferral =
+        (input.discountAmount ?? 0) + couponDiscount + offerDiscount;
+      const referral = await this.referrals.applyToOrder(tx, {
+        tenantId,
+        customerId: customer?.id ?? null,
+        orderId: null,
+        referralCode: input.referralCode,
+        rewardId: input.referralRewardId,
+        lines,
+        discountableSubtotal: Math.max(0, subtotal - beforeReferral),
+      });
+
       // Membership pricing is computed server-side. The browser only supplies
       // identity (phone); it cannot choose its own discount or free delivery.
-      const discountBeforeMembership =
-        (input.discountAmount ?? 0) + couponDiscount + offerDiscount;
+      const discountBeforeMembership = beforeReferral + referral.discount;
       const membership = await this.memberships.quote(
         tx,
         tenantId,
@@ -469,6 +492,28 @@ export class OrdersService {
         discount: membership.discount,
         freeDeliverySaved: membership.freeDelivery ? originalDeliveryFee : 0,
       });
+
+      /*
+       * The reward's link to the order it paid for, and the invitation this
+       * order accepted. Both need the order's id, so they follow its creation
+       * rather than its pricing.
+       */
+      if (referral.rewardId) {
+        await this.referrals.linkRewardToOrder(
+          tx,
+          tenantId,
+          referral.rewardId,
+          order.id,
+        );
+      }
+      if (input.referralCode && customer) {
+        await this.referrals.recordInvitation(tx, {
+          tenantId,
+          customerId: customer.id,
+          orderId: order.id,
+          referralCode: input.referralCode,
+        });
+      }
 
       if (appliedCouponId) {
         await this.coupons.redeem(tx, {
@@ -961,7 +1006,11 @@ export class OrdersService {
         include: {
           ...ORDER_DETAIL_INCLUDE,
           branch: {
-            select: { name: true, phone: true, restaurant: { select: { name: true } } },
+            select: {
+              name: true,
+              phone: true,
+              restaurant: { select: { name: true, slug: true } },
+            },
           },
         },
       }),
@@ -971,6 +1020,7 @@ export class OrdersService {
     return toTrackingDto(
       row,
       row.branch.restaurant.name,
+      row.branch.restaurant.slug,
       row.branch.name,
       row.branch.phone,
     );

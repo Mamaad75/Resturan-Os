@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { OrderStatus } from '@restaurant-os/types';
+import { customerFromTrackingToken } from '../../common/utils/guest-identity';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
 import { pickUsualOrder, type HistoricOrder } from './usual-order';
@@ -44,7 +45,11 @@ export class RegularsService {
     tenantId: string,
     trackingToken: string,
   ): Promise<UsualOrderDto | null> {
-    const customerId = await this.customerFromToken(tenantId, trackingToken);
+    const customerId = await customerFromTrackingToken(
+      this.prisma,
+      tenantId,
+      trackingToken,
+    );
     if (!customerId) return null;
 
     const rows = await runAsSystem('usual order: customer history', () =>
@@ -97,23 +102,5 @@ export class RegularsService {
         modifierOptionIds: line.modifierOptionIds,
       })),
     };
-  }
-
-  /**
-   * The token has to belong to this restaurant as well as exist: a token from
-   * one tenant must not identify a customer inside another, even though the
-   * same person may eat at both.
-   */
-  private async customerFromToken(
-    tenantId: string,
-    trackingToken: string,
-  ): Promise<string | null> {
-    const order = await runAsSystem('usual order: resolve tracking token', () =>
-      this.prisma.order.findFirst({
-        where: { trackingToken, tenantId },
-        select: { customerId: true },
-      }),
-    );
-    return order?.customerId ?? null;
   }
 }

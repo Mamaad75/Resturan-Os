@@ -164,6 +164,10 @@ export const publicService = {
       couponCode?: string | null;
       /** A checkout offer the guest accepted. The server prices it. */
       offerId?: string | null;
+      /** A friend's invitation code, credited once the order is written. */
+      referralCode?: string | null;
+      /** A referral reward being spent. The server decides what it is worth. */
+      referralRewardId?: string | null;
       marketingConsent?: boolean;
       items: Array<{
         productId: string;
@@ -204,6 +208,12 @@ export const publicService = {
    */
   usualOrder: (slug: string, trackingToken: string) =>
     api.get<UsualOrderDto | null>(`/public/restaurants/${slug}/usual`, {
+      query: { token: trackingToken },
+      retryOnAuthFailure: false,
+    }),
+  /** This guest's invitation code, progress and unspent rewards. */
+  referral: (slug: string, trackingToken: string) =>
+    api.get<ReferralPanelDto>(`/public/restaurants/${slug}/referral`, {
       query: { token: trackingToken },
       retryOnAuthFailure: false,
     }),
@@ -364,6 +374,64 @@ export const offerService = {
     },
   ) => api.patch<{ id: string }>(`/offers/${id}`, body),
   remove: (id: string) => api.delete<{ deleted: boolean }>(`/offers/${id}`),
+};
+
+/* ------------------------------------------------------------------ */
+/* Referrals                                                           */
+/* ------------------------------------------------------------------ */
+
+export type ReferralRewardType = 'PERCENTAGE' | 'FIXED' | 'FREE_PRODUCT';
+
+/** The terms of the invitation, as the owner sets them. */
+export interface ReferralProgramDto {
+  isActive: boolean;
+  rewardType: ReferralRewardType;
+  rewardValue: number;
+  rewardProductId: string | null;
+  rewardProductNameFa: string | null;
+  invitesRequired: number;
+  friendRewardType: ReferralRewardType | null;
+  friendRewardValue: number;
+  friendRewardProductId: string | null;
+  friendRewardProductNameFa: string | null;
+  rewardValidDays: number;
+  termsFa: string | null;
+  /** Invitations accepted so far, and rewards handed out for them. */
+  invitedTotal: number;
+  rewardsGranted: number;
+}
+
+/** The invitation as one guest sees it. */
+export interface ReferralPanelDto {
+  isActive: boolean;
+  code: string | null;
+  invitedCount: number;
+  invitesRequired: number;
+  rewardLabelFa: string;
+  friendRewardLabelFa: string | null;
+  termsFa: string | null;
+  rewards: Array<{
+    id: string;
+    labelFa: string;
+    expiresAt: string;
+    productId: string | null;
+  }>;
+}
+
+export const referralService = {
+  program: () => api.get<ReferralProgramDto>('/referrals/program'),
+  saveProgram: (body: {
+    isActive: boolean;
+    rewardType: ReferralRewardType;
+    rewardValue?: number;
+    rewardProductId?: string | null;
+    invitesRequired: number;
+    friendRewardType?: ReferralRewardType | null;
+    friendRewardValue?: number;
+    friendRewardProductId?: string | null;
+    rewardValidDays: number;
+    termsFa?: string | null;
+  }) => api.put<ReferralProgramDto>('/referrals/program', body),
 };
 
 /* ------------------------------------------------------------------ */

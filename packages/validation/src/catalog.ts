@@ -179,3 +179,113 @@ export const updateCheckoutOfferSchema = checkoutOfferSchema.partial().omit({
   productId: true,
 });
 export type UpdateCheckoutOfferInput = z.infer<typeof updateCheckoutOfferSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Referral programme                                                  */
+/* ------------------------------------------------------------------ */
+
+const referralRewardTypeSchema = z.enum(['PERCENTAGE', 'FIXED', 'FREE_PRODUCT'], {
+  errorMap: () => ({ message: 'نوع پاداش معتبر نیست.' }),
+});
+
+/**
+ * The terms of "invite a friend".
+ *
+ * A reward's shape decides which of its fields matter, so the cross-field
+ * checks live here rather than in the service: a percentage needs a percentage,
+ * a free drink needs a drink, and an owner who leaves the wrong one blank is
+ * told which field to fill in.
+ */
+export const referralProgramSchema = z
+  .object({
+    isActive: z.boolean(),
+
+    rewardType: referralRewardTypeSchema,
+    /** Basis points for PERCENTAGE, an amount for FIXED. */
+    rewardValue: z.coerce.number().int().min(0).max(100_000_000).optional(),
+    rewardProductId: uuidSchema.nullable().optional(),
+    /** Friends who must order before the inviter is paid. */
+    invitesRequired: z.coerce
+      .number()
+      .int('تعداد دعوت باید عدد صحیح باشد.')
+      .min(1, 'حداقل یک دعوت.')
+      .max(50, 'حداکثر ۵۰ دعوت.'),
+
+    /** Null means the invitation is worth nothing to the friend. */
+    friendRewardType: referralRewardTypeSchema.nullable().optional(),
+    friendRewardValue: z.coerce.number().int().min(0).max(100_000_000).optional(),
+    friendRewardProductId: uuidSchema.nullable().optional(),
+
+    rewardValidDays: z.coerce
+      .number()
+      .int('مدت اعتبار باید عدد صحیح باشد.')
+      .min(1, 'حداقل یک روز.')
+      .max(365, 'حداکثر یک سال.'),
+
+    termsFa: optionalText(300, 'شرایط'),
+  })
+  .superRefine((program, ctx) => {
+    const check = (
+      type: 'PERCENTAGE' | 'FIXED' | 'FREE_PRODUCT' | null | undefined,
+      value: number | undefined,
+      productId: string | null | undefined,
+      valueKey: string,
+      productKey: string,
+    ) => {
+      if (!type) return;
+      if (type === 'FREE_PRODUCT') {
+        if (!productId) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [productKey],
+            message: 'برای پاداش «محصول رایگان» یک آیتم انتخاب کنید.',
+          });
+        }
+        return;
+      }
+      if (!value || value <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [valueKey],
+          message: 'مقدار پاداش باید بیشتر از صفر باشد.',
+        });
+        return;
+      }
+      if (type === 'PERCENTAGE' && value > 9_000) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [valueKey],
+          message: 'حداکثر ۹۰٪ تخفیف.',
+        });
+      }
+    };
+
+    check(
+      program.rewardType,
+      program.rewardValue,
+      program.rewardProductId,
+      'rewardValue',
+      'rewardProductId',
+    );
+    check(
+      program.friendRewardType,
+      program.friendRewardValue,
+      program.friendRewardProductId,
+      'friendRewardValue',
+      'friendRewardProductId',
+    );
+  });
+export type ReferralProgramInput = z.infer<typeof referralProgramSchema>;
+
+/**
+ * An invitation code as a friend types it.
+ *
+ * Deliberately lenient about case and spacing - it is read aloud across a
+ * table - and strict about length, so it cannot be used to probe.
+ */
+export const referralCodeSchema = z
+  .string()
+  .trim()
+  .min(4, 'کد معرفی معتبر نیست.')
+  .max(16, 'کد معرفی معتبر نیست.')
+  .transform((code) => code.toUpperCase());

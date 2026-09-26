@@ -50,6 +50,10 @@ export const createPublicOrderSchema = z
      * the price: the server re-reads the offer and decides what it is worth.
      */
     offerId: uuidSchema.nullable().optional(),
+    /** A friend's invitation code, credited after the order is written. */
+    referralCode: optionalText(16, 'کد معرفی'),
+    /** A referral reward the guest is spending. The server prices it. */
+    referralRewardId: uuidSchema.nullable().optional(),
     /**
      * Points to spend on this order. The server decides what they are worth;
      * a request never states the discount.

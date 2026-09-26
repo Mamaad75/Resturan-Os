@@ -305,6 +305,11 @@ model Tenant {
 
   checkoutOffers CheckoutOffer[]
 
+  referralProgram ReferralProgram?
+  referralCodes   ReferralCode[]
+  referrals       Referral[]
+  referralRewards ReferralReward[]
+
   @@index([slug])
   @@map("tenants")
 }
@@ -635,6 +640,10 @@ model Product {
 
   checkoutOffers CheckoutOffer[]
 
+  referralRewardFor       ReferralProgram[] @relation("ReferralRewardProduct")
+  referralFriendRewardFor ReferralProgram[] @relation("ReferralFriendRewardProduct")
+  referralRewardsGranted  ReferralReward[]  @relation("ReferralRewardGranted")
+
   @@index([tenantId])
   @@index([categoryId, displayOrder])
   @@index([tenantId, isAvailable])
@@ -799,6 +808,8 @@ model Customer {
   smsMessages   SmsMessage[]
   loyaltyEntries LoyaltyEntry[]
   memberships   CustomerMembership[]
+  referralCode  ReferralCode?
+  referralRewards ReferralReward[]
 
   @@unique([tenantId, phone])
   @@index([tenantId])
@@ -2299,4 +2310,149 @@ model CheckoutOffer {
   @@index([tenantId, isActive, startsAt, endsAt])
   @@index([productId])
   @@map("checkout_offers")
+}
+
+/// What a referral pays out. The owner chooses; the server prices it.
+enum ReferralRewardType {
+  /// Value is basis points off the order subtotal.
+  PERCENTAGE
+  /// Value is a flat amount off.
+  FIXED
+  /// One named product on the house. Value is ignored.
+  FREE_PRODUCT
+}
+
+enum ReferralRewardStatus {
+  /// Earned and spendable.
+  AVAILABLE
+  /// Spent on an order.
+  USED
+  /// Ran out of time before it was spent.
+  EXPIRED
+}
+
+/// Who a reward belongs to, which decides what the guest is told.
+enum ReferralRole {
+  /// The customer who did the inviting.
+  REFERRER
+  /// The friend who accepted the invitation.
+  FRIEND
+}
+
+/// One programme per restaurant: the terms of "invite a friend".
+model ReferralProgram {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @db.Uuid
+
+  /// Off until an owner sets the terms, so nobody is promised a reward the
+  /// restaurant never agreed to.
+  isActive Boolean @default(false)
+
+  /// What the inviter gets, and after how many friends have ordered.
+  rewardType      ReferralRewardType @default(PERCENTAGE)
+  /// Basis points for PERCENTAGE, an amount for FIXED, unused for FREE_PRODUCT.
+  rewardValue     Int                @default(1000)
+  rewardProductId String?            @db.Uuid
+  invitesRequired Int                @default(1)
+
+  /// What the invited friend gets on their first order. Null means the
+  /// invitation is worth nothing to them, which is a choice an owner may make.
+  friendRewardType      ReferralRewardType?
+  friendRewardValue     Int                 @default(0)
+  friendRewardProductId String?             @db.Uuid
+
+  /// How long an earned reward stays spendable.
+  rewardValidDays Int @default(30)
+
+  /// Shown to the guest under the invitation, in the owner's own words.
+  termsFa String? @db.VarChar(300)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rewardProduct      Product? @relation("ReferralRewardProduct", fields: [rewardProductId], references: [id], onDelete: SetNull)
+  friendRewardProduct Product? @relation("ReferralFriendRewardProduct", fields: [friendRewardProductId], references: [id], onDelete: SetNull)
+
+  @@map("referral_programs")
+}
+
+/// A customer's own invitation code. Issued on first ask, then permanent.
+model ReferralCode {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  /// Unique on its own: a customer belongs to one restaurant and holds one
+  /// code there, so the code is a property of the customer rather than a row
+  /// they might accumulate.
+  customerId String @unique @db.Uuid
+
+  /// Short, uppercase, and unambiguous when read aloud or retyped.
+  code String @db.VarChar(16)
+
+  createdAt DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  referrals Referral[]
+
+  /// No two customers of one restaurant share a code.
+  @@unique([tenantId, code])
+  @@map("referral_codes")
+}
+
+/// One accepted invitation: this friend used that code, on this order.
+model Referral {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  codeId   String @db.Uuid
+
+  /// The customer who did the inviting, denormalised for counting.
+  referrerCustomerId String @db.Uuid
+  invitedCustomerId  String @db.Uuid
+  /// The friend's first order, which is what makes the invitation count.
+  orderId            String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code   ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  /// A person can be referred once, ever: the welcome is for new customers.
+  @@unique([tenantId, invitedCustomerId])
+  /// And one invitation per order, so re-submitting cannot double-count.
+  @@unique([orderId])
+  @@index([tenantId, referrerCustomerId])
+  @@map("referrals")
+}
+
+/// An earned reward, spendable exactly once.
+///
+/// The terms are copied here rather than read from the programme: an owner who
+/// changes the offer next week must not silently change what was already
+/// promised, and must not be able to revoke it either.
+model ReferralReward {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  customerId String @db.Uuid
+
+  role   ReferralRole
+  type   ReferralRewardType
+  /// Basis points for PERCENTAGE, an amount for FIXED, unused for FREE_PRODUCT.
+  value  Int                  @default(0)
+  productId String?           @db.Uuid
+  status ReferralRewardStatus @default(AVAILABLE)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  usedOnOrderId String?  @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product? @relation("ReferralRewardGranted", fields: [productId], references: [id], onDelete: SetNull)
+
+  /// The guest-facing lookup: what this customer can spend right now.
+  @@index([tenantId, customerId, status])
+  @@map("referral_rewards")
 }

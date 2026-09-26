@@ -165,6 +165,7 @@ export function toOrderSummaryDto(row: OrderSummaryRow): OrderSummaryDto {
 export function toTrackingDto(
   row: OrderDetailRow,
   restaurantName: string,
+  restaurantSlug: string,
   branchName: string,
   branchPhone: string | null,
 ): OrderTrackingDto {
@@ -186,6 +187,7 @@ export function toTrackingDto(
     status: row.status,
     paymentStatus: row.paymentStatus,
     restaurantName,
+    restaurantSlug,
     branchName,
     branchPhone,
     tableNumber: row.table?.number ?? null,

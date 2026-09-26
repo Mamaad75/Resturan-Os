@@ -23,6 +23,7 @@ import { cn } from '@/lib/cn';
 import { formatMoney, formatTimeFa, toPersianDigits } from '@/lib/format';
 import { publicService } from '@/services';
 import { FeedbackCard } from './feedback-card';
+import { ReferralPanel } from './referral-panel';
 import { BillGame } from './bill-game';
 import { GamePanel } from './game-panel';
 import { PaymentPanel } from './payment-panel';
@@ -167,6 +168,21 @@ export function TrackingView({ token }: { token: string }) {
       ) : null}
 
       {!isCancelled ? <FeedbackCard token={token} status={order.status} /> : null}
+
+      {/*
+        The invitation, on the one screen where a guest is both pleased and
+        waiting. Below the feedback card on purpose: how the food was comes
+        before who else should try it.
+      */}
+      {!isCancelled ? (
+        <div className="mt-4">
+          <ReferralPanel
+            slug={order.restaurantSlug}
+            trackingToken={token}
+            restaurantName={order.restaurantName}
+          />
+        </div>
+      ) : null}
 
       {order.branchPhone ? (
         <a
