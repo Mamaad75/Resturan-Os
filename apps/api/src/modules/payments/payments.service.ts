@@ -31,6 +31,22 @@ import {
   createPaymentProviders,
   type PaymentProviderRegistry,
 } from './payment-provider.factory';
+import type { PaymentProvider } from './payment.provider';
+import { SandboxPaymentProvider } from './providers/sandbox.provider';
+import { ZarinpalPaymentProvider } from './providers/zarinpal.provider';
+
+/** The single platform-gateway config row lives at this sentinel id. */
+const PLATFORM_PAYMENT_CONFIG_ID = '00000000-0000-0000-0000-000000000001';
+
+/** How a given restaurant is set up to take ONLINE payments right now. */
+interface TenantOnlineConfig {
+  provider: PaymentProvider | null;
+  mode: 'OFF' | 'PLATFORM' | 'OWN';
+  /** Platform commission in basis points (0 for OWN / OFF). */
+  commissionBps: number;
+  settleMinHours: number;
+  settleMaxHours: number;
+}
 
 @Injectable()
 export class PaymentsService {
@@ -47,6 +63,86 @@ export class PaymentsService {
     this.logger.log(
       `Payment providers: manual + ${this.providers.online?.name ?? 'no online gateway'}`,
     );
+  }
+
+  /**
+   * Builds the ONLINE gateway for one restaurant from its saved configuration
+   * (DB), not from process env. This is what makes the superadmin/owner gateway
+   * settings actually take effect. A gateway in sandbox mode resolves to the
+   * Sandbox provider so the flow can be exercised before a real gateway exists.
+   */
+  private buildOnlineProvider(
+    providerName: string | null | undefined,
+    credentials: Record<string, string>,
+    sandbox: boolean,
+  ): PaymentProvider | null {
+    if (sandbox) return new SandboxPaymentProvider();
+    const name = (providerName ?? '').trim().toLowerCase();
+    if (name === 'zarinpal') {
+      const merchantId = credentials.merchant_id ?? credentials.merchantId ?? '';
+      if (merchantId) return new ZarinpalPaymentProvider(merchantId);
+    }
+    // Unknown / unconfigured provider: online is simply unavailable.
+    return null;
+  }
+
+  private asCreds(value: unknown): Record<string, string> {
+    const out: Record<string, string> = {};
+    if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        out[k] = String(v ?? '');
+      }
+    }
+    return out;
+  }
+
+  /** Resolves the ONLINE gateway + commission for a restaurant, from the DB. */
+  private async resolveTenantOnline(tenantId: string): Promise<TenantOnlineConfig> {
+    const restaurant = await this.prisma.restaurant.findFirst({
+      where: { tenantId },
+      select: {
+        onlinePaymentMode: true,
+        ownPaymentProvider: true,
+        ownPaymentCredentials: true,
+        ownPaymentSandbox: true,
+      },
+    });
+    const mode = (restaurant?.onlinePaymentMode ?? 'OFF') as TenantOnlineConfig['mode'];
+
+    if (!restaurant || mode === 'OFF') {
+      return { provider: null, mode: 'OFF', commissionBps: 0, settleMinHours: 0, settleMaxHours: 0 };
+    }
+
+    if (mode === 'OWN') {
+      const provider = this.buildOnlineProvider(
+        restaurant.ownPaymentProvider,
+        this.asCreds(restaurant.ownPaymentCredentials),
+        restaurant.ownPaymentSandbox,
+      );
+      return { provider, mode: 'OWN', commissionBps: 0, settleMinHours: 0, settleMaxHours: 0 };
+    }
+
+    // PLATFORM: use the platform's shared gateway, when it is enabled.
+    const platform = await runAsSystem('payments: platform gateway config', () =>
+      this.prisma.platformPaymentConfig.findUnique({
+        where: { id: PLATFORM_PAYMENT_CONFIG_ID },
+      }),
+    );
+    if (!platform || !platform.enabled) {
+      return { provider: null, mode: 'PLATFORM', commissionBps: platform?.commissionBps ?? 400, settleMinHours: platform?.settleMinHours ?? 1, settleMaxHours: platform?.settleMaxHours ?? 48 };
+    }
+    const provider = this.buildOnlineProvider(
+      platform.provider,
+      this.asCreds(platform.credentials),
+      platform.sandbox,
+    );
+    return {
+      provider,
+      mode: 'PLATFORM',
+      commissionBps: platform.commissionBps,
+      settleMinHours: platform.settleMinHours,
+      settleMaxHours: platform.settleMaxHours,
+    };
   }
 
   /**
@@ -103,11 +199,18 @@ export class PaymentsService {
       throw AppException.validation('مبلغ پرداخت باید بزرگ‌تر از صفر باشد.');
     }
 
-    const provider = this.providers.forMethod(input.method);
+    // Cash / card terminal settle in person via the manual provider; ONLINE is
+    // routed to whatever gateway this restaurant has configured in the DB.
+    let provider: PaymentProvider | null;
+    if (input.method === PaymentMethod.ONLINE) {
+      provider = (await this.resolveTenantOnline(ctx.tenantId)).provider;
+    } else {
+      provider = this.providers.manual;
+    }
     if (!provider) {
       throw new AppException(
         ApiErrorCode.PAYMENT_PROVIDER_ERROR,
-        'درگاه پرداخت آنلاین پیکربندی نشده است.',
+        'درگاه پرداخت آنلاین برای این رستوران فعال نیست.',
         503,
       );
     }
@@ -221,20 +324,11 @@ export class PaymentsService {
     providerRef: string,
     payload?: Record<string, unknown>,
   ): Promise<{ verified: boolean; orderId: string | null; trackingToken: string | null }> {
-    const provider = this.providers.online;
-    if (!provider) {
-      throw new AppException(
-        ApiErrorCode.PAYMENT_PROVIDER_ERROR,
-        'درگاه پرداخت آنلاین پیکربندی نشده است.',
-        503,
-      );
-    }
-
     // The callback is anonymous: the gateway reference is what identifies the
     // payment, and therefore the tenant.
     const payment = await runAsSystem('gateway callback lookup by reference', () =>
       this.prisma.payment.findFirst({
-        where: { providerRef, provider: provider.name },
+        where: { providerRef },
         include: {
           order: {
             select: {
@@ -262,7 +356,17 @@ export class PaymentsService {
       };
     }
 
-    const verification = await provider.verifyPayment({
+    // Rebuild the gateway from the paying restaurant's own configuration.
+    const online = await this.resolveTenantOnline(payment.order.tenantId);
+    if (!online.provider) {
+      throw new AppException(
+        ApiErrorCode.PAYMENT_PROVIDER_ERROR,
+        'درگاه پرداخت آنلاین برای این رستوران فعال نیست.',
+        503,
+      );
+    }
+
+    const verification = await online.provider.verifyPayment({
       providerRef,
       amount: payment.currency === 'IRT' ? payment.amount * 10 : payment.amount,
       payload,
@@ -294,6 +398,35 @@ export class PaymentsService {
       await this.prisma.$transaction((tx) =>
         applySettledPayment(tx, payment.order.tenantId, payment.orderId, payment.amount),
       );
+
+      // Money taken through the platform gateway is owed back to the
+      // restaurant minus commission; record what the platform must settle.
+      if (online.mode === 'PLATFORM') {
+        const existing = await this.prisma.platformSettlement.findUnique({
+          where: { paymentId: payment.id },
+          select: { id: true },
+        });
+        if (!existing) {
+          const gross = payment.amount;
+          const commissionAmount = Math.round((gross * online.commissionBps) / 10_000);
+          const dueAt = new Date(now.getTime() + online.settleMaxHours * 3_600_000);
+          const eligibleAt = new Date(now.getTime() + online.settleMinHours * 3_600_000);
+          await this.prisma.platformSettlement.create({
+            data: {
+              tenantId: payment.order.tenantId,
+              orderId: payment.orderId,
+              paymentId: payment.id,
+              grossAmount: gross,
+              commissionBps: online.commissionBps,
+              commissionAmount,
+              netAmount: gross - commissionAmount,
+              status: 'PENDING',
+              eligibleAt,
+              dueAt,
+            },
+          });
+        }
+      }
     });
 
     if (verification.verified) {
@@ -346,10 +479,10 @@ export class PaymentsService {
     }
 
     const provider =
-      payment.provider === this.providers.online?.name
-        ? this.providers.online
-        : this.providers.manual;
-    const result = await provider!.refund({
+      !payment.provider || payment.provider === this.providers.manual.name
+        ? this.providers.manual
+        : (await this.resolveTenantOnline(ctx.tenantId)).provider ?? this.providers.manual;
+    const result = await provider.refund({
       providerRef: payment.providerRef ?? payment.id,
       amount,
       reason: input.reason,
@@ -402,6 +535,132 @@ export class PaymentsService {
       orderBy: { createdAt: 'asc' },
     });
     return rows.map(toPaymentDto);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Customer-facing (anonymous, by tracking token)                      */
+  /* ------------------------------------------------------------------ */
+
+  /** What a customer may do to pay this order: which methods, how much is left. */
+  async getPublicPayOptions(token: string) {
+    const order = await runAsSystem('public pay options: order', () =>
+      this.prisma.order.findUnique({
+        where: { trackingToken: token },
+        select: {
+          tenantId: true,
+          orderNumber: true,
+          total: true,
+          paidTotal: true,
+          paymentStatus: true,
+        },
+      }),
+    );
+    if (!order) throw AppException.notFound('سفارش');
+
+    const restaurant = await runAsSystem('public pay options: restaurant', () =>
+      this.prisma.restaurant.findFirst({
+        where: { tenantId: order.tenantId },
+        select: {
+          payCashEnabled: true,
+          payCardOnSiteEnabled: true,
+          onlinePaymentMode: true,
+        },
+      }),
+    );
+    const online = await this.resolveTenantOnline(order.tenantId);
+
+    return {
+      orderNumber: order.orderNumber,
+      total: order.total,
+      paidTotal: order.paidTotal,
+      outstanding: Math.max(0, order.total - order.paidTotal),
+      paymentStatus: order.paymentStatus,
+      methods: {
+        cash: restaurant?.payCashEnabled ?? false,
+        cardOnSite: restaurant?.payCardOnSiteEnabled ?? false,
+        online: (restaurant?.onlinePaymentMode ?? 'OFF') !== 'OFF' && online.provider !== null,
+      },
+    };
+  }
+
+  /**
+   * Starts an online payment a customer initiated from the tracking page. The
+   * money is only captured once the gateway callback verifies it, exactly like
+   * the staff-initiated flow.
+   */
+  async startPublicOnlinePayment(token: string): Promise<{ redirectUrl: string | null }> {
+    const order = await runAsSystem('public online pay: order', () =>
+      this.prisma.order.findUnique({
+        where: { trackingToken: token },
+        select: {
+          id: true,
+          tenantId: true,
+          orderNumber: true,
+          total: true,
+          paidTotal: true,
+          currency: true,
+          customerPhone: true,
+        },
+      }),
+    );
+    if (!order) throw AppException.notFound('سفارش');
+
+    const outstanding = order.total - order.paidTotal;
+    if (outstanding <= 0) {
+      throw new AppException(
+        ApiErrorCode.ORDER_ALREADY_PAID,
+        'این سفارش قبلاً به‌طور کامل تسویه شده است.',
+        409,
+      );
+    }
+
+    const online = await this.resolveTenantOnline(order.tenantId);
+    if (!online.provider) {
+      throw new AppException(
+        ApiErrorCode.PAYMENT_PROVIDER_ERROR,
+        'درگاه پرداخت آنلاین برای این رستوران فعال نیست.',
+        503,
+      );
+    }
+
+    let providerResult;
+    try {
+      providerResult = await online.provider.createPayment({
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        amount: outstanding,
+        currency: order.currency,
+        method: PaymentMethod.ONLINE,
+        description: `سفارش #${order.orderNumber}`,
+        customerPhone: order.customerPhone,
+        callbackUrl: this.config.payment.callbackUrl,
+      });
+    } catch {
+      throw new AppException(
+        ApiErrorCode.PAYMENT_PROVIDER_ERROR,
+        'ارتباط با درگاه پرداخت برقرار نشد. لطفاً دوباره تلاش کنید.',
+        502,
+      );
+    }
+
+    await runAsSystem('public online pay: create pending payment', () =>
+      this.prisma.payment.create({
+        data: {
+          tenantId: order.tenantId,
+          orderId: order.id,
+          recordedById: null,
+          method: PaymentMethod.ONLINE,
+          status: PaymentStatus.PENDING,
+          amount: outstanding,
+          currency: order.currency,
+          provider: online.provider!.name,
+          providerRef: providerResult.providerRef,
+          providerMeta: (providerResult.raw ?? undefined) as never,
+        },
+      }),
+    );
+
+    return { redirectUrl: providerResult.redirectUrl };
   }
 }
 

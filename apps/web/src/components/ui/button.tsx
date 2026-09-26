@@ -8,9 +8,9 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'succe
 type Size = 'sm' | 'md' | 'lg' | 'xl' | 'icon';
 
 const VARIANTS: Record<Variant, string> = {
-  // Gold is reserved for the single primary action on a screen.
+  // The brand colour is reserved for the single primary action on a screen.
   primary:
-    'bg-gold text-ink-inverse hover:bg-gold-bright active:bg-gold shadow-sm font-semibold',
+    'bg-brand text-ink-inverse hover:bg-brand-bright active:bg-brand shadow-sm font-semibold',
   secondary:
     'bg-surface-raised text-ink hover:bg-line border border-line hover:border-line-strong',
   outline:
@@ -20,13 +20,16 @@ const VARIANTS: Record<Variant, string> = {
   success: 'bg-positive/15 text-positive border border-positive/30 hover:bg-positive/25',
 };
 
+// min-h (not a fixed height) plus real vertical padding: single-line buttons
+// keep their familiar height, but the label always has breathing room and a
+// button that wraps on a narrow screen grows gracefully instead of clipping.
 const SIZES: Record<Size, string> = {
-  sm: 'h-9 px-3 text-sm gap-1.5 rounded-lg',
-  md: 'h-11 px-4 text-sm gap-2 rounded-xl',
-  lg: 'h-13 px-6 text-base gap-2.5 rounded-xl',
+  sm: 'min-h-9 px-3.5 py-2 text-sm gap-1.5 rounded-lg leading-none',
+  md: 'min-h-11 px-5 py-2.5 text-sm gap-2 rounded-xl leading-none',
+  lg: 'min-h-13 px-6 py-3 text-base gap-2.5 rounded-xl leading-none',
   // Sized for the POS and kitchen display, where staff tap at speed.
-  xl: 'h-16 px-8 text-lg gap-3 rounded-2xl font-semibold',
-  icon: 'h-11 w-11 rounded-xl',
+  xl: 'min-h-16 px-8 py-4 text-lg gap-3 rounded-2xl font-semibold leading-none',
+  icon: 'h-11 w-11 shrink-0 rounded-xl',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

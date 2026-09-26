@@ -28,10 +28,10 @@ const config: Config = {
           subtle: 'rgb(var(--ink-subtle) / <alpha-value>)',
           inverse: 'rgb(var(--ink-inverse) / <alpha-value>)',
         },
-        gold: {
-          DEFAULT: 'rgb(var(--gold) / <alpha-value>)',
-          bright: 'rgb(var(--gold-bright) / <alpha-value>)',
-          dim: 'rgb(var(--gold-dim) / <alpha-value>)',
+        brand: {
+          DEFAULT: 'rgb(var(--brand) / <alpha-value>)',
+          bright: 'rgb(var(--brand-bright) / <alpha-value>)',
+          dim: 'rgb(var(--brand-dim) / <alpha-value>)',
         },
         positive: 'rgb(var(--positive) / <alpha-value>)',
         caution: 'rgb(var(--caution) / <alpha-value>)',
@@ -47,9 +47,17 @@ const config: Config = {
         '3xl': '1.5rem',
       },
       boxShadow: {
-        panel: '0 1px 2px rgb(0 0 0 / 0.28), 0 12px 32px -12px rgb(0 0 0 / 0.45)',
-        lifted: '0 2px 4px rgb(0 0 0 / 0.3), 0 24px 48px -16px rgb(0 0 0 / 0.55)',
-        gold: '0 0 0 1px rgb(var(--gold) / 0.35), 0 8px 24px -8px rgb(var(--gold) / 0.35)',
+        /*
+         * Cast in `--shadow`, which each mode sets: a near-black wash on the
+         * paper canvas and true black in dark mode. A shadow tuned for charcoal
+         * looks like dirt on white.
+         */
+        panel:
+          '0 1px 2px rgb(var(--shadow) / 0.05), 0 8px 24px -12px rgb(var(--shadow) / 0.12)',
+        lifted:
+          '0 2px 6px rgb(var(--shadow) / 0.07), 0 20px 44px -16px rgb(var(--shadow) / 0.18)',
+        brand:
+          '0 0 0 1px rgb(var(--brand) / 0.25), 0 8px 24px -10px rgb(var(--brand) / 0.30)',
       },
       keyframes: {
         'fade-in': {

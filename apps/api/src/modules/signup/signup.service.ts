@@ -4,6 +4,7 @@ import {
   MENU_TEMPLATE_SPECS,
   MenuTemplate,
   ServiceMode,
+  SubscriptionStatus,
   UserRole,
   type AuthSession,
 } from '@restaurant-os/types';
@@ -51,6 +52,8 @@ const BUSINESS_PRESETS = {
     starterCategories: ['برگر', 'پیتزا', 'ساندویچ', 'نوشیدنی'],
   },
 } as const;
+
+import { STARTER_MENUS, type StarterMenuKey } from './starter-menus';
 
 @Injectable()
 export class SignupService {
@@ -158,16 +161,38 @@ export class SignupService {
           data: { tenantId: tenant.id, branchId: branch.id },
         });
 
-        // Starter categories so the menu screen is never an empty void.
-        await tx.category.createMany({
-          data: preset.starterCategories.map((nameFa, index) => ({
-            tenantId: tenant.id,
-            menuId: menu.id,
-            name: nameFa,
-            nameFa,
-            displayOrder: index,
-          })),
-        });
+        /*
+         * A starter menu, not just starter headings.
+         *
+         * Signing up used to leave an owner looking at three empty categories
+         * with twenty items to type before they could take an order. These are
+         * the items the business almost certainly sells; everything is
+         * editable and deletable, and the prices are deliberately round so
+         * nobody mistakes them for a recommendation.
+         */
+        const starter = STARTER_MENUS[input.businessType as StarterMenuKey] ?? [];
+        for (const [index, category] of starter.entries()) {
+          await tx.category.create({
+            data: {
+              tenantId: tenant.id,
+              menuId: menu.id,
+              name: category.nameFa,
+              nameFa: category.nameFa,
+              displayOrder: index,
+              products: {
+                create: category.products.map((product, productIndex) => ({
+                  tenantId: tenant.id,
+                  name: product.name,
+                  nameFa: product.nameFa,
+                  descriptionFa: product.descriptionFa ?? null,
+                  price: product.price,
+                  preparationMinutes: product.preparationMinutes ?? null,
+                  displayOrder: productIndex,
+                })),
+              },
+            },
+          });
+        }
 
         const owner = await tx.user.create({
           data: {
@@ -194,6 +219,27 @@ export class SignupService {
             targetPath: `/r/${restaurant.slug}`,
           },
         });
+
+        // Every tenant needs a subscription row from minute one, or the
+        // platform console cannot activate a plan for it ("اشتراک یافت نشد")
+        // and the admin settings page cannot read its subscription. New
+        // signups start on a trial of the default plan; if no plan is seeded
+        // yet the row is skipped rather than failing the whole signup.
+        const defaultPlan = await tx.plan.findFirst({
+          where: { isActive: true },
+          orderBy: [{ isDefault: 'desc' }, { displayOrder: 'asc' }],
+          select: { id: true },
+        });
+        if (defaultPlan) {
+          await tx.subscription.create({
+            data: {
+              tenantId: tenant.id,
+              planId: defaultPlan.id,
+              status: SubscriptionStatus.TRIAL,
+              trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
+            },
+          });
+        }
 
         return { tenant, restaurant, branch, owner };
       }),

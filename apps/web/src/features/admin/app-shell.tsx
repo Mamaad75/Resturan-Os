@@ -7,8 +7,15 @@ import {
 } from '@restaurant-os/types';
 import { useQuery } from '@tanstack/react-query';
 import {
+  BadgePercent,
   BarChart3,
   Bell,
+  CalendarDays,
+  Dices,
+  Gift,
+  Crown,
+  Wallet,
+  Warehouse,
   ChefHat,
   ClipboardList,
   LayoutDashboard,
@@ -31,6 +38,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { cn } from '@/lib/cn';
+import { PanelTheme } from '@/features/theme/panel-theme';
 import { ThemeToggle } from '@/features/theme/theme-toggle';
 import { restaurantService, subscriptionService } from '@/services';
 import { NotificationBell } from './notification-bell';
@@ -53,6 +61,8 @@ interface NavItem {
 interface NavContext {
   hasTables: boolean;
   crmEnabled: boolean;
+  inventoryEnabled: boolean;
+  customerMembershipEnabled: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -105,10 +115,54 @@ const NAV_ITEMS: NavItem[] = [
     visible: (context) => context.crmEnabled,
   },
   {
+    href: '/admin/accounting',
+    label: 'حسابداری',
+    icon: Wallet,
+    permissions: [Permission.ACCOUNTING_READ],
+  },
+  {
+    href: '/admin/inventory',
+    label: 'انبارداری',
+    icon: Warehouse,
+    permissions: [Permission.INVENTORY_READ],
+    visible: (context) => context.inventoryEnabled,
+  },
+  {
+    href: '/admin/memberships',
+    label: 'اشتراک مشتریان',
+    icon: Crown,
+    permissions: [Permission.MEMBERSHIP_READ],
+    visible: (context) => context.customerMembershipEnabled,
+  },
+  {
     href: '/admin/coupons',
     label: 'کدهای تخفیف',
     icon: Tag,
     permissions: [Permission.SETTINGS_MANAGE],
+  },
+  {
+    href: '/admin/offers',
+    label: 'پیشنهاد ویژه',
+    icon: BadgePercent,
+    permissions: [Permission.SETTINGS_MANAGE],
+  },
+  {
+    href: '/admin/referrals',
+    label: 'دعوت از دوستان',
+    icon: Gift,
+    permissions: [Permission.SETTINGS_MANAGE],
+  },
+  {
+    href: '/admin/events',
+    label: 'رویدادها',
+    icon: CalendarDays,
+    permissions: [Permission.SETTINGS_READ],
+  },
+  {
+    href: '/admin/games',
+    label: 'بازی',
+    icon: Dices,
+    permissions: [Permission.SETTINGS_READ],
   },
   {
     href: '/admin/reports',
@@ -190,6 +244,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? tablesEnabled(restaurantQuery.data.settings.serviceModes)
       : true,
     crmEnabled: subscriptionQuery.data?.entitlements.features.crmEnabled ?? false,
+    inventoryEnabled: restaurantQuery.data?.settings.inventoryEnabled ?? false,
+    customerMembershipEnabled: restaurantQuery.data?.settings.customerMembershipEnabled ?? false,
   };
 
   const visibleItems = NAV_ITEMS.filter(
@@ -199,11 +255,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-canvas">
+      {/* The restaurant's own palette, applied to this panel. Renders nothing. */}
+      {signedIn ? <PanelTheme /> : null}
+
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 start-0 z-40 hidden w-64 flex-col border-e border-line bg-surface lg:flex">
         <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">
-          <span className="flex size-9 items-center justify-center rounded-xl border border-gold/25 bg-gold/10">
-            <ChefHat className="size-4.5 text-gold" />
+          <span className="flex size-9 items-center justify-center rounded-xl border border-brand/25 bg-brand/10">
+            <ChefHat className="size-4.5 text-brand" />
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
@@ -284,7 +343,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
               <p className="text-xs text-ink-subtle">{roleLabel(user.role)}</p>
             </div>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-gold/12 text-sm font-semibold text-gold">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-brand/12 text-sm font-semibold text-brand">
               {user.fullName.charAt(0)}
             </span>
           </div>
@@ -307,7 +366,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex flex-1 flex-col items-center gap-1 py-2.5 text-xs transition-colors',
-                active ? 'text-gold' : 'text-ink-subtle',
+                active ? 'text-brand' : 'text-ink-subtle',
               )}
             >
               <item.icon className="size-5" />
@@ -336,7 +395,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       className={cn(
         'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
         active
-          ? 'bg-gold/12 text-gold'
+          ? 'bg-brand/12 text-brand'
           : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
       )}
     >
@@ -351,7 +410,7 @@ function UserCard({ onLogout }: { onLogout: () => void }) {
   if (!user) return null;
   return (
     <div className="flex items-center gap-2.5 rounded-xl bg-surface-sunken p-2.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/12 text-sm font-semibold text-gold">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-sm font-semibold text-brand">
         {user.fullName.charAt(0)}
       </span>
       <div className="min-w-0 flex-1">

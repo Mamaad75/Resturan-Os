@@ -93,6 +93,14 @@ export interface RestaurantSettings {
   estimatedPrepMinutes: number;
   smsNotificationsEnabled: boolean;
   autoConfirmOrders: boolean;
+  /** Enable the complete stock/recipe/purchasing workspace. */
+  inventoryEnabled: boolean;
+  /** Enable customer-facing paid/gift memberships and benefits. */
+  customerMembershipEnabled: boolean;
+  /** Allow OS/PWA push delivery for staff operational alerts. */
+  pushNotificationsEnabled: boolean;
+  /** Enable paired card terminal workflows in POS. */
+  posTerminalEnabled: boolean;
 }
 
 export interface PublicRestaurant {
@@ -312,6 +320,8 @@ export interface OrderTrackingDto {
   status: OrderStatus;
   paymentStatus: PaymentStatus;
   restaurantName: string;
+  /** So the tracking page can reach the restaurant's own public routes. */
+  restaurantSlug: string;
   branchName: string;
   branchPhone: string | null;
   tableNumber: number | null;
@@ -376,6 +386,8 @@ export interface NotificationDto {
   title: string;
   body: string;
   entityId: string | null;
+  /** Action destination for in-app/Web Push navigation. */
+  url: string;
   readAt: string | null;
   createdAt: string;
 }
@@ -540,6 +552,8 @@ export interface WaiterCallDto {
   reason: import('./enums').WaiterCallReason;
   status: import('./enums').WaiterCallStatus;
   note: string | null;
+  assignedToId: string | null;
+  escalationLevel: number;
   acknowledgedByName: string | null;
   createdAt: string;
   /** Whole minutes the guest has been waiting. */

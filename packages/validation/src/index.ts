@@ -1,4 +1,5 @@
 export * from './primitives';
+export * from './accounting';
 export * from './auth';
 export * from './signup';
 export * from './catalog';
@@ -12,3 +13,10 @@ export * from './report';
 export * from './menu-theme';
 export * from './platform';
 export * from './crm';
+export * from './events';
+export * from './platform-settings';
+export * from './games';
+export * from './inventory';
+export * from './membership';
+export * from './terminal';
+export * from './push';

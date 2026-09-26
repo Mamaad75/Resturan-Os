@@ -5,11 +5,13 @@ import {
   type PlatformTenantSummary,
 } from '@restaurant-os/types';
 import type {
+  EntitlementOverridesInput,
   ExtendSubscriptionInput,
   SuspendTenantInput,
   TenantNotesInput,
   UpdateSubscriptionInput,
 } from '@restaurant-os/validation';
+import { Prisma } from '@prisma/client';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { PlatformContext } from '../../common/types/request-context';
 import {
@@ -19,7 +21,20 @@ import {
 import { tehranMonthStart } from '../../common/utils/time.util';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
-import { PlansService, effectiveStatus, toSubscriptionDto } from '../plans/plans.service';
+import {
+  hasOverrides,
+  readFeatureOverrides,
+  readLimitOverrides,
+} from '../plans/entitlement-overrides';
+import {
+  NO_FEATURES,
+  PlansService,
+  ZERO_LIMITS,
+  effectiveStatus,
+  pickFeatures,
+  pickLimits,
+  toSubscriptionDto,
+} from '../plans/plans.service';
 import {
   PlatformAction,
   PlatformAuditService,
@@ -141,10 +156,21 @@ export class PlatformTenantsService {
         this.plans.entitlements(tenantId),
       ]);
 
+    const subscription = tenant.subscription;
     return {
       ...toSummary(tenant),
       adminNotes: tenant.adminNotes,
       entitlements,
+      overrides: {
+        limits: readLimitOverrides(subscription?.limitOverrides),
+        features: readFeatureOverrides(subscription?.featureOverrides),
+        note: subscription?.overrideNote ?? null,
+        // The plan's own terms, so an exception can be shown against them.
+        planLimits: subscription ? pickLimits(subscription.plan) : ZERO_LIMITS,
+        planFeatures: subscription
+          ? pickFeatures(subscription.plan)
+          : NO_FEATURES,
+      },
       branches: tenant.branches.map((branch) => ({
         id: branch.id,
         name: branch.name,
@@ -320,6 +346,65 @@ export class PlatformTenantsService {
       ...meta,
     });
     return { adminNotes: input.adminNotes ?? null };
+  }
+
+  /**
+   * Per-tenant exceptions to a plan.
+   *
+   * Support says yes to one restaurant - a second branch for a month, inventory
+   * while they trial it - and the alternative is inventing a plan that then
+   * appears on the pricing page for everyone.
+   *
+   * Written as a whole replacement of the exception set, not a merge: the
+   * screen shows every exception at once, so what it sends is the complete
+   * answer, and an admin clearing a toggle means the tenant follows the plan
+   * again rather than keeping a stale grant nobody can see.
+   */
+  async setEntitlementOverrides(
+    admin: PlatformContext,
+    tenantId: string,
+    input: EntitlementOverridesInput,
+    meta: AuditMeta,
+  ) {
+    const before = await this.requireSubscription(tenantId);
+
+    const limits = readLimitOverrides(input.limits);
+    const features = readFeatureOverrides(input.features);
+    const empty = !hasOverrides(limits, features);
+
+    await runAsSystem('platform: set entitlement overrides', () =>
+      this.prisma.subscription.update({
+        where: { tenantId },
+        data: {
+          // Null rather than an empty object, so "no exceptions" is one state
+          // in the column as well as on the screen.
+          limitOverrides: empty ? Prisma.DbNull : limits,
+          featureOverrides: empty ? Prisma.DbNull : features,
+          overrideNote: empty ? null : (input.note ?? null),
+        },
+      }),
+    );
+
+    this.audit.record({
+      adminId: admin.adminId,
+      tenantId,
+      action: PlatformAction.ENTITLEMENT_OVERRIDE,
+      entity: 'Subscription',
+      entityId: before.id,
+      previousValue: {
+        limits: before.limitOverrides ?? null,
+        features: before.featureOverrides ?? null,
+        note: before.overrideNote ?? null,
+      },
+      newValue: {
+        limits: empty ? null : limits,
+        features: empty ? null : features,
+        note: empty ? null : (input.note ?? null),
+      },
+      ...meta,
+    });
+
+    return this.detail(tenantId);
   }
 
   /* ---------------------------------------------------------- subscription */

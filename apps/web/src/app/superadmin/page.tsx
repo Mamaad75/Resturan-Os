@@ -108,7 +108,7 @@ function DashboardContent() {
                   <span className="text-xs text-ink-subtle">
                     {toPersianDigits(row.tenants)} کسب‌وکار
                   </span>
-                  <span className="font-semibold tabular-nums text-gold">
+                  <span className="font-semibold tabular-nums text-brand">
                     {formatMoney(row.amount, 'IRT', { withUnit: false })}
                   </span>
                 </div>

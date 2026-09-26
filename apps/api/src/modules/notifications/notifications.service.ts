@@ -10,6 +10,7 @@ import { buildPaginationMeta, paginationArgs } from '../../common/utils/paginati
 import type { RequestContext } from '../../common/types/request-context';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
+import { PushService } from './push.service';
 
 export interface CreateNotificationInput {
   tenantId: string;
@@ -31,6 +32,7 @@ export class NotificationsService {
   constructor(
     @Inject(PRISMA) private readonly prisma: PrismaService,
     private readonly events: EventEmitter2,
+    private readonly push: PushService,
   ) {}
 
   async create(input: CreateNotificationInput): Promise<NotificationDto> {
@@ -51,6 +53,60 @@ export class NotificationsService {
 
     const dto = toDto(row);
     // Push it to whoever is connected right now; the row is the durable record.
+    this.emitRealtime(row, dto);
+    await this.push.sendToUser(row.tenantId, row.userId, {
+      title: row.title,
+      body: row.body,
+      type: row.type,
+      entityId: row.entityId,
+      url: notificationUrl(row.type, row.entityId, row.orderId),
+      tag: `${row.type}:${row.entityId ?? row.id}`,
+    });
+    return dto;
+  }
+
+  async createMany(inputs: CreateNotificationInput[]): Promise<number> {
+    if (inputs.length === 0) return 0;
+    // createMany() is fast but returns no rows, which previously meant bulk
+    // notifications never reached connected clients. Create the small staff
+    // fan-out in one transaction, then deliver every durable row in realtime
+    // and via Web Push.
+    const rows = await this.prisma.$transaction(
+      inputs.map((input) => this.prisma.notification.create({
+        data: {
+          tenantId: input.tenantId,
+          branchId: input.branchId ?? null,
+          userId: input.userId ?? null,
+          customerId: input.customerId ?? null,
+          orderId: input.orderId ?? null,
+          type: input.type,
+          channel: input.channel ?? NotificationChannel.IN_APP,
+          title: input.title,
+          body: input.body,
+          entityId: input.entityId ?? input.orderId ?? null,
+        },
+      })),
+    );
+
+    await Promise.all(rows.map(async (row) => {
+      const dto = toDto(row);
+      this.emitRealtime(row, dto);
+      await this.push.sendToUser(row.tenantId, row.userId, {
+        title: row.title,
+        body: row.body,
+        type: row.type,
+        entityId: row.entityId,
+        url: notificationUrl(row.type, row.entityId, row.orderId),
+        tag: `${row.type}:${row.entityId ?? row.id}`,
+      });
+    }));
+    return rows.length;
+  }
+
+  private emitRealtime(
+    row: { tenantId: string; branchId: string | null; userId: string | null; orderId: string | null },
+    dto: NotificationDto,
+  ) {
     this.events.emit(RealtimeEvent.NOTIFICATION_CREATED, {
       tenantId: row.tenantId,
       branchId: row.branchId,
@@ -58,26 +114,6 @@ export class NotificationsService {
       orderId: row.orderId,
       notification: dto,
     });
-    return dto;
-  }
-
-  async createMany(inputs: CreateNotificationInput[]): Promise<number> {
-    if (inputs.length === 0) return 0;
-    const result = await this.prisma.notification.createMany({
-      data: inputs.map((input) => ({
-        tenantId: input.tenantId,
-        branchId: input.branchId ?? null,
-        userId: input.userId ?? null,
-        customerId: input.customerId ?? null,
-        orderId: input.orderId ?? null,
-        type: input.type,
-        channel: input.channel ?? NotificationChannel.IN_APP,
-        title: input.title,
-        body: input.body,
-        entityId: input.entityId ?? input.orderId ?? null,
-      })),
-    });
-    return result.count;
   }
 
   /** Staff inbox for the signed-in user. */
@@ -168,6 +204,7 @@ function toDto(row: {
   title: string;
   body: string;
   entityId: string | null;
+  orderId: string | null;
   readAt: Date | null;
   createdAt: Date;
 }): NotificationDto {
@@ -178,7 +215,19 @@ function toDto(row: {
     title: row.title,
     body: row.body,
     entityId: row.entityId,
+    url: notificationUrl(row.type, row.entityId, row.orderId),
     readAt: row.readAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+function notificationUrl(type: string, entityId: string | null, orderId: string | null): string {
+  const id = orderId ?? entityId;
+  if (id && (type.startsWith('ORDER_') || type === 'PAYMENT_RECEIVED' || type === 'TERMINAL_PAYMENT')) {
+    return `/admin/orders/${id}`;
+  }
+  if (type === 'WAITER_CALLED') return '/admin/orders';
+  if (type === 'INVENTORY_LOW') return '/admin/inventory';
+  if (type === 'MEMBERSHIP_EXPIRING') return '/admin/memberships';
+  return '/admin';
 }

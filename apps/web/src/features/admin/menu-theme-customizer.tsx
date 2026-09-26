@@ -1,14 +1,19 @@
 'use client';
 
 import {
+  BRAND_SWATCHES,
   MENU_TEMPLATES,
   MENU_TEMPLATE_SPECS,
   MENU_THEME_PRESETS,
+  isLightColor,
+  paletteFromBrand,
   presetConfig,
   type MenuTemplate,
   type MenuThemeConfig,
   type MenuThemeDto,
   type PlanFeatures,
+  type ThemeColors,
+  type ThemeMode,
 } from '@restaurant-os/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Eye, Lock, RotateCcw, Save, Send } from 'lucide-react';
@@ -290,6 +295,14 @@ export function MenuThemeCustomizer({
     setDirty(true);
   }
 
+  /** Replaces all seven colours at once, from one brand colour and a mode. */
+  function applyPalette(brand: string, mode: ThemeMode) {
+    setDraft((current) =>
+      current ? { ...current, colors: paletteFromBrand(brand, mode) } : current,
+    );
+    setDirty(true);
+  }
+
   const save = useMutation({
     mutationFn: (publish: boolean) =>
       themeService.update({
@@ -385,13 +398,13 @@ export function MenuThemeCustomizer({
                       className={cn(
                         'rounded-xl border p-3 text-start transition-colors disabled:opacity-60',
                         selected
-                          ? 'border-gold/60 bg-gold/[0.06]'
+                          ? 'border-brand/60 bg-brand/[0.06]'
                           : 'border-line bg-surface hover:border-line-strong',
                       )}
                     >
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
                         {spec.labelFa}
-                        {selected ? <Check className="size-3.5 text-gold" /> : null}
+                        {selected ? <Check className="size-3.5 text-brand" /> : null}
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-ink-subtle">
                         {spec.descriptionFa}
@@ -420,16 +433,35 @@ export function MenuThemeCustomizer({
 
               <div className="pt-4">
                 {tab === 'colors' ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {COLORS.map((control) => (
-                      <ColorField
-                        key={control.key}
-                        label={control.label}
-                        value={draft.colors[control.key]}
-                        disabled={disabled}
-                        onChange={(value) => patch('colors', control.key, value)}
-                      />
-                    ))}
+                  <div className="space-y-5">
+                    {/*
+                      The first question, and for most owners the only one:
+                      what colour, and light or dark. Seven surface tokens are
+                      the right tool for someone who knows what a surface token
+                      is, and the wrong thing to open with.
+                    */}
+                    <QuickPalette
+                      colors={draft.colors}
+                      disabled={disabled}
+                      onPick={applyPalette}
+                    />
+
+                    <details className="group">
+                      <summary className="cursor-pointer text-sm font-medium text-ink-muted hover:text-ink">
+                        تنظیم تک‌تک رنگ‌ها
+                      </summary>
+                      <div className="grid gap-3 pt-3 sm:grid-cols-2">
+                        {COLORS.map((control) => (
+                          <ColorField
+                            key={control.key}
+                            label={control.label}
+                            value={draft.colors[control.key]}
+                            disabled={disabled}
+                            onChange={(value) => patch('colors', control.key, value)}
+                          />
+                        ))}
+                      </div>
+                    </details>
                   </div>
                 ) : null}
 
@@ -524,7 +556,7 @@ export function MenuThemeCustomizer({
                         setDirty(true);
                       }}
                       placeholder={'.menu-card {\n  letter-spacing: 0.01em;\n}'}
-                      className="w-full rounded-xl border border-line bg-surface-sunken p-3 font-mono text-xs text-ink outline-none focus:border-gold/50 disabled:opacity-60"
+                      className="w-full rounded-xl border border-line bg-surface-sunken p-3 font-mono text-xs text-ink outline-none focus:border-brand/50 disabled:opacity-60"
                     />
                   </div>
                 ) : null}
@@ -671,8 +703,105 @@ function ColorField({
             // the preview on every keystroke.
             if (/^#[0-9a-fA-F]{6}$/.test(next)) onChange(next);
           }}
-          className="h-10 w-full rounded-lg border border-line bg-surface-sunken px-3 font-mono text-xs text-ink outline-none focus:border-gold/50 disabled:opacity-60"
+          className="h-10 w-full rounded-lg border border-line bg-surface-sunken px-3 font-mono text-xs text-ink outline-none focus:border-brand/50 disabled:opacity-60"
         />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One colour and one switch.
+ *
+ * Writes all seven colour tokens from the pair, so an owner who knows their
+ * sign is green never has to learn what a "surface" is. It writes values
+ * rather than locking them: the per-colour fields underneath still work, and
+ * still win, for anyone who wants them.
+ */
+function QuickPalette({
+  colors,
+  disabled,
+  onPick,
+}: {
+  colors: ThemeColors;
+  disabled: boolean;
+  onPick: (brand: string, mode: ThemeMode) => void;
+}) {
+  const mode: ThemeMode = isLightColor(colors.background) ? 'light' : 'dark';
+  const current = colors.primary.toLowerCase();
+
+  return (
+    <div className="space-y-4 rounded-xl border border-line bg-surface-sunken p-4">
+      <div>
+        <p className="text-sm font-medium text-ink">رنگ اصلی</p>
+        <p className="mt-0.5 text-xs text-ink-subtle">
+          یک رنگ انتخاب کنید؛ بقیه رنگ‌ها خودشان هماهنگ می‌شوند.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {BRAND_SWATCHES.map((swatch) => (
+            <button
+              key={swatch.hex}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPick(swatch.hex, mode)}
+              aria-label={swatch.labelFa}
+              aria-pressed={current === swatch.hex}
+              className={cn(
+                'size-9 rounded-xl border-2 transition-transform',
+                current === swatch.hex
+                  ? 'scale-110 border-ink'
+                  : 'border-transparent hover:scale-105',
+                disabled && 'cursor-not-allowed opacity-50',
+              )}
+              style={{ backgroundColor: swatch.hex }}
+            />
+          ))}
+          {/*
+            And a free choice, for a restaurant whose brand colour is not one
+            of seven. The native picker is the right control here: it is the
+            one every phone already knows how to show.
+          */}
+          <label
+            className={cn(
+              'flex size-9 cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-line-strong text-xs text-ink-subtle',
+              disabled && 'cursor-not-allowed opacity-50',
+            )}
+            title="رنگ دلخواه"
+          >
+            <input
+              type="color"
+              className="sr-only"
+              disabled={disabled}
+              value={colors.primary}
+              onChange={(e) => onPick(e.target.value, mode)}
+            />
+            +
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-sm font-medium text-ink">زمینه</p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {(['light', 'dark'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              disabled={disabled}
+              onClick={() => onPick(colors.primary, option)}
+              aria-pressed={mode === option}
+              className={cn(
+                'rounded-xl border p-3 text-sm transition-colors',
+                mode === option
+                  ? 'border-brand bg-brand/10 text-ink'
+                  : 'border-line bg-surface text-ink-muted hover:border-line-strong',
+                disabled && 'cursor-not-allowed opacity-50',
+              )}
+            >
+              {option === 'light' ? 'روشن' : 'تیره'}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

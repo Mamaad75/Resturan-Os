@@ -2,10 +2,13 @@
 
 import {
   Building2,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   Package,
+  Phone,
   Receipt,
+  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -20,6 +23,9 @@ const NAV = [
   { href: '/superadmin/tenants', label: 'کسب‌وکارها', icon: Building2 },
   { href: '/superadmin/plans', label: 'پلن‌ها', icon: Package },
   { href: '/superadmin/invoices', label: 'پرداخت‌ها', icon: Receipt },
+  { href: '/superadmin/payments', label: 'درگاه و پیامک', icon: CreditCard },
+  { href: '/superadmin/settlements', label: 'تسویه', icon: Wallet },
+  { href: '/superadmin/phone-bank', label: 'بانک شماره', icon: Phone },
 ];
 
 /**
@@ -47,13 +53,13 @@ export function PlatformShell({ children }: { children: ReactNode }) {
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
           <div className="flex items-center gap-2">
-            <span className="rounded-lg bg-gold px-2 py-1 text-xs font-bold text-ink-inverse">
+            <span className="rounded-lg bg-brand px-2 py-1 text-xs font-bold text-ink-inverse">
               FoodOS
             </span>
             <span className="text-sm text-ink-muted">مدیریت پلتفرم</span>
           </div>
 
-          <nav className="flex flex-1 gap-1">
+          <nav className="no-scrollbar flex flex-1 gap-1 overflow-x-auto">
             {NAV.map((item) => {
               const active =
                 item.href === '/superadmin'
@@ -64,9 +70,9 @@ export function PlatformShell({ children }: { children: ReactNode }) {
                   key={item.href}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                    'flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                     active
-                      ? 'bg-gold/10 text-gold'
+                      ? 'bg-brand/10 text-brand'
                       : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
                   )}
                 >

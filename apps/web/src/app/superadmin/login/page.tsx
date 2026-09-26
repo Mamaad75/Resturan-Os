@@ -38,7 +38,7 @@ export default function PlatformLoginPage() {
     <div className="flex min-h-dvh items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <p className="text-xs font-medium tracking-widest text-gold">FoodOS</p>
+          <p className="text-xs font-medium tracking-widest text-brand">FoodOS</p>
           <h1 className="mt-1 text-2xl font-bold text-ink">مدیریت پلتفرم</h1>
           <p className="mt-1 text-sm text-ink-subtle">
             این بخش فقط برای تیم فوداواس است.

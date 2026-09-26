@@ -24,6 +24,21 @@ export const TENANT_SCOPED_MODELS = new Set([
   'Notification',
   'SmsMessage',
   'AuditLog',
+  'GameSession',
+  'InventoryItem',
+  'Warehouse',
+  'InventoryStock',
+  'StockMovement',
+  'RecipeItem',
+  'Supplier',
+  'PurchaseOrder',
+  'CustomerMembershipPlan',
+  'CustomerMembership',
+  'MembershipPayment',
+  'MembershipUsage',
+  'PushSubscription',
+  'PosTerminal',
+  'WaiterCall',
 ]);
 
 /** Reads that must inspect a filtered `where`. */

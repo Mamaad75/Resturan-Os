@@ -126,12 +126,12 @@ export default function OnboardingPage() {
         <div className="relative p-6">
           <div
             aria-hidden
-            className="pointer-events-none absolute -top-24 start-1/2 size-72 -translate-x-1/2 rounded-full bg-gold/[0.09] blur-3xl"
+            className="pointer-events-none absolute -top-24 start-1/2 size-72 -translate-x-1/2 rounded-full bg-brand/[0.09] blur-3xl"
           />
           <div className="relative">
             <div className="mb-3 flex items-center gap-2.5">
-              <span className="flex size-10 items-center justify-center rounded-xl border border-gold/25 bg-gold/10">
-                <PartyPopper className="size-5 text-gold" />
+              <span className="flex size-10 items-center justify-center rounded-xl border border-brand/25 bg-brand/10">
+                <PartyPopper className="size-5 text-brand" />
               </span>
               <div>
                 <h1 className="text-lg font-bold text-ink">
@@ -147,7 +147,7 @@ export default function OnboardingPage() {
             <div className="mt-4 flex items-center gap-3">
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                 <div
-                  className="h-full rounded-full bg-gold transition-all duration-500"
+                  className="h-full rounded-full bg-brand transition-all duration-500"
                   style={{ width: `${(doneCount / steps.length) * 100}%` }}
                 />
               </div>

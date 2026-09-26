@@ -17,13 +17,20 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { couponService, publicService } from '@/services';
+import {
+  couponService,
+  publicService,
+  type CheckoutOfferDto,
+  type ReferralPanelDto,
+} from '@/services';
 import { useCart } from './cart';
+import { lastOrderToken, rememberLastOrder } from './last-order-token';
+import { OfferPopup } from './offer-popup';
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
@@ -43,6 +50,7 @@ export function CheckoutSheet({
   const toast = useToast();
 
   const modes = restaurant.settings.serviceModes;
+  const requirePhone = restaurant.settings.requireCustomerPhone;
   const dineInAvailable =
     modes.includes(ServiceMode.DINE_IN) && Boolean(restaurant.table);
   const takeawayAvailable = modes.includes(ServiceMode.TAKEAWAY);
@@ -79,6 +87,76 @@ export function CheckoutSheet({
   const [couponError, setCouponError] = useState<string | null>(null);
   const [checkingCoupon, setCheckingCoupon] = useState(false);
 
+  /*
+   * The offer shown on the way to paying. Fetched once when the sheet opens so
+   * that editing the cart does not keep re-asking the server (and inflating the
+   * offer's impression count), and asked at most once per checkout: a popup
+   * that comes back after being declined is the kind of thing that loses a
+   * customer rather than sells a croissant.
+   */
+  /*
+   * The referral side of checkout: a code from a friend, and any reward this
+   * guest has already earned. Both are sent as identifiers - the server decides
+   * what a reward is worth and whether a code is real, so neither field can set
+   * a price.
+   */
+  const [referralCode, setReferralCode] = useState('');
+  const [referral, setReferral] = useState<ReferralPanelDto | null>(null);
+  const [rewardId, setRewardId] = useState<string | null>(null);
+
+  const [offer, setOffer] = useState<CheckoutOfferDto | null>(null);
+  const [offerAsked, setOfferAsked] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [acceptedOffer, setAcceptedOffer] = useState<CheckoutOfferDto | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const token = lastOrderToken(slug);
+    if (!token) return;
+    let cancelled = false;
+    publicService
+      .referral(slug, token)
+      .then((result) => {
+        if (!cancelled) setReferral(result);
+      })
+      // A guest with no rewards is the normal case, so this stays silent.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [open, slug]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    // Products already in the basket are excluded: a discount on something the
+    // guest was buying anyway is money the restaurant gives away.
+    const inCart = [...new Set(cart.lines.map((line) => line.productId))];
+    if (inCart.length === 0) return;
+    publicService
+      .checkoutOffer(slug, inCart)
+      .then((result) => {
+        if (!cancelled) setOffer(result);
+      })
+      // No offer is the normal case, so a failure here is silent - it must
+      // never be the reason someone cannot order.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, slug]);
+
+  // A fresh checkout starts with a fresh offer, so closing and reopening the
+  // sheet does not carry an accepted croissant into an order without it.
+  useEffect(() => {
+    if (open) return;
+    setOfferAsked(false);
+    setOfferOpen(false);
+    setAcceptedOffer(null);
+    setRewardId(null);
+  }, [open]);
+
   async function applyCoupon() {
     const code = couponInput.trim();
     if (!code) return;
@@ -110,8 +188,30 @@ export function CheckoutSheet({
     }
   }
 
-  async function submit() {
+  async function submit(accepted: CheckoutOfferDto | null = acceptedOffer) {
     setErrors({});
+
+    const items = cart.lines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      notes: line.notes,
+      modifierOptionIds: line.modifiers.map((m) => m.id),
+    }));
+
+    /*
+     * The accepted offer becomes a normal order line. It is only appended when
+     * the cart does not already carry that product, so a guest who accepts,
+     * hits a validation error and submits again is charged for one croissant
+     * rather than two.
+     */
+    if (accepted && !items.some((item) => item.productId === accepted.productId)) {
+      items.push({
+        productId: accepted.productId,
+        quantity: 1,
+        notes: null,
+        modifierOptionIds: [],
+      });
+    }
 
     const payload = {
       type: orderType,
@@ -120,17 +220,22 @@ export function CheckoutSheet({
       customerPhone: customerPhone.trim() || null,
       notes: notes.trim() || null,
       couponCode: appliedCoupon?.code ?? null,
+      // The offer, not its price: the server decides what it is worth.
+      offerId: accepted?.id ?? null,
+      referralCode: referralCode.trim() || null,
+      referralRewardId: rewardId,
       deliveryZoneId: orderType === 'DELIVERY' ? deliveryZoneId || null : null,
       deliveryAddress:
         orderType === 'DELIVERY' ? deliveryAddress.trim() || null : null,
       deliveryNotes: orderType === 'DELIVERY' ? deliveryNotes.trim() || null : null,
-      items: cart.lines.map((line) => ({
-        productId: line.productId,
-        quantity: line.quantity,
-        notes: line.notes,
-        modifierOptionIds: line.modifiers.map((m) => m.id),
-      })),
+      items,
     };
+
+    // Dine-in phone is enforced by the restaurant setting, not the base schema.
+    if (requirePhone && !customerPhone.trim()) {
+      setErrors({ customerPhone: 'وارد کردن شمارهٔ موبایل الزامی است.' });
+      return;
+    }
 
     // Validate with the very schema the API will apply, for instant feedback.
     const parsed = createPublicOrderSchema.safeParse(payload);
@@ -143,9 +248,19 @@ export function CheckoutSheet({
       return;
     }
 
+    // Everything about the order is valid; this is the moment before paying.
+    if (offer && !offerAsked && !accepted) {
+      setOfferAsked(true);
+      setOfferOpen(true);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const result = await publicService.createOrder(slug, payload);
+      // Remembered so the menu can offer this basket back next time, and so
+      // the invitation panel can recognise them.
+      rememberLastOrder(slug, result.trackingToken);
       cart.clear();
       onClose();
       // The tracking token is the customer's only handle on this order.
@@ -194,9 +309,22 @@ export function CheckoutSheet({
             <div className="flex items-center justify-between text-sm">
               <span className="text-ink-muted">جمع اقلام</span>
               <span className="font-semibold text-ink">
-                {formatMoney(cart.estimatedSubtotal)}
+                {formatMoney(cart.estimatedSubtotal + (acceptedOffer?.price ?? 0))}
               </span>
             </div>
+            {acceptedOffer ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-positive">
+                  تخفیف پیشنهاد ویژه ({acceptedOffer.productNameFa})
+                </span>
+                <span className="font-semibold text-positive">
+                  -{' '}
+                  {formatMoney(
+                    Math.max(0, acceptedOffer.price - acceptedOffer.offerPrice),
+                  )}
+                </span>
+              </div>
+            ) : null}
             {appliedCoupon ? (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-positive">تخفیف ({appliedCoupon.code})</span>
@@ -223,7 +351,7 @@ export function CheckoutSheet({
               size="lg"
               fullWidth
               loading={submitting}
-              onClick={submit}
+              onClick={() => void submit()}
             >
               ثبت سفارش
             </Button>
@@ -344,7 +472,7 @@ export function CheckoutSheet({
                         className={cn(
                           'flex items-center justify-between gap-3 rounded-xl border p-3 text-start transition-colors',
                           deliveryZoneId === zone.id
-                            ? 'border-gold/50 bg-gold/[0.08]'
+                            ? 'border-brand/50 bg-brand/[0.08]'
                             : 'border-line bg-surface-raised',
                         )}
                       >
@@ -362,7 +490,7 @@ export function CheckoutSheet({
                         <span
                           className={cn(
                             'shrink-0 text-sm font-semibold tabular-nums',
-                            belowMinimum ? 'text-critical' : 'text-gold',
+                            belowMinimum ? 'text-critical' : 'text-brand',
                           )}
                         >
                           {formatMoney(zone.fee, 'IRT')}
@@ -425,13 +553,29 @@ export function CheckoutSheet({
               />
             </div>
           ) : (
-            <Input
-              label="نام (اختیاری)"
-              placeholder="برای صدا زدن هنگام سرو"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              error={errors.customerName}
-            />
+            <div className="space-y-3">
+              <Input
+                label="نام (اختیاری)"
+                placeholder="برای صدا زدن هنگام سرو"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                error={errors.customerName}
+              />
+              {requirePhone ? (
+                <Input
+                  label="شماره موبایل"
+                  type="tel"
+                  inputMode="numeric"
+                  dir="ltr"
+                  placeholder="۰۹۱۲۱۲۳۴۵۶۷"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  error={errors.customerPhone}
+                  hint="برای اطلاع‌رسانی و باشگاه مشتریان"
+                  required
+                />
+              ) : null}
+            </div>
           )}
 
           {/* Discount code */}
@@ -495,6 +639,66 @@ export function CheckoutSheet({
             )}
           </div>
 
+          {/*
+            Rewards this guest has earned. Offered rather than applied: a free
+            latte is worth spending on a day they ordered a latte, and only the
+            guest knows that.
+          */}
+          {referral && referral.rewards.length > 0 ? (
+            <div className="space-y-2 rounded-xl border border-positive/30 bg-positive/[0.08] p-3">
+              <p className="text-sm font-medium text-positive">پاداش‌های شما</p>
+              {referral.rewards.map((reward) => (
+                <label
+                  key={reward.id}
+                  className="flex items-center gap-2.5 text-sm text-ink"
+                >
+                  <input
+                    type="radio"
+                    name="referral-reward"
+                    className="size-4 accent-[var(--brand)]"
+                    checked={rewardId === reward.id}
+                    onChange={() => setRewardId(reward.id)}
+                  />
+                  <span className="min-w-0 flex-1">{reward.labelFa}</span>
+                </label>
+              ))}
+              {rewardId ? (
+                <button
+                  type="button"
+                  onClick={() => setRewardId(null)}
+                  className="text-xs text-ink-muted underline"
+                >
+                  استفاده نکن
+                </button>
+              ) : null}
+              <p className="text-[0.7rem] leading-relaxed text-ink-subtle">
+                مبلغ دقیق تخفیف هنگام ثبت سفارش توسط سیستم محاسبه می‌شود.
+              </p>
+            </div>
+          ) : null}
+
+          {/*
+            A friend's code, only offered to someone this browser has never
+            ordered with: the welcome is for new customers, and asking a regular
+            for an invitation code is a question with no right answer.
+          */}
+          {referral == null ? (
+            <Input
+              label="کد معرفی دوست (اختیاری)"
+              dir="ltr"
+              placeholder="ABCD34"
+              maxLength={16}
+              value={referralCode}
+              onChange={(e) =>
+                setReferralCode(
+                  e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''),
+                )
+              }
+              hint="اگر دوستی شما را معرفی کرده، کدش را وارد کنید."
+              error={errors.referralCode}
+            />
+          ) : null}
+
           <Textarea
             label="توضیحات سفارش (اختیاری)"
             placeholder="مثلاً: لطفاً سفارش را یک‌جا بیاورید"
@@ -503,6 +707,26 @@ export function CheckoutSheet({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             error={errors.notes}
+          />
+
+          {/*
+            The last screen before paying. It renders through a portal, so
+            sitting inside the sheet in the tree still puts it on top of it.
+            Either answer continues to the order the guest already confirmed -
+            neither is a dead end.
+          */}
+          <OfferPopup
+            offer={offer}
+            open={offerOpen}
+            onAccept={() => {
+              setAcceptedOffer(offer);
+              setOfferOpen(false);
+              void submit(offer);
+            }}
+            onDecline={() => {
+              setOfferOpen(false);
+              void submit(null);
+            }}
           />
         </div>
       )}
@@ -531,11 +755,11 @@ function ModeButton({
       className={cn(
         'flex flex-col items-center gap-1 rounded-xl border p-3 transition-colors',
         active
-          ? 'border-gold/50 bg-gold/[0.08] text-ink'
+          ? 'border-brand/50 bg-brand/[0.08] text-ink'
           : 'border-line bg-surface-sunken text-ink-muted hover:border-line-strong',
       )}
     >
-      <span className={active ? 'text-gold' : ''}>{icon}</span>
+      <span className={active ? 'text-brand' : ''}>{icon}</span>
       <span className="text-sm font-medium">{label}</span>
       <span className="text-[0.7rem] text-ink-subtle">{sub}</span>
     </button>

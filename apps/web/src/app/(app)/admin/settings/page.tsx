@@ -30,7 +30,10 @@ import { useAuth } from '@/features/auth/auth-context';
 import { MenuThemeCustomizer } from '@/features/admin/menu-theme-customizer';
 import { DeliveryZones } from '@/features/admin/delivery-zones';
 import { LoyaltyProgram } from '@/features/admin/loyalty-program';
+import { PaymentMethods } from '@/features/admin/payment-methods';
 import { SubscriptionPayment } from '@/features/admin/subscription-payment';
+import { PwaDeviceCard } from '@/features/admin/pwa-device-card';
+import { PosTerminalSettings } from '@/features/admin/pos-terminal-settings';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { toPersianDigits } from '@/lib/format';
@@ -51,7 +54,7 @@ export default function SettingsPage() {
   const [tagline, setTagline] = useState('');
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [accentColor, setAccentColor] = useState('#C9A24B');
+  const [accentColor, setAccentColor] = useState('#0D7666');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [settings, setSettings] = useState<RestaurantSettings | null>(null);
   const [tab, setTab] = useState('general');
@@ -156,7 +159,7 @@ export default function SettingsPage() {
               href={restaurant.publicUrl}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1.5 text-sm text-gold hover:text-gold-bright"
+              className="flex items-center gap-1.5 text-sm text-brand hover:text-brand-bright"
             >
               مشاهده منو
               <ExternalLink className="size-3.5" />
@@ -235,7 +238,7 @@ export default function SettingsPage() {
             <p className="mb-2 text-sm font-medium text-ink-muted">رنگ شاخص</p>
             <div className="flex flex-wrap items-center gap-2">
               {/* The five template accents, so the swatches and the templates agree. */}
-              {['#C9A24B', '#C2410C', '#0F766E', '#DC2626', '#57534E'].map((color) => (
+              {['#0D7666', '#B4460F', '#7A5236', '#DC2626', '#57534E'].map((color) => (
                 <button
                   key={color}
                   disabled={!editable}
@@ -300,7 +303,7 @@ export default function SettingsPage() {
               className={cn(
                 'flex flex-col items-start gap-1 rounded-xl border p-4 text-start transition-colors',
                 settings.businessType === value
-                  ? 'border-gold/50 bg-gold/[0.08]'
+                  ? 'border-brand/50 bg-brand/[0.08]'
                   : 'border-line bg-surface-sunken',
                 !editable && 'cursor-not-allowed opacity-60',
               )}
@@ -333,7 +336,7 @@ export default function SettingsPage() {
                 className={cn(
                   'flex flex-col items-start gap-1 rounded-xl border p-4 text-start transition-colors',
                   settings.serviceMode === value
-                    ? 'border-gold/50 bg-gold/[0.08]'
+                    ? 'border-brand/50 bg-brand/[0.08]'
                     : 'border-line bg-surface-sunken',
                   !editable && 'cursor-not-allowed opacity-60',
                 )}
@@ -481,6 +484,41 @@ export default function SettingsPage() {
         </CardBody>
       </Card>
 
+
+      <Card>
+        <CardHeader
+          title="ماژول‌های اختیاری Restaurant OS"
+          description="هر ماژول هم در رابط کاربری و هم در API فعال/غیرفعال می‌شود."
+        />
+        <CardBody className="space-y-3">
+          <Switch
+            checked={settings.inventoryEnabled}
+            onChange={(value) => updateSetting('inventoryEnabled', value)}
+            disabled={!editable}
+            label="انبارداری کامل"
+            description="مواد اولیه، موجودی شعبه، Recipe/BOM، گردش کالا، تأمین‌کننده، سفارش خرید و هشدار کمبود."
+          />
+          <Switch
+            checked={settings.customerMembershipEnabled}
+            onChange={(value) => updateSetting('customerMembershipEnabled', value)}
+            disabled={!editable}
+            label="اشتراک مشتریان"
+            description="فروش یا هدیه اشتراک، تخفیف دائمی، ارسال رایگان و ضریب امتیاز وفاداری."
+          />
+          <Switch
+            checked={settings.posTerminalEnabled}
+            onChange={(value) => updateSetting('posTerminalEnabled', value)}
+            disabled={!editable}
+            label="اتصال کارتخوان POS"
+            description="ارسال مبلغ از صندوق به Terminal Bridge و ثبت خودکار نتیجه پرداخت."
+          />
+        </CardBody>
+      </Card>
+
+      <PwaDeviceCard />
+
+      {settings.posTerminalEnabled ? <PosTerminalSettings editable={editable} /> : null}
+
       <div>
         <div className="mb-3">
           <h2 className="text-lg font-bold text-ink">طراحی منو</h2>
@@ -494,6 +532,8 @@ export default function SettingsPage() {
           editable={editable}
         />
       </div>
+
+      <PaymentMethods editable={editable} />
 
       <LoyaltyProgram editable={editable} />
 
@@ -623,7 +663,7 @@ function SubscriptionCard() {
                   <div
                     className={cn(
                       'h-full rounded-full',
-                      ratio >= 1 ? 'bg-critical' : ratio > 0.8 ? 'bg-caution' : 'bg-gold',
+                      ratio >= 1 ? 'bg-critical' : ratio > 0.8 ? 'bg-caution' : 'bg-brand',
                     )}
                     style={{ width: `${Math.round(ratio * 100)}%` }}
                   />

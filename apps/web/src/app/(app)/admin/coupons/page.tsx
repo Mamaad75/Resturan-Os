@@ -125,14 +125,14 @@ export default function CouponsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         onClick={() => copyCode(coupon.code)}
-                        className="ltr-nums flex items-center gap-1.5 rounded-lg border border-line bg-surface-sunken px-2.5 py-1 font-mono text-sm font-semibold text-gold transition-colors hover:border-gold/40"
+                        className="ltr-nums flex items-center gap-1.5 rounded-lg border border-line bg-surface-sunken px-2.5 py-1 font-mono text-sm font-semibold text-brand transition-colors hover:border-brand/40"
                         title="کپی کد"
                       >
                         {coupon.code}
                         <Copy className="size-3 opacity-60" />
                       </button>
 
-                      <Badge tone={coupon.type === CouponType.PERCENTAGE ? 'info' : 'gold'}>
+                      <Badge tone={coupon.type === CouponType.PERCENTAGE ? 'info' : 'brand'}>
                         {coupon.type === CouponType.PERCENTAGE
                           ? `${toPersianDigits(coupon.value / 100)}٪ تخفیف`
                           : `${formatMoney(coupon.value)} تخفیف`}

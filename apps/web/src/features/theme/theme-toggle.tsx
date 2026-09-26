@@ -24,7 +24,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       className={cn(
         'inline-flex size-9 items-center justify-center rounded-xl border border-line',
         'text-ink-muted transition-colors hover:border-line-strong hover:text-ink',
-        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold',
+        'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
         className,
       )}
     >

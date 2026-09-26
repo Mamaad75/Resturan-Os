@@ -25,7 +25,9 @@ import {
   type ThemeClasses,
 } from './theme-runtime';
 import { CheckoutSheet } from './checkout-sheet';
+import { EventsRail } from './events-rail';
 import { ProductSheet } from './product-sheet';
+import { UsualOrderCard } from './usual-order-card';
 import { WaiterCallButton } from './waiter-call';
 
 export function MenuView({ menu, slug }: { menu: PublicMenu; slug: string }) {
@@ -66,13 +68,17 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const chipRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
+  const allProducts = useMemo(
+    () => categories.flatMap((category) => category.products),
+    [categories],
+  );
+
   const featured = useMemo(
     () =>
-      categories
-        .flatMap((category) => category.products)
+      allProducts
         .filter((product) => product.isFeatured && product.isAvailable)
         .slice(0, 6),
-    [categories],
+    [allProducts],
   );
 
   /*
@@ -179,6 +185,19 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
           />
         ) : null}
 
+        {/*
+          Above everything else, including the featured rail: a regular opened
+          the menu to order the same thing again, and anything they have to
+          scroll past is friction this card exists to remove. It renders nothing
+          for a first-time guest.
+        */}
+        <UsualOrderCard
+          slug={slug}
+          products={allProducts}
+          headingClassName={styles.heading}
+          onAdded={() => setCheckoutOpen(true)}
+        />
+
         {featured.length > 0 && config.showFeaturedRail ? (
           <section
             className="pt-[var(--menu-section-gap)]"
@@ -188,7 +207,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
               id="featured-heading"
               className={cn('flex items-center gap-2', styles.heading)}
             >
-              <Sparkles className="size-4 text-gold" />
+              <Sparkles className="size-4 text-brand" />
               پیشنهاد ویژه
             </h2>
             <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
@@ -196,7 +215,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                 <button
                   key={product.id}
                   onClick={() => setSelectedProduct(product)}
-                  className="group w-40 shrink-0 overflow-hidden rounded-[var(--menu-radius)] border border-line bg-surface text-start transition-colors hover:border-gold/40"
+                  className="group w-40 shrink-0 overflow-hidden rounded-[var(--menu-radius)] border border-line bg-surface text-start transition-colors hover:border-brand/40"
                 >
                   <div className="relative aspect-square bg-surface-sunken">
                     {product.imageUrl ? (
@@ -215,7 +234,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
                     <p className="truncate text-sm font-medium text-ink">
                       {product.nameFa}
                     </p>
-                    <p className="mt-1 text-sm font-semibold text-gold">
+                    <p className="mt-1 text-sm font-semibold text-brand">
                       {formatMoney(product.effectivePrice, 'IRT', { withUnit: false })}
                     </p>
                   </div>
@@ -224,6 +243,8 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
             </div>
           </section>
         ) : null}
+
+        <EventsRail slug={slug} headingClassName={styles.heading} />
 
         {categories.map((category) => {
           /*
@@ -280,7 +301,7 @@ function MenuScreen({ menu, slug }: { menu: PublicMenu; slug: string }) {
         <div className="fixed inset-x-0 bottom-0 z-40 p-4">
           <button
             onClick={() => setCheckoutOpen(true)}
-            className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 rounded-2xl bg-gold px-5 py-4 text-ink-inverse shadow-lifted transition-transform active:scale-[0.99]"
+            className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 rounded-2xl bg-brand px-5 py-4 text-ink-inverse shadow-lifted transition-transform active:scale-[0.99]"
           >
             <span className="flex items-center gap-2.5 font-semibold">
               <span className="flex size-7 items-center justify-center rounded-full bg-black/15 text-sm tabular-nums">
@@ -340,7 +361,7 @@ function RestaurantHeader({
             className="object-cover"
           />
         ) : (
-          <div className="size-full bg-[radial-gradient(120%_100%_at_50%_0%,rgb(var(--gold)/0.18),transparent_70%)]" />
+          <div className="size-full bg-[radial-gradient(120%_100%_at_50%_0%,rgb(var(--brand)/0.18),transparent_70%)]" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-canvas via-canvas/55 to-transparent" />
       </div>
@@ -375,7 +396,7 @@ function RestaurantHeader({
                 className="object-cover"
               />
             ) : (
-              <div className="flex size-full items-center justify-center text-2xl font-bold text-gold">
+              <div className="flex size-full items-center justify-center text-2xl font-bold text-brand">
                 {restaurant.name.charAt(0)}
               </div>
             )}
@@ -408,7 +429,7 @@ function RestaurantHeader({
           )}
         >
           {restaurant.table ? (
-            <Badge tone="gold" dot>
+            <Badge tone="brand" dot>
               میز {toPersianDigits(restaurant.table.number)}
             </Badge>
           ) : null}
@@ -545,7 +566,7 @@ function ProductCard({
         <PlaceholderArt />
       )}
       {card.showAddButton && product.isAvailable ? (
-        <span className="absolute bottom-2 end-2 flex size-8 items-center justify-center rounded-[var(--menu-radius)] bg-gold text-ink-inverse shadow">
+        <span className="absolute bottom-2 end-2 flex size-8 items-center justify-center rounded-[var(--menu-radius)] bg-brand text-ink-inverse shadow">
           <ShoppingBag className="size-4" />
         </span>
       ) : null}
@@ -562,7 +583,7 @@ function ProductCard({
         styles.card,
         layout !== 'text' && 'rounded-[var(--menu-radius)]',
         'transition-colors',
-        product.isAvailable ? 'hover:border-gold/40' : 'cursor-not-allowed opacity-55',
+        product.isAvailable ? 'hover:border-brand/40' : 'cursor-not-allowed opacity-55',
       )}
     >
       {layout === 'text' ? (
@@ -629,7 +650,7 @@ function ProductCard({
 /** Fallback art so a product without a photo still looks intentional. */
 function PlaceholderArt() {
   return (
-    <div className="flex size-full items-center justify-center bg-[radial-gradient(100%_100%_at_50%_0%,rgb(var(--gold)/0.14),transparent)]">
+    <div className="flex size-full items-center justify-center bg-[radial-gradient(100%_100%_at_50%_0%,rgb(var(--brand)/0.14),transparent)]">
       <UtensilsCrossed className="size-6 text-ink-subtle" />
     </div>
   );

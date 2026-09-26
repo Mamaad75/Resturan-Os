@@ -151,6 +151,20 @@ export class OrderNotificationsListener {
             event.orderNumber,
           )} ثبت شد.`,
         });
+
+        const recipients = await this.notifications.staffRecipients(
+          event.tenantId, event.branchId, ['OWNER', 'MANAGER', 'CASHIER'],
+        );
+        await this.notifications.createMany(recipients.map((userId) => ({
+          tenantId: event.tenantId,
+          branchId: event.branchId,
+          userId,
+          orderId: event.orderId,
+          type: NotificationType.PAYMENT_RECEIVED,
+          title: 'پرداخت جدید دریافت شد',
+          body: `سفارش #${toPersianDigits(event.orderNumber)} • ${formatMoney(event.amount)}`,
+          entityId: event.orderId,
+        })));
       });
     } catch (error) {
       this.logger.error(

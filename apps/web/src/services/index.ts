@@ -31,6 +31,7 @@ import type {
   SmsMessageDto,
   StaffDto,
   TableDto,
+  PublicRestaurant,
 } from '@restaurant-os/types';
 import {
   api,
@@ -161,6 +162,12 @@ export const publicService = {
       deliveryAddress?: string | null;
       deliveryNotes?: string | null;
       couponCode?: string | null;
+      /** A checkout offer the guest accepted. The server prices it. */
+      offerId?: string | null;
+      /** A friend's invitation code, credited once the order is written. */
+      referralCode?: string | null;
+      /** A referral reward being spent. The server decides what it is worth. */
+      referralRewardId?: string | null;
       marketingConsent?: boolean;
       items: Array<{
         productId: string;
@@ -175,6 +182,41 @@ export const publicService = {
       body,
       { retryOnAuthFailure: false },
     ),
+  /**
+   * The offer to show before payment, or null when nothing is running.
+   *
+   * `exclude` carries what is already in the cart: offering a discount on
+   * something the guest has ordered anyway costs the restaurant money for
+   * nothing.
+   */
+  checkoutOffer: (slug: string, excludeProductIds: string[] = []) =>
+    api.get<CheckoutOfferDto | null>(
+      `/public/restaurants/${slug}/checkout-offer`,
+      {
+        query: excludeProductIds.length
+          ? { exclude: excludeProductIds.join(',') }
+          : undefined,
+        retryOnAuthFailure: false,
+      },
+    ),
+  /**
+   * What this returning guest usually orders, or null when they are new.
+   *
+   * Identified by the tracking token of one of their own past orders, held in
+   * this browser - never by a phone number, which would let anyone read a
+   * stranger's habits by guessing.
+   */
+  usualOrder: (slug: string, trackingToken: string) =>
+    api.get<UsualOrderDto | null>(`/public/restaurants/${slug}/usual`, {
+      query: { token: trackingToken },
+      retryOnAuthFailure: false,
+    }),
+  /** This guest's invitation code, progress and unspent rewards. */
+  referral: (slug: string, trackingToken: string) =>
+    api.get<ReferralPanelDto>(`/public/restaurants/${slug}/referral`, {
+      query: { token: trackingToken },
+      retryOnAuthFailure: false,
+    }),
   track: (token: string) =>
     api.get<OrderTrackingDto>(`/public/orders/track/${token}`, {
       retryOnAuthFailure: false,
@@ -183,7 +225,59 @@ export const publicService = {
     api.get<NotificationDto[]>(`/public/orders/track/${token}/notifications`, {
       retryOnAuthFailure: false,
     }),
+  payOptions: (token: string) =>
+    api.get<PayOptionsDto>(`/public/payments/options/${token}`, {
+      retryOnAuthFailure: false,
+    }),
+  startOnlinePayment: (token: string) =>
+    api.post<{ redirectUrl: string | null }>(
+      `/public/payments/start/${token}`,
+      undefined,
+      { retryOnAuthFailure: false },
+    ),
+  verifyPayment: (providerRef: string) =>
+    api.post<{ verified: boolean; orderId: string | null; trackingToken: string | null }>(
+      '/public/payments/verify',
+      { providerRef },
+      { retryOnAuthFailure: false },
+    ),
 };
+
+/** A returning guest's usual basket, in ids the live menu resolves. */
+export interface UsualOrderDto {
+  /** How many of their recent orders were this exact basket. */
+  repeatCount: number;
+  lastOrderedAt: string;
+  lines: Array<{
+    productId: string;
+    quantity: number;
+    modifierOptionIds: string[];
+  }>;
+}
+
+/** One live checkout offer, priced by the server. */
+export interface CheckoutOfferDto {
+  id: string;
+  title: string;
+  productId: string;
+  productNameFa: string;
+  imageUrl: string | null;
+  /** Normal price of one unit. */
+  price: number;
+  /** What one unit costs with the offer applied. */
+  offerPrice: number;
+  discountBps: number;
+  endsAt: string;
+}
+
+export interface PayOptionsDto {
+  orderNumber: string;
+  total: number;
+  paidTotal: number;
+  outstanding: number;
+  paymentStatus: 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'REFUNDED' | 'CANCELLED';
+  methods: { cash: boolean; cardOnSite: boolean; online: boolean };
+}
 
 /* ------------------------------------------------------------------ */
 /* Catalogue                                                           */
@@ -237,6 +331,107 @@ export const menuService = {
   deleteProduct: (id: string) => api.delete<{ deleted: boolean }>(`/products/${id}`),
   reorderProducts: (items: Array<{ id: string; displayOrder: number }>) =>
     api.post<{ reordered: number }>('/products/reorder', { items }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Checkout offers                                                     */
+/* ------------------------------------------------------------------ */
+
+/** One offer as the owner sees it, with how it has performed. */
+export interface CheckoutOfferAdminDto {
+  id: string;
+  productId: string;
+  productNameFa: string;
+  title: string | null;
+  discountBps: number;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+  shownCount: number;
+  acceptedCount: number;
+  /** Active *and* inside its window. Active alone is not the same thing. */
+  isLive: boolean;
+}
+
+export const offerService = {
+  list: () => api.get<CheckoutOfferAdminDto[]>('/offers'),
+  create: (body: {
+    productId: string;
+    title?: string | null;
+    discountBps: number;
+    days: number;
+    startsAt?: string;
+    isActive?: boolean;
+  }) => api.post<{ id: string }>('/offers', body),
+  update: (
+    id: string,
+    body: {
+      title?: string | null;
+      discountBps?: number;
+      days?: number;
+      startsAt?: string;
+      isActive?: boolean;
+    },
+  ) => api.patch<{ id: string }>(`/offers/${id}`, body),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/offers/${id}`),
+};
+
+/* ------------------------------------------------------------------ */
+/* Referrals                                                           */
+/* ------------------------------------------------------------------ */
+
+export type ReferralRewardType = 'PERCENTAGE' | 'FIXED' | 'FREE_PRODUCT';
+
+/** The terms of the invitation, as the owner sets them. */
+export interface ReferralProgramDto {
+  isActive: boolean;
+  rewardType: ReferralRewardType;
+  rewardValue: number;
+  rewardProductId: string | null;
+  rewardProductNameFa: string | null;
+  invitesRequired: number;
+  friendRewardType: ReferralRewardType | null;
+  friendRewardValue: number;
+  friendRewardProductId: string | null;
+  friendRewardProductNameFa: string | null;
+  rewardValidDays: number;
+  termsFa: string | null;
+  /** Invitations accepted so far, and rewards handed out for them. */
+  invitedTotal: number;
+  rewardsGranted: number;
+}
+
+/** The invitation as one guest sees it. */
+export interface ReferralPanelDto {
+  isActive: boolean;
+  code: string | null;
+  invitedCount: number;
+  invitesRequired: number;
+  rewardLabelFa: string;
+  friendRewardLabelFa: string | null;
+  termsFa: string | null;
+  rewards: Array<{
+    id: string;
+    labelFa: string;
+    expiresAt: string;
+    productId: string | null;
+  }>;
+}
+
+export const referralService = {
+  program: () => api.get<ReferralProgramDto>('/referrals/program'),
+  saveProgram: (body: {
+    isActive: boolean;
+    rewardType: ReferralRewardType;
+    rewardValue?: number;
+    rewardProductId?: string | null;
+    invitesRequired: number;
+    friendRewardType?: ReferralRewardType | null;
+    friendRewardValue?: number;
+    friendRewardProductId?: string | null;
+    rewardValidDays: number;
+    termsFa?: string | null;
+  }) => api.put<ReferralProgramDto>('/referrals/program', body),
 };
 
 /* ------------------------------------------------------------------ */
@@ -395,6 +590,11 @@ export const notificationService = {
     ),
   markRead: (body: { ids?: string[]; all?: boolean }) =>
     api.post<{ updated: number }>('/notifications/read', body),
+  pushConfig: () => api.get<{ enabled: boolean; publicKey: string | null }>('/notifications/push/config'),
+  subscribePush: (body: { endpoint: string; keys: { p256dh: string; auth: string }; userAgent?: string | null }) =>
+    api.post<{ enabled: boolean; subscribed: boolean }>('/notifications/push/subscribe', body),
+  unsubscribePush: (endpoint: string) =>
+    api.delete<{ unsubscribed: number }>('/notifications/push/subscribe', { query: { endpoint } }),
 };
 
 export const smsService = {
@@ -512,6 +712,20 @@ export const platformService = {
     planKey?: string;
   }) => api.get<ListResult<PlatformTenantSummary>>('/platform/tenants', { query: params }),
   tenant: (id: string) => api.get<PlatformTenantDetail>(`/platform/tenants/${id}`),
+  /**
+   * Replaces this tenant's exceptions to their plan, in full.
+   *
+   * Anything left out follows the plan again, including whatever the plan
+   * becomes later - which is why the screen sends the whole set.
+   */
+  setEntitlements: (
+    id: string,
+    body: {
+      limits: Record<string, number | null>;
+      features: Record<string, boolean>;
+      note?: string | null;
+    },
+  ) => api.put<PlatformTenantDetail>(`/platform/tenants/${id}/entitlements`, body),
 
   suspend: (id: string, reason: string) =>
     api.post<SubscriptionDto>(`/platform/tenants/${id}/suspend`, { reason }),
@@ -558,6 +772,138 @@ export const platformService = {
     ),
   rejectInvoice: (id: string, reviewNote: string) =>
     api.post<InvoiceDto>(`/platform/invoices/${id}/reject`, { reviewNote }),
+
+  /* --- online payments: platform gateway, SMS service, settlements --- */
+  paymentConfig: () =>
+    api.get<PlatformPaymentConfigDto>('/platform/payment-config'),
+  updatePaymentConfig: (body: UpdatePlatformPaymentConfigBody) =>
+    api.put<PlatformPaymentConfigDto>('/platform/payment-config', body),
+
+  smsConfig: () => api.get<PlatformSmsConfigDto>('/platform/sms-config'),
+  updateSmsConfig: (body: UpdatePlatformSmsConfigBody) =>
+    api.put<PlatformSmsConfigDto>('/platform/sms-config', body),
+
+  settlements: (params: {
+    status?: string;
+    tenantId?: string;
+    page?: number;
+    pageSize?: number;
+  }) =>
+    api.get<SettlementListDto>('/platform/settlements', { query: params }),
+  settle: (body: { ids: string[]; settlementRef?: string; note?: string }) =>
+    api.post<{ settled: number }>('/platform/settlements/settle', body),
+
+  phoneBank: (params: {
+    search?: string;
+    consentOnly?: boolean;
+    page?: number;
+    pageSize?: number;
+  }) => api.get<PhoneBankDto>('/platform/phone-bank', { query: params }),
+};
+
+export interface PhoneBankRow {
+  phone: string;
+  name: string | null;
+  restaurantName: string;
+  ordersCount: number;
+  marketingConsent: boolean;
+  createdAt: string;
+}
+
+export interface PhoneBankDto {
+  items: PhoneBankRow[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  totals: { records: number; consenting: number; uniquePhones: number };
+}
+
+/* --- platform online-payment DTOs --- */
+
+export interface PlatformPaymentConfigDto {
+  provider: string;
+  credentials: Record<string, string>;
+  sandbox: boolean;
+  enabled: boolean;
+  commissionBps: number;
+  settleMinHours: number;
+  settleMaxHours: number;
+}
+
+export interface UpdatePlatformPaymentConfigBody {
+  provider: string;
+  credentials?: Record<string, string>;
+  sandbox?: boolean;
+  enabled?: boolean;
+  commissionBps: number;
+  settleMinHours: number;
+  settleMaxHours: number;
+}
+
+export interface PlatformSmsConfigDto {
+  provider: 'console' | 'kavenegar' | 'sms_ir';
+  apiKey: string;
+  sender: string;
+  enabled: boolean;
+}
+
+export interface UpdatePlatformSmsConfigBody {
+  provider: 'console' | 'kavenegar' | 'sms_ir';
+  apiKey?: string;
+  sender?: string;
+  enabled?: boolean;
+}
+
+export type SettlementStatus = 'PENDING' | 'SETTLED' | 'CANCELLED';
+
+export interface SettlementDto {
+  id: string;
+  tenant: { id: string; name: string; slug: string };
+  orderNumber: string | number;
+  grossAmount: number;
+  commissionAmount: number;
+  netAmount: number;
+  status: SettlementStatus;
+  eligibleAt: string;
+  dueAt: string;
+  settledAt: string | null;
+  createdAt: string;
+}
+
+export interface SettlementListDto {
+  items: SettlementDto[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+  totals: { pendingNet: number; pendingCommission: number };
+}
+
+/* ------------------------------------------------------------------ */
+/* Tenant payment configuration (the restaurant owner's side)          */
+/* ------------------------------------------------------------------ */
+
+export type OnlinePaymentMode = 'OFF' | 'PLATFORM' | 'OWN';
+
+export interface TenantPaymentConfigDto {
+  mode: OnlinePaymentMode;
+  ownProvider: string | null;
+  ownCredentials: Record<string, string>;
+  ownSandbox: boolean;
+  cashEnabled: boolean;
+  cardOnSiteEnabled: boolean;
+  platformAvailable: boolean;
+  platformCommissionBps: number;
+}
+
+export interface UpdateTenantPaymentConfigBody {
+  mode: OnlinePaymentMode;
+  ownProvider?: string | null;
+  ownCredentials?: Record<string, string>;
+  ownSandbox?: boolean;
+  cashEnabled?: boolean;
+  cardOnSiteEnabled?: boolean;
+}
+
+export const paymentConfigService = {
+  get: () => api.get<TenantPaymentConfigDto>('/payment-config'),
+  update: (body: UpdateTenantPaymentConfigBody) =>
+    api.put<TenantPaymentConfigDto>('/payment-config', body),
 };
 
 /* ------------------------------------------------------------------ */
@@ -705,4 +1051,637 @@ export const billingService = {
     note?: string | null;
   }) => api.post<InvoiceDto>('/billing/invoices', body),
   cancel: (id: string) => api.post<InvoiceDto>(`/billing/invoices/${id}/cancel`),
+};
+
+/* ------------------------------------------------------------------ */
+/* Events                                                              */
+/* ------------------------------------------------------------------ */
+
+export interface EventDto {
+  id: string;
+  branchId: string | null;
+  title: string;
+  slug: string;
+  description: string | null;
+  coverUrl: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  accentColor: string | null;
+  theme: string | null;
+  menuTemplate: string | null;
+  menuId: string | null;
+  capacity: number | null;
+  rsvpEnabled: boolean;
+  isActive: boolean;
+  displayOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventRsvpItem {
+  id: string;
+  name: string;
+  phone: string;
+  guests: number;
+  status: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface EventRsvpsResult {
+  capacity: number | null;
+  reserved: number;
+  spotsLeft: number | null;
+  items: EventRsvpItem[];
+}
+
+export interface PublicEventsResult {
+  restaurant: PublicRestaurant;
+  events: EventDto[];
+}
+
+export interface PublicEventDetail {
+  restaurant: PublicRestaurant;
+  event: EventDto;
+  spotsLeft: number | null;
+}
+
+export const eventService = {
+  list: () => api.get<EventDto[]>('/events'),
+  create: (body: Record<string, unknown>) => api.post<EventDto>('/events', body),
+  update: (id: string, body: Record<string, unknown>) =>
+    api.patch<EventDto>(`/events/${id}`, body),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/events/${id}`),
+  rsvps: (id: string) => api.get<EventRsvpsResult>(`/events/${id}/rsvps`),
+  qr: (id: string) => api.get<{ targetPath: string; dataUrl: string }>(`/events/${id}/qr`),
+};
+
+/* ------------------------------------------------------------------ */
+/* Games (loyalty game)                                                */
+/* ------------------------------------------------------------------ */
+
+export type GameRewardType = 'NONE' | 'PERCENTAGE' | 'FIXED';
+export type GameModel = 'SPIN' | 'KITCHEN_RUSH' | 'THRESHOLD' | 'LEADERBOARD';
+export type GameConfigModel = 'ARCADE' | GameModel;
+
+export interface SpinSegmentDto {
+  label: string;
+  weight: number;
+  rewardType: GameRewardType;
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface SpinConfig {
+  segments: SpinSegmentDto[];
+  cooldownHours: number;
+  scorePerPlay: number;
+}
+
+export interface ThresholdTierDto {
+  label: string;
+  points: number;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface ThresholdConfig {
+  scorePerPlay: number;
+  cooldownHours: number;
+  tiers: ThresholdTierDto[];
+}
+
+export interface LeaderboardRewardDto {
+  rank: number;
+  label: string;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface LeaderboardConfig {
+  scorePerPlay: number;
+  cooldownHours: number;
+  periodDays: number;
+  topN: number;
+  rewards: LeaderboardRewardDto[];
+  /** When the current season began; null means "since the game was created". */
+  seasonStartedAt: string | null;
+}
+
+export interface KitchenRushRewardDto {
+  label: string;
+  minScore: number;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface KitchenRushConfig {
+  durationSeconds: number;
+  lives: number;
+  scorePerCorrect: number;
+  comboStep: number;
+  feverThreshold: number;
+  cooldownHours: number;
+  scorePerPlay: number;
+  itemLabels: string[];
+  rewards: KitchenRushRewardDto[];
+}
+
+/** What the winner of a duel gets. Null for a game played for its own sake. */
+export interface MemoryDuelRewardDto {
+  label: string;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface MemoryDuelConfig {
+  pairs: number;
+  cooldownHours: number;
+  scorePerPlay: number;
+  itemLabels: string[];
+  reward: MemoryDuelRewardDto | null;
+  rewardOnDraw: boolean;
+}
+
+export type AnyGameConfig = SpinConfig | KitchenRushConfig | ThresholdConfig | LeaderboardConfig;
+export interface ArcadeConfig {
+  spinEnabled: boolean;
+  spin: SpinConfig;
+  kitchenRushEnabled: boolean;
+  kitchenRush: KitchenRushConfig;
+  leaderboardEnabled: boolean;
+  leaderboard: LeaderboardConfig;
+  memoryDuelEnabled: boolean;
+  memoryDuel: MemoryDuelConfig;
+}
+
+
+export interface GameConfigDto {
+  isEnabled: boolean;
+  model: GameConfigModel;
+  config: ArcadeConfig | AnyGameConfig;
+}
+
+export interface GamePlayRow {
+  id: string;
+  phone: string;
+  name: string | null;
+  model?: string;
+  label: string | null;
+  couponCode: string | null;
+  createdAt: string;
+}
+
+export const gameService = {
+  get: () => api.get<GameConfigDto>('/game'),
+  update: (body: { isEnabled: boolean; model: GameConfigModel; config: ArcadeConfig | AnyGameConfig }) =>
+    api.put<GameConfigDto>('/game', body),
+  plays: () => api.get<GamePlayRow[]>('/game/plays'),
+  closeSeason: () =>
+    api.post<{
+      closedAt: string;
+      winners: Array<{
+        rank: number;
+        displayName: string;
+        score: number;
+        couponCode: string | null;
+        label: string | null;
+      }>;
+    }>('/game/leaderboard/close'),
+};
+
+/* --- public game (customer) --- */
+
+export interface PublicGameState {
+  enabled: boolean;
+  player?: { score: number; level: number; playsCount: number } | null;
+  spin?: {
+    enabled: boolean;
+    cooldownHours: number;
+    canPlay: boolean;
+    nextPlayAt: string | null;
+    segments: Array<{ label: string }>;
+  };
+  kitchenRush?: {
+    enabled: boolean;
+    cooldownHours: number;
+    canPlay: boolean;
+    nextPlayAt: string | null;
+    durationSeconds: number;
+    lives: number;
+    scorePerCorrect: number;
+    comboStep: number;
+    feverThreshold: number;
+    itemLabels: string[];
+    rewards: Array<{ label: string; minScore: number }>;
+  };
+  memoryDuel?: {
+    enabled: boolean;
+    cooldownHours: number;
+    canPlay: boolean;
+    nextPlayAt: string | null;
+    pairs: number;
+    rewardLabel: string | null;
+    rewardOnDraw: boolean;
+  };
+}
+
+/** One row of the public season board. */
+export interface LeaderboardStanding {
+  rank: number;
+  displayName: string;
+  score: number;
+  isYou: boolean;
+}
+
+export interface LeaderboardDto {
+  enabled: boolean;
+  periodDays?: number;
+  seasonStartsAt?: string;
+  seasonEndsAt?: string;
+  standings?: LeaderboardStanding[];
+  you?: { rank: number | null; score: number } | null;
+  prizes?: Array<{ rank: number; label: string }>;
+  playerCount?: number;
+}
+
+/** A dealt Memory Duel board. The seed is what both sides deal from. */
+export interface MemoryDuelSessionDto {
+  sessionToken: string;
+  seed: number;
+  pairs: number;
+  itemLabels: string[];
+  rewardLabel: string | null;
+  rewardOnDraw: boolean;
+  expiresAt: string;
+  /** True when this is a duel already in progress rather than a fresh deal. */
+  resumes: boolean;
+}
+
+export interface MemoryDuelResultDto {
+  winner: 0 | 1 | 2;
+  scoreOne: number;
+  scoreTwo: number;
+  couponCode: string | null;
+  rewardLabel: string | null;
+  playerScore: number;
+  level: number;
+}
+
+export interface FinishMemoryDuelPayload {
+  sessionToken: string;
+  scoreOne: number;
+  scoreTwo: number;
+  turns: number;
+  durationMs: number;
+}
+
+export interface GameRewardResult {
+  label: string | null;
+  rewardType: GameRewardType;
+  rewardValue: number;
+  couponCode: string | null;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface PlayResultDto {
+  model: GameModel;
+  score: number;
+  level: number;
+  // SPIN
+  segmentIndex?: number;
+  label?: string;
+  rewardType?: GameRewardType;
+  rewardValue?: number;
+  couponCode?: string | null;
+  minOrderTotal?: number;
+  expiryDays?: number;
+  // KITCHEN_RUSH
+  runScore?: number;
+  correct?: number;
+  mistakes?: number;
+  comboMax?: number;
+  // THRESHOLD
+  reached?: GameRewardResult[];
+  nextTierPoints?: number | null;
+  nextTierLabel?: string | null;
+  scoreDelta?: number;
+  // LEADERBOARD
+  rank?: number;
+  reward?: GameRewardResult | null;
+}
+
+export interface KitchenRushSessionDto {
+  sessionToken: string;
+  seed: number;
+  durationSeconds: number;
+  lives: number;
+  scorePerCorrect: number;
+  comboStep: number;
+  feverThreshold: number;
+  itemLabels: string[];
+  startedAt: string;
+  expiresAt: string;
+  resumes: boolean;
+}
+
+export interface FinishKitchenRushPayload {
+  sessionToken: string;
+  score: number;
+  correct: number;
+  mistakes: number;
+  comboMax: number;
+  durationMs: number;
+}
+
+export const publicGameService = {
+  state: (slug: string, phone?: string) =>
+    api.get<PublicGameState>(`/public/restaurants/${slug}/game`, {
+      query: phone ? { phone } : {},
+      retryOnAuthFailure: false,
+    }),
+  play: (slug: string, body: { phone: string; name?: string | null }) =>
+    api.post<PlayResultDto>(`/public/restaurants/${slug}/game/play`, body, {
+      retryOnAuthFailure: false,
+    }),
+  stateByToken: (token: string) =>
+    api.get<PublicGameState>(`/public/orders/track/${token}/game`, {
+      retryOnAuthFailure: false,
+    }),
+  playByToken: (token: string, body?: { phone?: string; name?: string | null }) =>
+    api.post<PlayResultDto>(`/public/orders/track/${token}/game/play`, body ?? {}, {
+      retryOnAuthFailure: false,
+    }),
+  startKitchenRushByToken: (token: string) =>
+    api.post<KitchenRushSessionDto>(`/public/orders/track/${token}/game/kitchen-rush/start`, {}, {
+      retryOnAuthFailure: false,
+    }),
+  finishKitchenRushByToken: (token: string, body: FinishKitchenRushPayload) =>
+    api.post<PlayResultDto>(`/public/orders/track/${token}/game/kitchen-rush/finish`, body, {
+      retryOnAuthFailure: false,
+    }),
+  leaderboard: (slug: string, phone?: string) =>
+    api.get<LeaderboardDto>(`/public/restaurants/${slug}/game/leaderboard`, {
+      query: phone ? { phone } : {},
+      retryOnAuthFailure: false,
+    }),
+  leaderboardByToken: (token: string) =>
+    api.get<LeaderboardDto>(`/public/orders/track/${token}/game/leaderboard`, {
+      retryOnAuthFailure: false,
+    }),
+  startMemoryDuelByToken: (token: string) =>
+    api.post<MemoryDuelSessionDto>(
+      `/public/orders/track/${token}/game/memory-duel/start`,
+      {},
+      { retryOnAuthFailure: false },
+    ),
+  finishMemoryDuelByToken: (token: string, body: FinishMemoryDuelPayload) =>
+    api.post<MemoryDuelResultDto>(
+      `/public/orders/track/${token}/game/memory-duel/finish`,
+      body,
+      { retryOnAuthFailure: false },
+    ),
+  startMemoryDuel: (slug: string, body: { phone: string; name?: string | null }) =>
+    api.post<MemoryDuelSessionDto>(
+      `/public/restaurants/${slug}/game/memory-duel/start`,
+      body,
+      { retryOnAuthFailure: false },
+    ),
+  finishMemoryDuel: (slug: string, phone: string, body: FinishMemoryDuelPayload) =>
+    api.post<MemoryDuelResultDto>(
+      `/public/restaurants/${slug}/game/memory-duel/finish`,
+      { ...body, phone },
+      { retryOnAuthFailure: false },
+    ),
+  startKitchenRush: (slug: string, body: { phone: string; name?: string | null }) =>
+    api.post<KitchenRushSessionDto>(`/public/restaurants/${slug}/game/kitchen-rush/start`, body, { retryOnAuthFailure: false }),
+  finishKitchenRush: (slug: string, phone: string, body: FinishKitchenRushPayload) =>
+    api.post<PlayResultDto>(`/public/restaurants/${slug}/game/kitchen-rush/finish`, { ...body, phone }, { retryOnAuthFailure: false }),
+};
+
+export const publicEventService = {
+  list: (slug: string) =>
+    api.get<PublicEventsResult>(`/public/restaurants/${slug}/events`),
+  get: (slug: string, eventSlug: string) =>
+    api.get<PublicEventDetail>(`/public/restaurants/${slug}/events/${eventSlug}`),
+  rsvp: (
+    slug: string,
+    eventSlug: string,
+    body: { name: string; phone: string; guests: number; note?: string | null },
+  ) =>
+    api.post<{ id: string; status: string }>(
+      `/public/restaurants/${slug}/events/${eventSlug}/rsvp`,
+      body,
+    ),
+};
+
+/* ------------------------------------------------------------------ */
+/* Inventory / memberships / terminal hardware                         */
+/* ------------------------------------------------------------------ */
+
+export interface InventoryItemDto {
+  id: string;
+  sku: string | null;
+  name: string;
+  unit: string;
+  unitCost: number;
+  lowStockThreshold: number;
+  trackStock: boolean;
+  isActive: boolean;
+  quantity: number;
+  low: boolean;
+  stockValue: number;
+  warehouseId: string;
+}
+
+export const inventoryService = {
+  summary: (branchId?: string) => api.get<Record<string, unknown>>('/inventory/summary', { query: { branchId } }),
+  items: (branchId?: string, warehouseId?: string) => api.get<InventoryItemDto[]>('/inventory/items', { query: { branchId, warehouseId } }),
+  createItem: (body: Record<string, unknown>) => api.post('/inventory/items', body),
+  updateItem: (id: string, body: Record<string, unknown>) => api.patch(`/inventory/items/${id}`, body),
+  warehouses: (branchId?: string) => api.get<Array<{ id: string; name: string; branchId: string; isDefault: boolean }>>('/inventory/warehouses', { query: { branchId } }),
+  createWarehouse: (body: Record<string, unknown>) => api.post('/inventory/warehouses', body),
+  adjust: (body: Record<string, unknown>) => api.post<{ itemId: string; quantity: number }>('/inventory/adjust', body),
+  transfer: (body: Record<string, unknown>) => api.post('/inventory/transfer', body),
+  movements: (branchId?: string, itemId?: string) => api.get<Array<Record<string, unknown>>>('/inventory/movements', { query: { branchId, itemId } }),
+  recipe: (productId: string) => api.get<Array<{ id: string; itemId: string; quantity: number; item: { id: string; name: string; unit: string } }>>(`/inventory/products/${productId}/recipe`),
+  setRecipe: (productId: string, items: Array<{ itemId: string; quantity: number }>) => api.put(`/inventory/products/${productId}/recipe`, { items }),
+  suppliers: () => api.get<Array<Record<string, unknown>>>('/inventory/suppliers'),
+  createSupplier: (body: Record<string, unknown>) => api.post('/inventory/suppliers', body),
+  purchaseOrders: (branchId?: string) => api.get<Array<Record<string, unknown>>>('/inventory/purchase-orders', { query: { branchId } }),
+  createPurchaseOrder: (body: Record<string, unknown>) => api.post('/inventory/purchase-orders', body),
+  receivePurchaseOrder: (id: string, body: Record<string, unknown>) => api.post(`/inventory/purchase-orders/${id}/receive`, body),
+};
+
+export interface MembershipPlanDto {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  durationDays: number;
+  discountBps: number;
+  loyaltyMultiplierBps: number;
+  freeDelivery: boolean;
+  monthlyFreeDrinks: number;
+  isActive: boolean;
+}
+
+export interface CustomerMembershipDto {
+  id: string;
+  status: string;
+  startsAt: string;
+  endsAt: string;
+  gifted: boolean;
+  customer: { id: string; phone: string; name: string | null; loyaltyPoints: number };
+  plan: MembershipPlanDto;
+  payments: Array<{ id: string; amount: number; method: string; reference: string | null; createdAt: string }>;
+}
+
+export const membershipService = {
+  plans: () => api.get<MembershipPlanDto[]>('/memberships/plans'),
+  createPlan: (body: Record<string, unknown>) => api.post<MembershipPlanDto>('/memberships/plans', body),
+  updatePlan: (id: string, body: Record<string, unknown>) => api.patch<MembershipPlanDto>(`/memberships/plans/${id}`, body),
+  list: (status?: string) => api.get<CustomerMembershipDto[]>('/memberships', { query: { status } }),
+  grant: (body: Record<string, unknown>) => api.post<CustomerMembershipDto>('/memberships', body),
+  cancel: (id: string, reason?: string) => api.post<CustomerMembershipDto>(`/memberships/${id}/cancel`, { reason }),
+};
+
+export interface PosTerminalDto {
+  id: string;
+  branchId: string;
+  name: string;
+  provider: string;
+  terminalKey: string | null;
+  bridgeUrl: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+export interface TerminalIntentDto {
+  intentId: string;
+  orderId: string;
+  orderNumber: string;
+  amount: number;
+  currency: string;
+  expiresAt: string;
+  terminal: Pick<PosTerminalDto, 'id' | 'name' | 'provider' | 'terminalKey' | 'bridgeUrl'>;
+}
+
+export const terminalService = {
+  list: (branchId?: string) => api.get<PosTerminalDto[]>('/terminals', { query: { branchId } }),
+  create: (body: Record<string, unknown>) => api.post<PosTerminalDto>('/terminals', body),
+  update: (id: string, body: Record<string, unknown>) => api.patch<PosTerminalDto>(`/terminals/${id}`, body),
+  intent: (orderId: string, body: { terminalId: string; amount?: number }) => api.post<TerminalIntentDto>(`/terminals/orders/${orderId}/intents`, body),
+};
+
+
+/* ------------------------------------------------------------------ */
+/* Accounting                                                          */
+/* ------------------------------------------------------------------ */
+
+export interface ExpenseCategoryDto {
+  id: string;
+  name: string;
+  icon: string | null;
+  isSystem: boolean;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface ExpenseDto {
+  id: string;
+  title: string;
+  amount: number;
+  spentAt: string;
+  method: 'CASH' | 'CARD' | 'TRANSFER' | 'CHEQUE' | 'OTHER';
+  reference: string | null;
+  note: string | null;
+  attachmentUrl: string | null;
+  recurrence: 'ONCE' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY';
+  nextDueAt: string | null;
+  branchId: string | null;
+  category: { id: string; name: string; icon: string | null } | null;
+  supplier: { id: string; name: string } | null;
+}
+
+export interface AccountingSummaryDto {
+  range: { from: string; to: string };
+  revenue: { total: number; orderCount: number; deliveryFees: number };
+  purchases: { total: number; movementCount: number };
+  expenses: {
+    total: number;
+    byCategory: Array<{
+      categoryId: string;
+      name: string;
+      icon: string | null;
+      total: number;
+    }>;
+  };
+  costs: number;
+  profit: number;
+  marginBps: number;
+}
+
+/** One line read off a photographed invoice, before anyone confirms it. */
+export interface ScannedLine {
+  name: string;
+  unit: string | null;
+  quantity: number;
+  unitCost: number;
+}
+
+export interface InvoiceReviewDto {
+  supplierName: string | null;
+  invoiceNumber: string | null;
+  purchasedAt: string | null;
+  lines: ScannedLine[];
+  statedTotal: number | null;
+  confidence: number | null;
+  computedTotal: number;
+  totalMismatch: number | null;
+}
+
+export const accountingService = {
+  categories: () => api.get<ExpenseCategoryDto[]>('/accounting/categories'),
+  createCategory: (body: Record<string, unknown>) =>
+    api.post<ExpenseCategoryDto>('/accounting/categories', body),
+  updateCategory: (id: string, body: Record<string, unknown>) =>
+    api.patch<ExpenseCategoryDto>(`/accounting/categories/${id}`, body),
+  deleteCategory: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/accounting/categories/${id}`),
+
+  expenses: (params: Record<string, unknown>) =>
+    api.get<ListResult<ExpenseDto>>('/accounting/expenses', { query: params }),
+  createExpense: (body: Record<string, unknown>) =>
+    api.post<ExpenseDto>('/accounting/expenses', body),
+  updateExpense: (id: string, body: Record<string, unknown>) =>
+    api.patch<ExpenseDto>(`/accounting/expenses/${id}`, body),
+  deleteExpense: (id: string) =>
+    api.delete<{ deleted: boolean }>(`/accounting/expenses/${id}`),
+
+  purchase: (body: Record<string, unknown>) =>
+    api.post<{
+      id: string;
+      number: string;
+      total: number;
+      lineCount: number;
+      purchasedAt: string;
+    }>('/accounting/purchases', body),
+
+  summary: (params: Record<string, unknown>) =>
+    api.get<AccountingSummaryDto>('/accounting/summary', { query: params }),
+
+  scanStatus: () => api.get<{ available: boolean }>('/accounting/scan/status'),
+  scanInvoice: (file: File) =>
+    uploadFile<InvoiceReviewDto>('/accounting/scan', file),
 };

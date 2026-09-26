@@ -182,7 +182,7 @@ export default function MenuPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium text-ink">{product.nameFa}</span>
-                      {product.isFeatured ? <Badge tone="gold">ویژه</Badge> : null}
+                      {product.isFeatured ? <Badge tone="brand">ویژه</Badge> : null}
                       {product.modifierGroups.length > 0 ? (
                         <Badge tone="neutral">
                           {toPersianDigits(product.modifierGroups.length)} گروه گزینه
@@ -196,7 +196,7 @@ export default function MenuPage() {
                   </div>
 
                   <div className="text-end">
-                    <p className="font-semibold tabular-nums text-gold">
+                    <p className="font-semibold tabular-nums text-brand">
                       {formatMoney(product.effectivePrice, 'IRT', { withUnit: false })}
                     </p>
                     {product.discountPrice != null ? (

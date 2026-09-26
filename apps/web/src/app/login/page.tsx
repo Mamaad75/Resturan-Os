@@ -71,16 +71,16 @@ export default function LoginPage() {
 
   return (
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
-      {/* Ambient gold wash - subtle, never the focus. */}
+      {/* Ambient brand wash - subtle, never the focus. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-40 start-1/2 size-[38rem] -translate-x-1/2 rounded-full bg-gold/[0.07] blur-3xl"
+        className="pointer-events-none absolute -top-40 start-1/2 size-[38rem] -translate-x-1/2 rounded-full bg-brand/[0.07] blur-3xl"
       />
 
       <div className="relative w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-gold/25 bg-gold/10">
-            <ChefHat className="size-7 text-gold" />
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-brand/25 bg-brand/10">
+            <ChefHat className="size-7 text-brand" />
           </div>
           <h1 className="text-2xl font-bold text-ink">ورود به سیستم</h1>
           <p className="mt-1.5 text-sm text-ink-muted">
@@ -141,7 +141,7 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-ink-muted">
             هنوز رستورانی ندارید؟{' '}
-            <Link href="/signup" className="font-medium text-gold hover:text-gold-bright">
+            <Link href="/signup" className="font-medium text-brand hover:text-brand-bright">
               رایگان بسازید
             </Link>
           </p>
@@ -161,7 +161,7 @@ export default function LoginPage() {
                   setEmail(account.email);
                   setPassword(account.password);
                 }}
-                className="rounded-lg border border-line px-3 py-2 text-start text-xs text-ink-muted transition-colors hover:border-gold/40 hover:text-ink"
+                className="rounded-lg border border-line px-3 py-2 text-start text-xs text-ink-muted transition-colors hover:border-brand/40 hover:text-ink"
               >
                 <span className="block font-medium text-ink">{account.label}</span>
                 <span className="ltr-nums block truncate text-[0.7rem] text-ink-subtle">

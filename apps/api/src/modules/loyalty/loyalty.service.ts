@@ -167,7 +167,12 @@ export class LoyaltyService {
   /** First order from this phone number, if the scheme offers a welcome bonus. */
   async grantWelcome(
     tx: Tx,
-    args: { tenantId: string; customerId: string; isFirstOrder: boolean },
+    args: {
+      tenantId: string;
+      customerId: string;
+      orderId?: string | null;
+      isFirstOrder: boolean;
+    },
   ) {
     if (!args.isFirstOrder) return;
     const rules = await this.rules(args.tenantId, tx);
@@ -175,6 +180,9 @@ export class LoyaltyService {
     await this.record(tx, {
       tenantId: args.tenantId,
       customerId: args.customerId,
+      // Tagged with the order so `reverseForOrder` claws the welcome bonus back
+      // if that first order is cancelled; an untagged bonus survived a cancel.
+      orderId: args.orderId ?? null,
       type: LoyaltyEntryType.EARN,
       points: rules.welcomePoints,
       note: 'هدیه خوش‌آمدگویی',
@@ -195,6 +203,8 @@ export class LoyaltyService {
       customerId: string | null;
       orderId: string;
       eligibleSpend: number;
+      /** Membership multiplier in basis points; 10000 = normal earning. */
+      multiplierBps?: number;
     },
   ) {
     if (!args.customerId) return 0;
@@ -211,7 +221,9 @@ export class LoyaltyService {
     if (already) return 0;
 
     const rules = await this.rules(args.tenantId, tx);
-    const points = pointsEarned(rules, args.eligibleSpend);
+    const basePoints = pointsEarned(rules, args.eligibleSpend);
+    const multiplierBps = Math.max(10_000, args.multiplierBps ?? 10_000);
+    const points = Math.floor((basePoints * multiplierBps) / 10_000);
     if (points <= 0) return 0;
 
     await this.record(tx, {
@@ -220,7 +232,7 @@ export class LoyaltyService {
       orderId: args.orderId,
       type: LoyaltyEntryType.EARN,
       points,
-      note: 'خرید',
+      note: multiplierBps > 10_000 ? `خرید ×${(multiplierBps / 10_000).toFixed(1)}` : 'خرید',
     });
     return points;
   }

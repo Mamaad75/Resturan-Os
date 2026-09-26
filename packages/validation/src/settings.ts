@@ -56,6 +56,10 @@ export const updateSettingsSchema = z
     estimatedPrepMinutes: nonNegativeIntSchema.optional(),
     smsNotificationsEnabled: z.boolean().optional(),
     autoConfirmOrders: z.boolean().optional(),
+    inventoryEnabled: z.boolean().optional(),
+    customerMembershipEnabled: z.boolean().optional(),
+    pushNotificationsEnabled: z.boolean().optional(),
+    posTerminalEnabled: z.boolean().optional(),
   })
   .strict();
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;

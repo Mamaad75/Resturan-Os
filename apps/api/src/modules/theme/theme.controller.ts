@@ -16,8 +16,13 @@ export class ThemeController {
   constructor(private readonly theme: ThemeService) {}
 
   @Get()
-  @RequirePermissions(Permission.SETTINGS_READ, Permission.BRANDING_MANAGE)
-  @ApiOperation({ summary: 'Current menu theme: preset, resolved config, draft state' })
+  @RequirePermissions(
+    Permission.SETTINGS_READ,
+    Permission.BRANDING_MANAGE,
+    Permission.MENU_READ,
+    Permission.ORDER_READ,
+  )
+  @ApiOperation({ summary: 'Current tenant theme for menu and authenticated app surfaces' })
   get(@Ctx() ctx: RequestContext) {
     return this.theme.getForAdmin(ctx);
   }

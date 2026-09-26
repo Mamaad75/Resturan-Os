@@ -75,7 +75,7 @@ function PlanList() {
               description={plan.description ?? undefined}
               action={
                 <div className="flex gap-1.5">
-                  {plan.isDefault ? <Badge tone="gold">پیش‌فرض</Badge> : null}
+                  {plan.isDefault ? <Badge tone="brand">پیش‌فرض</Badge> : null}
                   <Badge tone={plan.isActive ? 'positive' : 'neutral'}>
                     {plan.isActive ? 'فعال' : 'غیرفعال'}
                   </Badge>
@@ -83,7 +83,7 @@ function PlanList() {
               }
             />
             <CardBody className="space-y-3">
-              <p className="text-xl font-bold tabular-nums text-gold">
+              <p className="text-xl font-bold tabular-nums text-brand">
                 {formatMoney(plan.monthlyPrice, 'IRT', { withUnit: false })}
                 <span className="text-xs font-normal text-ink-subtle"> / ماه</span>
               </p>

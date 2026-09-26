@@ -69,7 +69,7 @@ const WEIGHT: Record<MenuThemeConfig['typography']['headlineWeight'], string> = 
 /**
  * The theme as CSS custom properties.
  *
- * Overriding the existing design tokens (`--canvas`, `--gold`, ...) rather than
+ * Overriding the existing design tokens (`--canvas`, `--brand`, ...) rather than
  * inventing a parallel set means every component already in the menu picks the
  * theme up without being rewritten.
  */
@@ -77,19 +77,25 @@ export function themeVariables(config: MenuThemeConfig): CSSProperties {
   const channels = (hex: string, fallback: string) =>
     hexToRgbChannels(hex) ?? fallback;
 
+  /*
+   * Fallbacks are the app's own light tokens, and they are all reached
+   * together or not at all: a config whose colours fail to parse would
+   * otherwise render dark text on a dark canvas. A readable default menu beats
+   * a half-applied theme.
+   */
   return {
-    '--canvas': channels(config.colors.background, '11 11 13'),
-    '--surface': channels(config.colors.surface, '19 19 22'),
-    '--surface-raised': channels(config.colors.surface, '26 26 31'),
-    '--surface-sunken': channels(config.colors.background, '8 8 10'),
-    '--ink': channels(config.colors.text, '245 245 244'),
-    '--ink-muted': channels(config.colors.textMuted, '161 161 170'),
-    '--ink-subtle': channels(config.colors.textMuted, '113 113 122'),
-    '--line': channels(config.colors.border, '38 38 44'),
-    '--line-strong': channels(config.colors.border, '56 56 64'),
-    '--gold': channels(config.colors.primary, '201 162 75'),
-    '--gold-bright': channels(config.colors.primary, '227 193 113'),
-    '--gold-dim': channels(config.colors.secondary, '138 111 51'),
+    '--canvas': channels(config.colors.background, '250 250 247'),
+    '--surface': channels(config.colors.surface, '255 255 255'),
+    '--surface-raised': channels(config.colors.surface, '255 255 255'),
+    '--surface-sunken': channels(config.colors.background, '244 244 240'),
+    '--ink': channels(config.colors.text, '26 26 24'),
+    '--ink-muted': channels(config.colors.textMuted, '91 91 86'),
+    '--ink-subtle': channels(config.colors.textMuted, '132 131 125'),
+    '--line': channels(config.colors.border, '229 228 222'),
+    '--line-strong': channels(config.colors.border, '209 208 200'),
+    '--brand': channels(config.colors.primary, '13 118 102'),
+    '--brand-bright': channels(config.colors.primary, '9 90 78'),
+    '--brand-dim': channels(config.colors.secondary, '168 213 204'),
     // Menu-specific knobs the components below read.
     '--menu-radius': RADIUS_PX[config.layout.radius],
     '--menu-gap': GAP[config.layout.cardSpacing],
@@ -136,10 +142,10 @@ const IMAGE_ASPECT: Record<MenuThemeConfig['layout']['imageRatio'], string> = {
 };
 
 const HEADING_STYLE: Record<MenuThemeConfig['typography']['headingStyle'], string> = {
-  rule: 'gold-rule mb-4 text-lg',
+  rule: 'brand-rule mb-4 text-lg',
   ornament: 'menu-ornament mb-5 text-center text-xl tracking-wide',
   block:
-    'mb-4 inline-block rounded-lg bg-gold px-3 py-1.5 text-base text-ink-inverse',
+    'mb-4 inline-block rounded-lg bg-brand px-3 py-1.5 text-base text-ink-inverse',
   plain: 'mb-4 text-lg tracking-tight',
 };
 
@@ -189,16 +195,16 @@ export function themeClasses(config: MenuThemeConfig): ThemeClasses {
     heading: `${HEADING_STYLE[typography.headingStyle]} text-ink`,
     price:
       productCard.priceStyle === 'loud'
-        ? 'text-lg font-extrabold text-gold'
+        ? 'text-lg font-extrabold text-brand'
         : productCard.priceStyle === 'badge'
-          ? 'inline-flex items-center rounded-lg bg-gold/15 px-2 py-0.5 font-bold text-gold'
-          : 'font-semibold text-gold',
+          ? 'inline-flex items-center rounded-lg bg-brand/15 px-2 py-0.5 font-bold text-brand'
+          : 'font-semibold text-brand',
     chipActive:
       layout.categoryNav === 'underline'
-        ? 'border-b-2 border-gold text-ink'
+        ? 'border-b-2 border-brand text-ink'
         : layout.categoryNav === 'pills'
-          ? 'rounded-full bg-gold px-4 py-2 font-bold text-ink-inverse'
-          : 'rounded-full bg-gold px-4 py-2 text-ink-inverse',
+          ? 'rounded-full bg-brand px-4 py-2 font-bold text-ink-inverse'
+          : 'rounded-full bg-brand px-4 py-2 text-ink-inverse',
     chipIdle:
       layout.categoryNav === 'underline'
         ? 'border-b-2 border-transparent text-ink-muted hover:text-ink'

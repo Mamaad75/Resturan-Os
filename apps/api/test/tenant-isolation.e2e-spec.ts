@@ -37,6 +37,7 @@ describe('Tenant isolation (restaurant A cannot reach restaurant B)', () => {
       .send({
         type: 'DINE_IN',
         tableId: beta.tableIds[0],
+        customerPhone: '09120000001',
         items: [{ productId: beta.productId, quantity: 2, modifierOptionIds: [] }],
       })
       .expect(201);
@@ -202,6 +203,7 @@ describe('Tenant isolation (restaurant A cannot reach restaurant B)', () => {
         .send({
           type: 'DINE_IN',
           tableId: alpha.tableIds[0],
+          customerPhone: '09120000001',
           items: [{ productId: beta.productId, quantity: 1, modifierOptionIds: [] }],
         });
 
@@ -216,6 +218,7 @@ describe('Tenant isolation (restaurant A cannot reach restaurant B)', () => {
         .send({
           type: 'DINE_IN',
           tableId: beta.tableIds[0],
+          customerPhone: '09120000001',
           items: [{ productId: alpha.productId, quantity: 1, modifierOptionIds: [] }],
         });
 

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   activatePlanSchema,
@@ -9,6 +9,7 @@ import {
   rejectInvoiceSchema,
   reviewInvoiceSchema,
   suspendTenantSchema,
+  entitlementOverridesSchema,
   tenantNotesSchema,
   updatePlanSchema,
   updateBankAccountSchema,
@@ -23,9 +24,20 @@ import {
   type ReviewInvoiceInput,
   type UpdateBankAccountInput,
   type SuspendTenantInput,
+  type EntitlementOverridesInput,
   type TenantNotesInput,
   type UpdatePlanInput,
   type UpdateSubscriptionInput,
+  phoneBankQuerySchema,
+  settleSettlementsSchema,
+  settlementQuerySchema,
+  updatePlatformPaymentConfigSchema,
+  updatePlatformSmsConfigSchema,
+  type PhoneBankQueryInput,
+  type SettleSettlementsInput,
+  type SettlementQueryInput,
+  type UpdatePlatformPaymentConfigInput,
+  type UpdatePlatformSmsConfigInput,
 } from '@restaurant-os/validation';
 import {
   ClientInfo,
@@ -43,6 +55,7 @@ import { PlansService } from '../plans/plans.service';
 import { PlatformAuditService } from './platform-audit.service';
 import { PlatformDashboardService } from './platform-dashboard.service';
 import { PlatformPlansService } from './platform-plans.service';
+import { PlatformSettingsService } from './platform-settings.service';
 import { PlatformTenantsService, type AuditMeta } from './platform-tenants.service';
 
 /**
@@ -63,7 +76,60 @@ export class PlatformController {
     private readonly platformPlans: PlatformPlansService,
     private readonly audit: PlatformAuditService,
     private readonly billing: BillingService,
+    private readonly settings: PlatformSettingsService,
   ) {}
+
+  /* ------------------------------------------------- payment/SMS config */
+
+  @Get('payment-config')
+  @ApiOperation({ summary: 'Platform online-gateway configuration (secrets masked)' })
+  getPaymentConfig() {
+    return this.settings.getPaymentConfig();
+  }
+
+  @Put('payment-config')
+  @ApiOperation({ summary: 'Configure the platform online gateway' })
+  updatePaymentConfig(
+    @ZodBody(updatePlatformPaymentConfigSchema) dto: UpdatePlatformPaymentConfigInput,
+  ) {
+    return this.settings.updatePaymentConfig(dto);
+  }
+
+  @Get('sms-config')
+  @ApiOperation({ summary: 'Platform SMS provider configuration (key masked)' })
+  getSmsConfig() {
+    return this.settings.getSmsConfig();
+  }
+
+  @Put('sms-config')
+  @ApiOperation({ summary: 'Configure the platform SMS provider' })
+  updateSmsConfig(
+    @ZodBody(updatePlatformSmsConfigSchema) dto: UpdatePlatformSmsConfigInput,
+  ) {
+    return this.settings.updateSmsConfig(dto);
+  }
+
+  /* ---------------------------------------------------------- settlements */
+
+  @Get('settlements')
+  @ApiOperation({ summary: 'Public-gateway settlement ledger (what is owed to each restaurant)' })
+  listSettlements(@ZodQuery(settlementQuerySchema) query: SettlementQueryInput) {
+    return this.settings.listSettlements(query);
+  }
+
+  @Post('settlements/settle')
+  @ApiOperation({ summary: 'Mark selected settlements as paid out' })
+  settle(@ZodBody(settleSettlementsSchema) dto: SettleSettlementsInput) {
+    return this.settings.settle(dto);
+  }
+
+  /* ------------------------------------------------------------ phone bank */
+
+  @Get('phone-bank')
+  @ApiOperation({ summary: 'Customer phone numbers collected across all restaurants' })
+  phoneBank(@ZodQuery(phoneBankQuerySchema) query: PhoneBankQueryInput) {
+    return this.settings.phoneBank(query);
+  }
 
   /* ------------------------------------------------------------ dashboard */
 
@@ -155,6 +221,22 @@ export class PlatformController {
     @ClientInfo() meta: AuditMeta,
   ) {
     return this.tenants.setNotes(admin, id, dto, meta);
+  }
+
+  @Put('tenants/:id/entitlements')
+  @ApiOperation({
+    summary: 'Grant or withdraw one tenant s exceptions to their plan',
+    description:
+      'A complete replacement of the exception set. Anything not sent follows ' +
+      'the plan, including whatever the plan becomes later.',
+  })
+  setEntitlements(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodParam('id', uuidSchema) id: string,
+    @ZodBody(entitlementOverridesSchema) dto: EntitlementOverridesInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.tenants.setEntitlementOverrides(admin, id, dto, meta);
   }
 
   /* --------------------------------------------------------- subscription */

@@ -9,6 +9,7 @@ import { PlatformBootstrapService } from './platform-bootstrap.service';
 import { PlatformController } from './platform.controller';
 import { PlatformDashboardService } from './platform-dashboard.service';
 import { PlatformPlansService } from './platform-plans.service';
+import { PlatformSettingsService } from './platform-settings.service';
 import { PlatformTenantsService } from './platform-tenants.service';
 
 /**
@@ -27,6 +28,7 @@ import { PlatformTenantsService } from './platform-tenants.service';
     PlatformDashboardService,
     PlatformTenantsService,
     PlatformPlansService,
+    PlatformSettingsService,
     // Lives here rather than in BillingModule so the platform controller can
     // inject it without the two modules importing each other.
     BillingService,

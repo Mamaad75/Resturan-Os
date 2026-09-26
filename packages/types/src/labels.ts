@@ -115,6 +115,10 @@ export const NOTIFICATION_TITLE_FA: Record<NotificationType, string> = {
   [NotificationType.ORDER_COMPLETED]: 'سفارش تکمیل شد',
   [NotificationType.ORDER_CANCELLED]: 'سفارش لغو شد',
   [NotificationType.PAYMENT_RECEIVED]: 'پرداخت ثبت شد',
+  [NotificationType.WAITER_CALLED]: 'درخواست گارسون',
+  [NotificationType.INVENTORY_LOW]: 'موجودی کم',
+  [NotificationType.MEMBERSHIP_EXPIRING]: 'اشتراک مشتری رو به پایان است',
+  [NotificationType.TERMINAL_PAYMENT]: 'پرداخت کارتخوان',
   [NotificationType.SYSTEM]: 'اطلاع‌رسانی سیستم',
 };
 

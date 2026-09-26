@@ -112,6 +112,10 @@ enum NotificationType {
   ORDER_COMPLETED
   ORDER_CANCELLED
   PAYMENT_RECEIVED
+  WAITER_CALLED
+  INVENTORY_LOW
+  MEMBERSHIP_EXPIRING
+  TERMINAL_PAYMENT
   SYSTEM
 }
 
@@ -276,9 +280,103 @@ model Tenant {
   deliveryZones  DeliveryZone[]
   loyaltyProgram LoyaltyProgram?
   loyaltyEntries LoyaltyEntry[]
+  events         Event[]
+  settlements    PlatformSettlement[]
+  game           Game?
+  gamePlayers    GamePlayer[]
+  gamePlays      GamePlay[]
+  gameSessions   GameSession[]
+  inventoryItems InventoryItem[]
+  warehouses     Warehouse[]
+  inventoryStocks InventoryStock[]
+  stockMovements StockMovement[]
+  suppliers      Supplier[]
+  purchaseOrders PurchaseOrder[]
+  recipeItems    RecipeItem[]
+  membershipPlans CustomerMembershipPlan[]
+  customerMemberships CustomerMembership[]
+  membershipPayments MembershipPayment[]
+  membershipUsages MembershipUsage[]
+  pushSubscriptions PushSubscription[]
+  posTerminals   PosTerminal[]
+
+  expenseCategories ExpenseCategory[]
+  expenses          Expense[]
+
+  checkoutOffers CheckoutOffer[]
+
+  referralProgram ReferralProgram?
+  referralCodes   ReferralCode[]
+  referrals       Referral[]
+  referralRewards ReferralReward[]
 
   @@index([slug])
   @@map("tenants")
+}
+
+/// A restaurant's loyalty game. One row per tenant. `model` and `config` are
+/// stored loosely (string + JSON) so a new game model or reward ships without a
+/// migration. Rewards are minted as ordinary Coupons the customer uses later.
+model Game {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @unique @db.Uuid
+  isEnabled Boolean  @default(false)
+  /// SPIN | KITCHEN_RUSH | THRESHOLD | LEADERBOARD
+  model     String   @default("SPIN") @db.VarChar(20)
+  config    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("games")
+}
+
+/// A player's standing within one restaurant, keyed by phone. The same shape
+/// carries over to the public cross-restaurant mode later.
+model GamePlayer {
+  id         String    @id @default(uuid()) @db.Uuid
+  tenantId   String    @db.Uuid
+  phone      String    @db.VarChar(20)
+  name       String?   @db.VarChar(120)
+  score      Int       @default(0)
+  level      Int       @default(1)
+  playsCount Int       @default(0)
+  lastPlayAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plays  GamePlay[]
+  sessions GameSession[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId, score])
+  @@map("game_players")
+}
+
+/// One recorded play and its outcome. A won discount is denormalised here
+/// (couponCode) so it can be shown without another lookup.
+model GamePlay {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  playerId    String   @db.Uuid
+  model       String   @db.VarChar(20)
+  scoreDelta  Int      @default(0)
+  /// NONE | PERCENTAGE | FIXED
+  rewardType  String?  @db.VarChar(20)
+  rewardValue Int?
+  couponId    String?  @db.Uuid
+  couponCode  String?  @db.VarChar(40)
+  label       String?  @db.VarChar(80)
+  createdAt   DateTime @default(now())
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  player GamePlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([playerId])
+  @@map("game_plays")
 }
 
 model Restaurant {
@@ -291,13 +389,28 @@ model Restaurant {
   // Branding
   logoUrl      String? @db.VarChar(500)
   coverUrl     String? @db.VarChar(500)
-  primaryColor String  @default("#0B0B0D") @db.VarChar(9)
-  accentColor  String  @default("#C9A24B") @db.VarChar(9)
-  theme        String  @default("dark") @db.VarChar(10)
+  primaryColor String  @default("#FAFAF7") @db.VarChar(9)
+  accentColor  String  @default("#0D7666") @db.VarChar(9)
+  theme        String  @default("light") @db.VarChar(10)
   tagline      String? @db.VarChar(160)
   // Which customer-menu layout this restaurant renders. Stored as a string
   // rather than an enum so a new template ships without a migration.
   menuTemplate String  @default("CLASSIC") @db.VarChar(24)
+
+  // Online payment routing. OFF = online disabled (cash at counter only);
+  // PLATFORM = pay through the platform's shared gateway (commission +
+  // settlement apply); OWN = the restaurant's own gateway (no commission).
+  // Stored as strings so a new mode/provider ships without a migration.
+  onlinePaymentMode      String  @default("OFF") @db.VarChar(12)
+  ownPaymentProvider     String? @db.VarChar(40)
+  /// The restaurant's own gateway credentials (merchant id, api key, ...).
+  ownPaymentCredentials  Json?
+  ownPaymentSandbox      Boolean @default(true)
+  /// Which in-person payment methods the owner offers customers. Online is
+  /// governed by onlinePaymentMode above (OFF = online off). A customer may
+  /// only pick a method that is enabled here.
+  payCashEnabled         Boolean @default(true)
+  payCardOnSiteEnabled   Boolean @default(true)
 
   // Service configuration
   /// What kind of business this is. Independent of `serviceModes`, which say
@@ -317,9 +430,16 @@ model Restaurant {
   /// Whether a guest must give a phone number to place an order. Takeaway
   /// needs one to send the "ready for pickup" message; dine-in usually does
   /// not, so this defaults off and onboarding turns it on for takeaway.
-  requireCustomerPhone    Boolean       @default(false)
+  requireCustomerPhone    Boolean       @default(true)
   /// Offer marketing opt-in at checkout. Off until the owner enables it.
   marketingOptInEnabled   Boolean       @default(false)
+
+  // Optional operational modules. These are tenant-controlled switches: when
+  // off, both API routes and admin navigation stay unavailable.
+  inventoryEnabled          Boolean       @default(false)
+  customerMembershipEnabled Boolean       @default(false)
+  pushNotificationsEnabled  Boolean       @default(true)
+  posTerminalEnabled        Boolean       @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -360,10 +480,16 @@ model Branch {
   orders            Order[]
   qrCodes           QrCode[]
   deliveryZones     DeliveryZone[]
+  expenses          Expense[]
   notifications     Notification[]
   waiterCalls       WaiterCall[]
   feedback          OrderFeedback[]
   lastSeenCustomers Customer[]
+  events            Event[]
+  warehouses        Warehouse[]
+  purchaseOrders    PurchaseOrder[]
+  stockMovements    StockMovement[]
+  posTerminals      PosTerminal[]
 
   @@unique([restaurantId, slug])
   @@index([tenantId])
@@ -406,6 +532,7 @@ model User {
   payments      Payment[]
   auditLogs     AuditLog[]
   notifications Notification[]
+  pushSubscriptions PushSubscription[]
 
   /// Email is unique per tenant, not globally: the same person may work at
   /// two restaurants on the platform.
@@ -456,6 +583,7 @@ model Menu {
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
   categories Category[]
+  events     Event[]
 
   @@index([tenantId])
   @@index([branchId])
@@ -508,6 +636,13 @@ model Product {
   category       Category        @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   modifierGroups ModifierGroup[]
   orderItems     OrderItem[]
+  recipeItems    RecipeItem[]
+
+  checkoutOffers CheckoutOffer[]
+
+  referralRewardFor       ReferralProgram[] @relation("ReferralRewardProduct")
+  referralFriendRewardFor ReferralProgram[] @relation("ReferralFriendRewardProduct")
+  referralRewardsGranted  ReferralReward[]  @relation("ReferralRewardGranted")
 
   @@index([tenantId])
   @@index([categoryId, displayOrder])
@@ -672,6 +807,9 @@ model Customer {
   notifications Notification[]
   smsMessages   SmsMessage[]
   loyaltyEntries LoyaltyEntry[]
+  memberships   CustomerMembership[]
+  referralCode  ReferralCode?
+  referralRewards ReferralReward[]
 
   @@unique([tenantId, phone])
   @@index([tenantId])
@@ -878,6 +1016,7 @@ model Payment {
   tenant     Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   order      Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   recordedBy User?  @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+  settlement PlatformSettlement?
 
   @@index([tenantId])
   @@index([orderId])
@@ -1063,6 +1202,10 @@ model WaiterCall {
   status WaiterCallStatus @default(OPEN)
   note   String?          @db.VarChar(200)
 
+  /// First waiter chosen for the call. Escalation widens recipients if no one acknowledges.
+  assignedToId     String?   @db.Uuid
+  escalationLevel  Int       @default(0)
+  escalatedAt      DateTime?
   acknowledgedById String?   @db.Uuid
   acknowledgedAt   DateTime?
   resolvedAt       DateTime?
@@ -1077,6 +1220,7 @@ model WaiterCall {
   @@index([tenantId])
   @@index([branchId, status])
   @@index([tableId, status])
+  @@index([assignedToId, status])
   @@map("waiter_calls")
 }
 
@@ -1292,6 +1436,19 @@ model Subscription {
   /// Set when the platform suspended the tenant, with the stated reason.
   suspendedAt     DateTime?
   suspendedReason String?   @db.VarChar(300)
+
+  /// Per-tenant exceptions to the plan, set by the platform.
+  ///
+  /// One restaurant negotiating a second branch, or being given inventory for
+  /// a month, must not require inventing a plan that then shows up in the
+  /// pricing page for everyone. Each holds a partial object keyed exactly like
+  /// the plan's own columns; anything absent falls through to the plan, so an
+  /// override is a note about one tenant rather than a copy of their whole
+  /// entitlement set that would silently stop tracking the plan.
+  limitOverrides   Json?
+  featureOverrides Json?
+  /// Why the exception exists, for whoever reads this in six months.
+  overrideNote     String? @db.VarChar(300)
 
   cancelledAt DateTime?
   createdAt   DateTime  @default(now())
@@ -1547,4 +1704,768 @@ model LoyaltyEntry {
   @@index([tenantId, customerId, createdAt])
   @@index([tenantId, createdAt])
   @@map("loyalty_entries")
+}
+
+/// A cafe/restaurant event (live music night, launch, workshop...). Carries an
+/// optional per-event look and an optional dedicated menu, and can collect
+/// RSVPs up to a capacity. Its public page lives at /r/<slug>/e/<eventSlug> and
+/// gets a dedicated QR rendered on demand from that path.
+model Event {
+  id           String    @id @default(uuid()) @db.Uuid
+  tenantId     String    @db.Uuid
+  branchId     String?   @db.Uuid
+  title        String    @db.VarChar(160)
+  /// Unique per tenant; the last segment of the public event URL.
+  slug         String    @db.VarChar(64)
+  description  String?   @db.VarChar(2000)
+  coverUrl     String?   @db.VarChar(500)
+  startsAt     DateTime
+  endsAt       DateTime?
+
+  // Optional per-event look. Null means "inherit the restaurant's look".
+  accentColor  String?   @db.VarChar(9)
+  theme        String?   @db.VarChar(10)
+  menuTemplate String?   @db.VarChar(24)
+
+  /// Optional per-event menu. Null falls back to the branch/restaurant menu.
+  menuId       String?   @db.Uuid
+
+  // Capacity + RSVP
+  capacity     Int?
+  rsvpEnabled  Boolean   @default(false)
+
+  isActive     Boolean   @default(true)
+  displayOrder Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  menu   Menu?       @relation(fields: [menuId], references: [id], onDelete: SetNull)
+  rsvps  EventRsvp[]
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([branchId])
+  @@map("events")
+}
+
+/// A guest reservation for an event. Status is a plain string
+/// (PENDING/CONFIRMED/CANCELLED) so a new state ships without a migration.
+model EventRsvp {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  eventId   String   @db.Uuid
+  name      String   @db.VarChar(120)
+  phone     String   @db.VarChar(20)
+  guests    Int      @default(1)
+  status    String   @default("PENDING") @db.VarChar(20)
+  note      String?  @db.VarChar(300)
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([eventId])
+  @@map("event_rsvps")
+}
+
+/// Platform-wide online payment gateway configuration, edited from the
+/// superadmin console. A single row (id is a fixed sentinel). Credentials are
+/// provider-agnostic so any gateway that has an adapter can be configured.
+model PlatformPaymentConfig {
+  id            String   @id @db.Uuid
+  /// Adapter name, e.g. "zarinpal". Empty until configured.
+  provider      String   @default("") @db.VarChar(40)
+  /// Merchant id / api key / extra fields for the chosen provider.
+  credentials   Json?
+  sandbox       Boolean  @default(true)
+  /// The public gateway stays OFF until an operator enables it after testing.
+  enabled       Boolean  @default(false)
+  /// Platform commission on public-gateway payments, in basis points (400 = 4%).
+  commissionBps Int      @default(400)
+  /// Settlement window: net is payable to the restaurant between these hours
+  /// after the payment is captured.
+  settleMinHours Int     @default(1)
+  settleMaxHours Int     @default(48)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("platform_payment_config")
+}
+
+/// Platform-wide SMS provider configuration, edited from the superadmin
+/// console. Single row. Falls back to the console provider when disabled.
+model PlatformSmsConfig {
+  id        String   @id @db.Uuid
+  provider  String   @default("console") @db.VarChar(20)
+  apiKey    String?  @db.VarChar(200)
+  sender    String?  @db.VarChar(40)
+  enabled   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_sms_config")
+}
+
+/// One row per captured public-gateway (PLATFORM) payment: the money landed in
+/// the platform account and this records what is owed back to the restaurant
+/// (gross minus commission) and when it may be settled.
+model PlatformSettlement {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  orderId          String    @db.Uuid
+  paymentId        String    @unique @db.Uuid
+  grossAmount      Int
+  commissionBps    Int
+  commissionAmount Int
+  netAmount        Int
+  /// PENDING | SETTLED | CANCELLED
+  status           String    @default("PENDING") @db.VarChar(12)
+  /// Net becomes payable between eligibleAt and dueAt (the 1-48h window).
+  eligibleAt       DateTime
+  dueAt            DateTime
+  settledAt        DateTime?
+  settlementRef    String?   @db.VarChar(120)
+  note             String?   @db.VarChar(300)
+  createdAt        DateTime  @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([status, eligibleAt])
+  @@map("platform_settlements")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Games v2 sessions
+ * ------------------------------------------------------------------
+ */
+
+/// Server-owned session for skill games. A session can be finished once only;
+/// the client animates/plays, while the server owns cooldown and rewards.
+model GameSession {
+  id          String    @id @default(uuid()) @db.Uuid
+  tenantId    String    @db.Uuid
+  playerId    String    @db.Uuid
+  model       String    @db.VarChar(24)
+  token       String    @unique @db.VarChar(64)
+  seed        Int
+  startedAt   DateTime  @default(now())
+  expiresAt   DateTime
+  finishedAt  DateTime?
+  score       Int?
+  correct     Int?
+  mistakes    Int?
+  comboMax    Int?
+  metadata    Json?
+
+  tenant Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  player GamePlayer @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, startedAt])
+  @@index([playerId, startedAt])
+  @@map("game_sessions")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Inventory
+ * ------------------------------------------------------------------
+ */
+
+model InventoryItem {
+  id                String   @id @default(uuid()) @db.Uuid
+  tenantId          String   @db.Uuid
+  sku               String?  @db.VarChar(64)
+  name              String   @db.VarChar(140)
+  unit              String   @default("UNIT") @db.VarChar(24)
+  unitCost          Int      @default(0)
+  lowStockThreshold Decimal  @default(0) @db.Decimal(14, 3)
+  trackStock        Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stocks InventoryStock[]
+  movements StockMovement[]
+  recipeItems RecipeItem[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, isActive])
+  @@map("inventory_items")
+}
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  branchId  String   @db.Uuid
+  name      String   @db.VarChar(120)
+  isDefault Boolean  @default(false)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  stocks InventoryStock[]
+  movements StockMovement[]
+  purchaseOrders PurchaseOrder[]
+
+  @@unique([branchId, name])
+  @@index([tenantId])
+  @@index([branchId, isActive])
+  @@map("warehouses")
+}
+
+model InventoryStock {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  warehouseId String   @db.Uuid
+  itemId      String   @db.Uuid
+  quantity    Decimal  @default(0) @db.Decimal(14, 3)
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, warehouseId, itemId])
+  @@index([tenantId])
+  @@index([itemId])
+  @@map("inventory_stocks")
+}
+
+model StockMovement {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  branchId    String   @db.Uuid
+  warehouseId String   @db.Uuid
+  itemId      String   @db.Uuid
+  type        String   @db.VarChar(32)
+  quantity    Decimal  @db.Decimal(14, 3)
+  unitCost    Int?
+  orderId     String?  @db.Uuid
+  reference   String?  @db.VarChar(120)
+  note        String?  @db.VarChar(300)
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([warehouseId, createdAt])
+  @@index([itemId, createdAt])
+  @@index([orderId, type])
+  @@map("stock_movements")
+}
+
+model RecipeItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  tenantId  String  @db.Uuid
+  productId String  @db.Uuid
+  itemId    String  @db.Uuid
+  quantity  Decimal @db.Decimal(14, 3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, itemId])
+  @@index([tenantId])
+  @@index([itemId])
+  @@map("recipe_items")
+}
+
+model Supplier {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  name      String   @db.VarChar(140)
+  phone     String?  @db.VarChar(30)
+  email     String?  @db.VarChar(160)
+  address   String?  @db.VarChar(300)
+  notes     String?  @db.VarChar(500)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+
+  expenses Expense[]
+
+  @@index([tenantId, isActive])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  branchId    String   @db.Uuid
+  warehouseId String   @db.Uuid
+  supplierId  String?  @db.Uuid
+  number      String   @db.VarChar(40)
+  status      String   @default("DRAFT") @db.VarChar(20)
+  notes       String?  @db.VarChar(500)
+  orderedAt   DateTime?
+  expectedAt  DateTime?
+  receivedAt  DateTime?
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items PurchaseOrderItem[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status, createdAt])
+  @@index([branchId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(uuid()) @db.Uuid
+  purchaseOrderId String   @db.Uuid
+  itemId          String   @db.Uuid
+  quantity        Decimal  @db.Decimal(14, 3)
+  receivedQuantity Decimal @default(0) @db.Decimal(14, 3)
+  unitCost        Int      @default(0)
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, itemId])
+  @@index([itemId])
+  @@map("purchase_order_items")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Customer memberships
+ * ------------------------------------------------------------------
+ */
+
+model CustomerMembershipPlan {
+  id                 String   @id @default(uuid()) @db.Uuid
+  tenantId           String   @db.Uuid
+  name               String   @db.VarChar(120)
+  description        String?  @db.VarChar(500)
+  price              Int      @default(0)
+  durationDays       Int      @default(30)
+  discountBps        Int      @default(0)
+  loyaltyMultiplierBps Int    @default(10000)
+  freeDelivery       Boolean  @default(false)
+  monthlyFreeDrinks  Int      @default(0)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  memberships CustomerMembership[]
+
+  @@index([tenantId, isActive])
+  @@map("customer_membership_plans")
+}
+
+model CustomerMembership {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  customerId     String   @db.Uuid
+  planId         String   @db.Uuid
+  status         String   @default("ACTIVE") @db.VarChar(20)
+  startsAt       DateTime @default(now())
+  endsAt         DateTime
+  autoRenew      Boolean  @default(false)
+  gifted         Boolean  @default(false)
+  grantedByUserId String? @db.Uuid
+  cancelledAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  plan CustomerMembershipPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  payments MembershipPayment[]
+  usages MembershipUsage[]
+
+  @@index([tenantId, status, endsAt])
+  @@index([customerId, status])
+  @@map("customer_memberships")
+}
+
+model MembershipPayment {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  membershipId String   @db.Uuid
+  amount       Int
+  method       String   @default("OTHER") @db.VarChar(20)
+  status       String   @default("PAID") @db.VarChar(20)
+  reference    String?  @db.VarChar(120)
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership CustomerMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([membershipId])
+  @@map("membership_payments")
+}
+
+model MembershipUsage {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  membershipId String   @db.Uuid
+  benefitType  String   @db.VarChar(40)
+  quantity     Int      @default(1)
+  orderId      String?  @db.Uuid
+  note         String?  @db.VarChar(200)
+  createdAt    DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  membership CustomerMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([membershipId, benefitType, createdAt])
+  @@map("membership_usages")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Push notifications / POS terminal pairing
+ * ------------------------------------------------------------------
+ */
+
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  userId    String   @db.Uuid
+  endpoint  String   @db.VarChar(1000)
+  p256dh    String   @db.VarChar(255)
+  auth      String   @db.VarChar(255)
+  userAgent String?  @db.VarChar(300)
+  isActive  Boolean  @default(true)
+  lastUsedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, endpoint])
+  @@index([tenantId, userId, isActive])
+  @@map("push_subscriptions")
+}
+
+model PosTerminal {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  branchId    String   @db.Uuid
+  name        String   @db.VarChar(120)
+  provider    String   @default("LOCAL_BRIDGE") @db.VarChar(40)
+  terminalKey String?  @db.VarChar(120)
+  bridgeUrl   String?  @db.VarChar(300)
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, isActive])
+  @@index([branchId, isActive])
+  @@map("pos_terminals")
+}
+
+
+/**
+ * ------------------------------------------------------------------
+ * Accounting
+ * ------------------------------------------------------------------
+ *
+ * Money leaving the business that is not stock. Purchases already live in
+ * the inventory domain - a purchase order that is received both costs money
+ * and raises stock - so accounting reads those rather than keeping a second,
+ * divergent copy of the same event.
+ */
+
+/// How an expense was settled. Mirrors how a small restaurant actually pays.
+enum ExpensePaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  CHEQUE
+  OTHER
+}
+
+/// How often a fixed cost repeats. ONCE is an ordinary one-off bill.
+enum ExpenseRecurrence {
+  ONCE
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+/// A heading on the expense report: rent, utilities, wages, repairs.
+model ExpenseCategory {
+  id       String  @id @default(uuid()) @db.Uuid
+  tenantId String  @db.Uuid
+  name     String  @db.VarChar(80)
+  /// Lucide icon name, so the list reads at a glance.
+  icon     String? @db.VarChar(40)
+  /// Marks the rows created by the seed, which may not be deleted while in use.
+  isSystem Boolean @default(false)
+  isActive Boolean @default(true)
+  displayOrder Int  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  expenses Expense[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, isActive, displayOrder])
+  @@map("expense_categories")
+}
+
+/// One payment out. Rent, the electricity bill, a plumber, wages.
+model Expense {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  /// Null means the cost belongs to the business rather than one branch.
+  branchId   String? @db.Uuid
+  categoryId String @db.Uuid
+  supplierId String? @db.Uuid
+
+  title  String @db.VarChar(160)
+  /// Toman. Stored as an integer like every other amount in the system.
+  amount Int
+  /// The day the money left, which is the day the report counts it on.
+  spentAt DateTime
+
+  method ExpensePaymentMethod @default(CASH)
+  /// Bank reference, cheque number, tracking code.
+  reference String? @db.VarChar(80)
+  note      String? @db.VarChar(500)
+  /// Photo of the bill or receipt.
+  attachmentUrl String? @db.VarChar(500)
+
+  /// Set on the template row of a repeating cost. Each occurrence is its own
+  /// row, so editing next month's rent never rewrites last month's books.
+  recurrence   ExpenseRecurrence @default(ONCE)
+  /// When the next occurrence is due, for the reminder list.
+  nextDueAt    DateTime?
+
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch   Branch?         @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  supplier Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  /// The report's main query: one tenant, one date range.
+  @@index([tenantId, spentAt])
+  @@index([tenantId, categoryId, spentAt])
+  @@index([branchId, spentAt])
+  @@map("expenses")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Checkout offers
+ * ------------------------------------------------------------------
+ */
+
+/// A timed upsell shown to a guest just before they pay.
+model CheckoutOffer {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @db.Uuid
+  productId String @db.Uuid
+
+  /// Headline the guest reads. Defaults are generated from the product.
+  title       String? @db.VarChar(120)
+  /// Percentage off, in basis points. 2000 = 20%.
+  discountBps Int     @default(0)
+
+  /// The window the offer runs in. An offer outside its window is invisible
+  /// without anyone having to remember to switch it off.
+  startsAt DateTime @default(now())
+  endsAt   DateTime
+
+  isActive Boolean @default(true)
+  /// How many times it has been shown and taken, so the owner can tell
+  /// whether the offer is worth running again.
+  shownCount    Int @default(0)
+  acceptedCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// The guest-facing lookup: this tenant, live right now.
+  @@index([tenantId, isActive, startsAt, endsAt])
+  @@index([productId])
+  @@map("checkout_offers")
+}
+
+/// What a referral pays out. The owner chooses; the server prices it.
+enum ReferralRewardType {
+  /// Value is basis points off the order subtotal.
+  PERCENTAGE
+  /// Value is a flat amount off.
+  FIXED
+  /// One named product on the house. Value is ignored.
+  FREE_PRODUCT
+}
+
+enum ReferralRewardStatus {
+  /// Earned and spendable.
+  AVAILABLE
+  /// Spent on an order.
+  USED
+  /// Ran out of time before it was spent.
+  EXPIRED
+}
+
+/// Who a reward belongs to, which decides what the guest is told.
+enum ReferralRole {
+  /// The customer who did the inviting.
+  REFERRER
+  /// The friend who accepted the invitation.
+  FRIEND
+}
+
+/// One programme per restaurant: the terms of "invite a friend".
+model ReferralProgram {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @unique @db.Uuid
+
+  /// Off until an owner sets the terms, so nobody is promised a reward the
+  /// restaurant never agreed to.
+  isActive Boolean @default(false)
+
+  /// What the inviter gets, and after how many friends have ordered.
+  rewardType      ReferralRewardType @default(PERCENTAGE)
+  /// Basis points for PERCENTAGE, an amount for FIXED, unused for FREE_PRODUCT.
+  rewardValue     Int                @default(1000)
+  rewardProductId String?            @db.Uuid
+  invitesRequired Int                @default(1)
+
+  /// What the invited friend gets on their first order. Null means the
+  /// invitation is worth nothing to them, which is a choice an owner may make.
+  friendRewardType      ReferralRewardType?
+  friendRewardValue     Int                 @default(0)
+  friendRewardProductId String?             @db.Uuid
+
+  /// How long an earned reward stays spendable.
+  rewardValidDays Int @default(30)
+
+  /// Shown to the guest under the invitation, in the owner's own words.
+  termsFa String? @db.VarChar(300)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rewardProduct      Product? @relation("ReferralRewardProduct", fields: [rewardProductId], references: [id], onDelete: SetNull)
+  friendRewardProduct Product? @relation("ReferralFriendRewardProduct", fields: [friendRewardProductId], references: [id], onDelete: SetNull)
+
+  @@map("referral_programs")
+}
+
+/// A customer's own invitation code. Issued on first ask, then permanent.
+model ReferralCode {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  /// Unique on its own: a customer belongs to one restaurant and holds one
+  /// code there, so the code is a property of the customer rather than a row
+  /// they might accumulate.
+  customerId String @unique @db.Uuid
+
+  /// Short, uppercase, and unambiguous when read aloud or retyped.
+  code String @db.VarChar(16)
+
+  createdAt DateTime @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  referrals Referral[]
+
+  /// No two customers of one restaurant share a code.
+  @@unique([tenantId, code])
+  @@map("referral_codes")
+}
+
+/// One accepted invitation: this friend used that code, on this order.
+model Referral {
+  id       String @id @default(uuid()) @db.Uuid
+  tenantId String @db.Uuid
+  codeId   String @db.Uuid
+
+  /// The customer who did the inviting, denormalised for counting.
+  referrerCustomerId String @db.Uuid
+  invitedCustomerId  String @db.Uuid
+  /// The friend's first order, which is what makes the invitation count.
+  orderId            String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code   ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+
+  /// A person can be referred once, ever: the welcome is for new customers.
+  @@unique([tenantId, invitedCustomerId])
+  /// And one invitation per order, so re-submitting cannot double-count.
+  @@unique([orderId])
+  @@index([tenantId, referrerCustomerId])
+  @@map("referrals")
+}
+
+/// An earned reward, spendable exactly once.
+///
+/// The terms are copied here rather than read from the programme: an owner who
+/// changes the offer next week must not silently change what was already
+/// promised, and must not be able to revoke it either.
+model ReferralReward {
+  id         String @id @default(uuid()) @db.Uuid
+  tenantId   String @db.Uuid
+  customerId String @db.Uuid
+
+  role   ReferralRole
+  type   ReferralRewardType
+  /// Basis points for PERCENTAGE, an amount for FIXED, unused for FREE_PRODUCT.
+  value  Int                  @default(0)
+  productId String?           @db.Uuid
+  status ReferralRewardStatus @default(AVAILABLE)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+  usedOnOrderId String?  @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product  Product? @relation("ReferralRewardGranted", fields: [productId], references: [id], onDelete: SetNull)
+
+  /// The guest-facing lookup: what this customer can spend right now.
+  @@index([tenantId, customerId, status])
+  @@map("referral_rewards")
 }

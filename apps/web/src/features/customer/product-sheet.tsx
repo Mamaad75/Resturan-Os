@@ -197,7 +197,7 @@ export function ProductSheet({
                     className={cn(
                       'flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition-colors',
                       isChecked
-                        ? 'border-gold/50 bg-gold/[0.08]'
+                        ? 'border-brand/50 bg-brand/[0.08]'
                         : 'border-line bg-surface-sunken hover:border-line-strong',
                       !option.isAvailable && 'cursor-not-allowed opacity-45',
                     )}
@@ -208,7 +208,7 @@ export function ProductSheet({
                       checked={isChecked}
                       disabled={!option.isAvailable}
                       onChange={() => toggle(group.id, option.id, group.type)}
-                      className="size-4 shrink-0 accent-[rgb(var(--gold))]"
+                      className="size-4 shrink-0 accent-[rgb(var(--brand))]"
                     />
                     <span className="flex-1 text-sm text-ink">{option.nameFa}</span>
                     {option.priceDelta > 0 ? (

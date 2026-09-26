@@ -1,0 +1,25 @@
+{
+  "name": "FoodOS Restaurant OS",
+  "short_name": "FoodOS",
+  "description": "سیستم عامل کافه و رستوران؛ سفارش، صندوق، آشپزخانه، انبار، مشتریان و بازی.",
+  "start_url": "/admin",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0B0B0D",
+  "theme_color": "#0B0B0D",
+  "lang": "fa",
+  "dir": "rtl",
+  "categories": ["business", "food", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "صندوق", "short_name": "صندوق", "url": "/pos", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "آشپزخانه", "short_name": "KDS", "url": "/kds", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "سفارش‌ها", "short_name": "سفارش", "url": "/admin/orders", "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

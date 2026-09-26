@@ -90,6 +90,55 @@ export const tenantNotesSchema = z.object({
 });
 export type TenantNotesInput = z.infer<typeof tenantNotesSchema>;
 
+/**
+ * Per-tenant exceptions to a plan.
+ *
+ * Deliberately a partial: a key that is absent means "follow the plan", which
+ * is not the same as a key set to the plan's current value. An admin removing
+ * an exception should leave the tenant tracking the plan again, including
+ * whatever the plan becomes later.
+ *
+ * `null` for a limit means unlimited, which is a thing the platform grants, so
+ * it is a value rather than an absence.
+ */
+const limitOverrideSchema = z
+  .number()
+  .int('محدودیت باید عدد صحیح باشد.')
+  .min(0, 'محدودیت نمی‌تواند منفی باشد.')
+  .max(1_000_000)
+  .nullable();
+
+export const entitlementOverridesSchema = z.object({
+  limits: z
+    .object({
+      maxBranches: limitOverrideSchema.optional(),
+      maxStaff: limitOverrideSchema.optional(),
+      maxProducts: limitOverrideSchema.optional(),
+      maxTables: limitOverrideSchema.optional(),
+      maxMonthlyOrders: limitOverrideSchema.optional(),
+      smsAllowance: limitOverrideSchema.optional(),
+    })
+    .default({}),
+  features: z
+    .object({
+      customThemeEnabled: z.boolean().optional(),
+      advancedThemeEnabled: z.boolean().optional(),
+      customCssEnabled: z.boolean().optional(),
+      crmEnabled: z.boolean().optional(),
+      campaignsEnabled: z.boolean().optional(),
+      takeawayEnabled: z.boolean().optional(),
+      dineInEnabled: z.boolean().optional(),
+      waiterCallEnabled: z.boolean().optional(),
+      reportsEnabled: z.boolean().optional(),
+      couponsEnabled: z.boolean().optional(),
+      multiBranchEnabled: z.boolean().optional(),
+    })
+    .default({}),
+  /** Why, for whoever reads this in six months. */
+  note: optionalText(300, 'دلیل'),
+});
+export type EntitlementOverridesInput = z.infer<typeof entitlementOverridesSchema>;
+
 /* ------------------------------------------------------------------ */
 /* Subscription billing                                                */
 /* ------------------------------------------------------------------ */

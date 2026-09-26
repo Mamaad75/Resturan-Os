@@ -135,24 +135,31 @@ export type DeepPartial<T> = {
 /* Preset defaults                                                     */
 /* ------------------------------------------------------------------ */
 
-const DARK: ThemeColors = {
-  background: '#0B0B0D',
-  surface: '#131316',
-  text: '#F5F5F4',
-  textMuted: '#A1A1AA',
-  primary: '#C9A24B',
-  secondary: '#8A6F33',
-  border: '#26262C',
+/*
+ * The two neutral bases every preset starts from.
+ *
+ * Both are warm rather than blue-grey, because food photography sits badly on
+ * a cold surface, and neither carries gold: the accent is a per-preset choice
+ * and the owner's first edit, not a house style baked into the neutrals.
+ */
+const LIGHT: ThemeColors = {
+  background: '#FAFAF7',
+  surface: '#FFFFFF',
+  text: '#1A1A18',
+  textMuted: '#5B5B56',
+  primary: '#0D7666',
+  secondary: '#0A5A4E',
+  border: '#E5E4DE',
 };
 
-const LIGHT: ThemeColors = {
-  background: '#FAFAF9',
-  surface: '#FFFFFF',
-  text: '#18181B',
-  textMuted: '#52525B',
-  primary: '#A17C2A',
-  secondary: '#D6BD85',
-  border: '#E4E4E7',
+const DARK: ThemeColors = {
+  background: '#141517',
+  surface: '#1C1E21',
+  text: '#F0F1EF',
+  textMuted: '#A4A6A3',
+  primary: '#2DB29A',
+  secondary: '#186054',
+  border: '#2D3034',
 };
 
 function baseConfig(colors: ThemeColors): MenuThemeConfig {
@@ -205,10 +212,10 @@ function baseConfig(colors: ThemeColors): MenuThemeConfig {
  * preset simply loads these values, and every one of them stays editable.
  */
 export const MENU_THEME_PRESETS: Record<MenuTemplate, MenuThemeConfig> = {
-  [MenuTemplate.CLASSIC]: baseConfig(DARK),
+  [MenuTemplate.CLASSIC]: baseConfig(LIGHT),
 
   [MenuTemplate.TRADITIONAL]: {
-    ...baseConfig({ ...DARK, primary: '#C2410C', secondary: '#7C2D12' }),
+    ...baseConfig({ ...LIGHT, primary: '#B4460F', secondary: '#7C2D12' }),
     typography: {
       headlineFont: 'serif',
       bodyFont: 'vazirmatn',
@@ -217,7 +224,7 @@ export const MENU_THEME_PRESETS: Record<MenuTemplate, MenuThemeConfig> = {
       headingStyle: 'ornament',
     },
     layout: {
-      ...baseConfig(DARK).layout,
+      ...baseConfig(LIGHT).layout,
       radius: 'sm',
       productLayout: 'list',
       categoryNav: 'pills',
@@ -225,7 +232,7 @@ export const MENU_THEME_PRESETS: Record<MenuTemplate, MenuThemeConfig> = {
   },
 
   [MenuTemplate.CAFE]: {
-    ...baseConfig({ ...DARK, primary: '#0F766E', secondary: '#134E4A' }),
+    ...baseConfig({ ...DARK, primary: '#C2925F', secondary: '#7A5236' }),
     typography: {
       headlineFont: 'vazirmatn-tight',
       bodyFont: 'vazirmatn',
@@ -418,7 +425,7 @@ export function scopeCustomCss(css: string | null | undefined): string {
 /* Colour mode                                                         */
 /* ------------------------------------------------------------------ */
 
-/** "#C9A24B" -> "201 162 75", the channel form the design tokens expect. */
+/** "#0D7666" -> "13 118 102", the channel form the design tokens expect. */
 export function hexToRgbChannels(hex: string): string | null {
   const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex.trim());
   if (!match) return null;
@@ -487,18 +494,18 @@ function shift(hex: string, amount: number): string {
  */
 const NEUTRALS: Record<ThemeMode, Omit<ThemeColors, 'primary' | 'secondary'>> = {
   dark: {
-    background: '#0b0b0d',
-    surface: '#131316',
-    text: '#f5f5f4',
-    textMuted: '#a1a1aa',
-    border: '#26262c',
+    background: '#141517',
+    surface: '#1c1e21',
+    text: '#f0f1ef',
+    textMuted: '#a4a6a3',
+    border: '#2d3034',
   },
   light: {
-    background: '#fafaf9',
+    background: '#fafaf7',
     surface: '#ffffff',
-    text: '#18181b',
-    textMuted: '#52525b',
-    border: '#e4e4e7',
+    text: '#1a1a18',
+    textMuted: '#5b5b56',
+    border: '#e5e4de',
   },
 };
 
@@ -513,32 +520,78 @@ const NEUTRALS: Record<ThemeMode, Omit<ThemeColors, 'primary' | 'secondary'>> = 
  * Returns the config untouched when it is already in the requested mode, so
  * the restaurant's own hand-picked palette is never second-guessed.
  */
+/*
+ * Accents carry price text, not just fills, so they need real separation from
+ * the background. A pale sand that reads well on charcoal is washed out on
+ * white at anything less than this.
+ */
+const MIN_ACCENT_GAP = 0.45;
+
+/**
+ * An accent nudged until it can be read on the given mode's background.
+ *
+ * Shared by the mode switch and by the palette builder, so a colour chosen in
+ * the customizer and the same colour after a guest flips to dark mode are
+ * treated by one rule rather than two that drift apart.
+ */
+export function readableAccent(hex: string, mode: ThemeMode): string {
+  const backgroundLum = luminance(NEUTRALS[mode].background);
+  if (Math.abs(luminance(hex) - backgroundLum) >= MIN_ACCENT_GAP) return hex;
+  return mode === 'light' ? shift(hex, -0.35) : shift(hex, 0.35);
+}
+
+/**
+ * A whole palette from one colour.
+ *
+ * The customizer's seven colour fields are the right tool for someone who
+ * knows what a surface token is, and the wrong first question for a café owner
+ * who knows their sign is green. This turns that one answer into a coherent
+ * palette: the fixed neutral ramp for the mode, the brand colour nudged until
+ * it is readable on it, and a deeper shade of the same hue for the secondary.
+ *
+ * The owner can still edit any of the seven afterwards - this writes values,
+ * it does not lock them.
+ */
+export function paletteFromBrand(brand: string, mode: ThemeMode): ThemeColors {
+  const primary = readableAccent(brand, mode);
+  return {
+    ...NEUTRALS[mode],
+    primary,
+    // A shade rather than a second hue: two unrelated accents is how a menu
+    // starts looking like a fairground.
+    secondary: shift(primary, mode === 'light' ? -0.25 : 0.25),
+  };
+}
+
+/**
+ * Brand colours offered as swatches.
+ *
+ * A short list of colours that are readable in both modes and that a
+ * restaurant plausibly already owns, because an empty colour picker is a
+ * worse question than five good answers.
+ */
+export const BRAND_SWATCHES: Array<{ hex: string; labelFa: string }> = [
+  { hex: '#0d7666', labelFa: 'سبز' },
+  { hex: '#b4460f', labelFa: 'نارنجی سوخته' },
+  { hex: '#7a5236', labelFa: 'قهوه‌ای' },
+  { hex: '#b91c3c', labelFa: 'قرمز' },
+  { hex: '#1d4ed8', labelFa: 'آبی' },
+  { hex: '#6d28d9', labelFa: 'بنفش' },
+  { hex: '#57534e', labelFa: 'خاکستری' },
+];
+
 export function applyColorMode(
   config: MenuThemeConfig,
   mode: ThemeMode,
 ): MenuThemeConfig {
   if (configMode(config) === mode) return config;
 
-  const neutrals = NEUTRALS[mode];
-  const backgroundLum = luminance(neutrals.background);
-
-  /*
-   * Accents carry price text, not just fills, so they need real separation
-   * from the background. The gold that reads well on charcoal is washed out
-   * on white at anything less than this.
-   */
-  const MIN_GAP = 0.45;
-  const readable = (hex: string) => {
-    if (Math.abs(luminance(hex) - backgroundLum) >= MIN_GAP) return hex;
-    return mode === 'light' ? shift(hex, -0.35) : shift(hex, 0.35);
-  };
-
   return {
     ...config,
     colors: {
-      ...neutrals,
-      primary: readable(config.colors.primary),
-      secondary: readable(config.colors.secondary),
+      ...NEUTRALS[mode],
+      primary: readableAccent(config.colors.primary, mode),
+      secondary: readableAccent(config.colors.secondary, mode),
     },
   };
 }

@@ -119,7 +119,7 @@ export default function StaffPage() {
                   key={member.id}
                   className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3.5 sm:px-5"
                 >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gold/12 font-semibold text-gold">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/12 font-semibold text-brand">
                     {member.fullName.charAt(0)}
                   </span>
 
@@ -131,7 +131,7 @@ export default function StaffPage() {
                         <Badge tone="critical">غیرفعال</Badge>
                       ) : null}
                       {member.id === user?.id ? (
-                        <Badge tone="gold">شما</Badge>
+                        <Badge tone="brand">شما</Badge>
                       ) : null}
                     </div>
                     <p className="ltr-nums mt-0.5 truncate text-xs text-ink-subtle">

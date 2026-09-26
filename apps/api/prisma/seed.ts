@@ -84,7 +84,7 @@ async function main() {
         'کافه‌ای دنج در قلب شهر با قهوه تخصصی، برگرهای دست‌ساز و دسرهای خانگی.',
       tagline: 'قهوه تخصصی و غذای دست‌ساز',
       primaryColor: '#0B0B0D',
-      accentColor: '#C9A24B',
+      accentColor: '#0D7666',
       theme: 'dark',
       serviceModes: ['DINE_IN', 'TAKEAWAY'],
       currency: 'IRT',

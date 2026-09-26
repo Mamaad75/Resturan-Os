@@ -115,7 +115,7 @@ function Invoices() {
               className={cn(
                 'shrink-0 rounded-lg px-3 py-2 text-sm transition-colors',
                 status === tab.value
-                  ? 'bg-gold/10 text-gold'
+                  ? 'bg-brand/10 text-brand'
                   : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
               )}
             >
@@ -155,7 +155,7 @@ function Invoices() {
                   <div className="min-w-0 flex-1">
                     <Link
                       href={`/superadmin/tenants/${invoice.tenant.id}`}
-                      className="flex items-center gap-1.5 font-semibold text-ink hover:text-gold"
+                      className="flex items-center gap-1.5 font-semibold text-ink hover:text-brand"
                     >
                       {invoice.tenant.name}
                       <ExternalLink className="size-3.5" />
@@ -166,7 +166,7 @@ function Invoices() {
                     </p>
                   </div>
                   <div className="text-end">
-                    <p className="font-bold tabular-nums text-gold">
+                    <p className="font-bold tabular-nums text-brand">
                       {formatMoney(invoice.amount, 'IRT')}
                     </p>
                     <Badge tone={STATUS_TONE[invoice.status]}>
@@ -198,7 +198,7 @@ function Invoices() {
                     href={invoice.receiptUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-gold hover:text-gold-bright"
+                    className="inline-flex items-center gap-1.5 text-xs text-brand hover:text-brand-bright"
                   >
                     مشاهده تصویر رسید
                     <ExternalLink className="size-3" />

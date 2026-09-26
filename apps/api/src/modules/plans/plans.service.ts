@@ -17,6 +17,13 @@ import { AppException } from '../../common/exceptions/app.exception';
 import { tehranMonthStart } from '../../common/utils/time.util';
 import { PRISMA, type PrismaService } from '../../prisma/prisma.service';
 import { runAsSystem } from '../../prisma/tenant-scope';
+import {
+  hasOverrides,
+  mergeFeatures,
+  mergeLimits,
+  readFeatureOverrides,
+  readLimitOverrides,
+} from './entitlement-overrides';
 
 /** Which resource a limit governs, for the error message. */
 const LIMIT_LABEL_FA: Record<PlanLimitKey, string> = {
@@ -111,11 +118,19 @@ export class PlansService {
       ? effectiveStatus(subscription)
       : SubscriptionStatus.EXPIRED;
 
+    /*
+     * Plan terms first, then the tenant's own exceptions. Overrides are read
+     * defensively: the column is JSON, and an entitlement is not something to
+     * infer from whatever happens to be in it.
+     */
+    const limitOverrides = readLimitOverrides(subscription?.limitOverrides);
+    const featureOverrides = readFeatureOverrides(subscription?.featureOverrides);
+
     const limits = subscription
-      ? pickLimits(subscription.plan)
+      ? mergeLimits(pickLimits(subscription.plan), limitOverrides)
       : ZERO_LIMITS;
     const features = subscription
-      ? pickFeatures(subscription.plan)
+      ? mergeFeatures(pickFeatures(subscription.plan), featureOverrides)
       : NO_FEATURES;
 
     return {
@@ -125,6 +140,11 @@ export class PlansService {
       writable: isWritable(status),
       limits,
       features,
+      // A tenant with no subscription has no exceptions either: failing closed
+      // means closed, whatever a leftover override row says.
+      hasOverrides: subscription
+        ? hasOverrides(limitOverrides, featureOverrides)
+        : false,
       usage: await this.usage(tenantId),
     };
   }
@@ -250,7 +270,7 @@ type PlanRow = Record<string, unknown> & {
   monthlyPrice: number;
 };
 
-const ZERO_LIMITS: PlanLimits = {
+export const ZERO_LIMITS: PlanLimits = {
   maxBranches: 0,
   maxStaff: 0,
   maxProducts: 0,
@@ -259,7 +279,7 @@ const ZERO_LIMITS: PlanLimits = {
   smsAllowance: 0,
 };
 
-const NO_FEATURES: PlanFeatures = PLAN_FEATURE_KEYS.reduce(
+export const NO_FEATURES: PlanFeatures = PLAN_FEATURE_KEYS.reduce(
   (acc, key) => ({ ...acc, [key]: false }),
   {} as PlanFeatures,
 );

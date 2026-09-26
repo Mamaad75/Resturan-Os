@@ -32,7 +32,7 @@ import { tableService } from '@/services';
 const STATUS_STYLES: Record<TableStatus, string> = {
   [TableStatus.AVAILABLE]:
     'border-positive/35 bg-positive/[0.07] text-positive hover:border-positive/60',
-  [TableStatus.OCCUPIED]: 'border-gold/40 bg-gold/[0.08] text-gold hover:border-gold/70',
+  [TableStatus.OCCUPIED]: 'border-brand/40 bg-brand/[0.08] text-brand hover:border-brand/70',
   [TableStatus.WAITING_PAYMENT]:
     'border-caution/40 bg-caution/[0.08] text-caution hover:border-caution/70',
   [TableStatus.RESERVED]: 'border-info/35 bg-info/[0.07] text-info hover:border-info/60',
@@ -110,7 +110,7 @@ export default function TablesPage() {
                   className={cn(
                     'size-2 rounded-full',
                     status === TableStatus.AVAILABLE && 'bg-positive',
-                    status === TableStatus.OCCUPIED && 'bg-gold',
+                    status === TableStatus.OCCUPIED && 'bg-brand',
                     status === TableStatus.WAITING_PAYMENT && 'bg-caution',
                     status === TableStatus.RESERVED && 'bg-info',
                     status === TableStatus.DISABLED && 'bg-ink-subtle',
@@ -161,7 +161,7 @@ export default function TablesPage() {
       ) : (
         zones.map(([zone, zoneTables]) => (
           <section key={zone}>
-            <h2 className="gold-rule mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
+            <h2 className="brand-rule mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
               <LayoutGrid className="size-4 text-ink-subtle" />
               {zone}
               <span className="text-xs font-normal text-ink-subtle">
@@ -249,7 +249,7 @@ function TableDetailModal({
               {toPersianDigits(table.activeOrder.itemCount)} قلم •{' '}
               {formatRelativeFa(table.activeOrder.openedAt)}
             </p>
-            <p className="mt-2 text-lg font-bold text-gold">
+            <p className="mt-2 text-lg font-bold text-brand">
               {formatMoney(table.activeOrder.total)}
             </p>
             <Link href={`/admin/orders/${table.activeOrder.id}`} className="mt-3 block">

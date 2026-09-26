@@ -119,7 +119,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                           item.action?.onClick();
                           dismiss(item.id);
                         }}
-                        className="mt-2 text-xs font-semibold text-gold hover:text-gold-bright"
+                        className="mt-2 text-xs font-semibold text-brand hover:text-brand-bright"
                       >
                         {item.action.label}
                       </button>

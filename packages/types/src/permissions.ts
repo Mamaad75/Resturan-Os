@@ -41,6 +41,18 @@ export const Permission = {
   PAYMENT_CREATE: 'payment:create',
   PAYMENT_REFUND: 'payment:refund',
 
+  // Inventory
+  INVENTORY_READ: 'inventory:read',
+  INVENTORY_MANAGE: 'inventory:manage',
+
+  // Accounting
+  ACCOUNTING_READ: 'accounting:read',
+  ACCOUNTING_MANAGE: 'accounting:manage',
+
+  // Customer memberships
+  MEMBERSHIP_READ: 'membership:read',
+  MEMBERSHIP_MANAGE: 'membership:manage',
+
   // Reports
   REPORT_READ: 'report:read',
   REPORT_FINANCIAL: 'report:financial',
@@ -85,8 +97,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.TABLE_MANAGE,
     Permission.PAYMENT_READ,
     Permission.PAYMENT_CREATE,
+    Permission.INVENTORY_READ,
+    Permission.INVENTORY_MANAGE,
+    Permission.MEMBERSHIP_READ,
+    Permission.MEMBERSHIP_MANAGE,
     Permission.REPORT_READ,
     Permission.REPORT_FINANCIAL,
+    Permission.ACCOUNTING_READ,
+    Permission.ACCOUNTING_MANAGE,
     Permission.STAFF_READ,
     Permission.SETTINGS_READ,
     Permission.QR_MANAGE,
@@ -108,6 +126,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.TABLE_MANAGE,
     Permission.PAYMENT_READ,
     Permission.PAYMENT_CREATE,
+    Permission.INVENTORY_READ,
+    Permission.MEMBERSHIP_READ,
+    Permission.MEMBERSHIP_MANAGE,
     Permission.DELIVERY_READ,
     Permission.DELIVERY_DISPATCH,
   ],
@@ -145,8 +166,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.PRODUCT_READ,
     Permission.ORDER_READ,
     Permission.PAYMENT_READ,
+    Permission.INVENTORY_READ,
+    Permission.MEMBERSHIP_READ,
     Permission.REPORT_READ,
     Permission.REPORT_FINANCIAL,
+    Permission.ACCOUNTING_READ,
+    Permission.ACCOUNTING_MANAGE,
   ],
 };
 

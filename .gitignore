@@ -143,7 +143,11 @@ vite.config.ts.timestamp-*
 .vite/
 
 # Restaurant OS
-storage/
+# Runtime upload storage only — anchored so it does NOT match the source
+# module apps/api/src/modules/storage/ (an unanchored `storage/` did, which
+# kept the StorageService out of the repo and broke clean-checkout builds).
+/storage/
 apps/api/storage/
+!apps/api/src/modules/storage/
 packages/*/dist/
 .turbo/

@@ -104,6 +104,8 @@ export interface TenantEntitlements {
   limits: PlanLimits;
   features: PlanFeatures;
   usage: PlanUsage;
+  /** True when the platform has granted this tenant exceptions to its plan. */
+  hasOverrides: boolean;
 }
 
 export interface PlanUsage {
@@ -198,6 +200,20 @@ export interface PlatformTenantSummary {
 export interface PlatformTenantDetail extends PlatformTenantSummary {
   adminNotes: string | null;
   entitlements: TenantEntitlements;
+  /**
+   * The exceptions this tenant has, and the plan's own terms beside them.
+   *
+   * `entitlements` is the resolved answer; this is how it was arrived at, so
+   * the screen can say "the plan allows one branch, this restaurant has two"
+   * rather than showing a number with no provenance.
+   */
+  overrides: {
+    limits: Partial<Record<PlanLimitKey, number | null>>;
+    features: Partial<Record<PlanFeatureKey, boolean>>;
+    note: string | null;
+    planLimits: PlanLimits;
+    planFeatures: PlanFeatures;
+  };
   branches: Array<{
     id: string;
     name: string;

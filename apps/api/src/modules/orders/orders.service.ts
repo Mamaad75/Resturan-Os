@@ -54,6 +54,9 @@ import {
 } from './order.mappers';
 import { CouponsService } from '../coupons/coupons.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { MembershipsService } from '../memberships/memberships.service';
+import { OffersService } from '../offers/offers.service';
+import { ReferralsService } from '../referrals/referrals.service';
 import { OrderPricingService, type ResolvedLine } from './order-pricing.service';
 
 @Injectable()
@@ -67,6 +70,9 @@ export class OrdersService {
     private readonly pricing: OrderPricingService,
     private readonly coupons: CouponsService,
     private readonly loyalty: LoyaltyService,
+    private readonly memberships: MembershipsService,
+    private readonly offers: OffersService,
+    private readonly referrals: ReferralsService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
     private readonly plans: PlansService,
@@ -120,7 +126,15 @@ export class OrdersService {
       this.createOrder({
         tenantId: resolved.tenantId,
         branchId: resolved.branchId,
-        input: { ...input, discountAmount: 0, sendToKitchen: false, couponCode: input.couponCode },
+        input: {
+          ...input,
+          discountAmount: 0,
+          sendToKitchen: false,
+          couponCode: input.couponCode,
+          offerId: input.offerId ?? null,
+          referralCode: input.referralCode ?? null,
+          referralRewardId: input.referralRewardId ?? null,
+        },
         actor: 'customer',
         actorUserId: null,
       }),
@@ -188,6 +202,9 @@ export class OrdersService {
       discountAmount?: number;
       sendToKitchen?: boolean;
       couponCode?: string | null;
+      offerId?: string | null;
+      referralCode?: string | null;
+      referralRewardId?: string | null;
     };
     actor: 'customer' | 'staff';
     actorUserId: string | null;
@@ -295,28 +312,84 @@ export class OrdersService {
       }
 
       /*
+       * The checkout offer. The request names the offer it accepted and
+       * nothing else - the window, the percentage and which line it applies to
+       * are all read here, so a guest who keeps an expired popup open, or edits
+       * the id to one from another restaurant, gets a discount of zero rather
+       * than a price of their own choosing.
+       */
+      let offerDiscount = 0;
+      if (input.offerId) {
+        offerDiscount = await this.offers.discountFor(
+          tx,
+          tenantId,
+          input.offerId,
+          lines,
+        );
+        if (offerDiscount > 0) {
+          await this.offers.markAccepted(tx, tenantId, input.offerId);
+        }
+      }
+
+      const customer = input.customerPhone
+        ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
+        : null;
+
+      /*
+       * A referral reward the guest is spending. Consumed here, inside the
+       * transaction that prices it, so the same reward cannot be spent twice
+       * on two simultaneous orders; the order it was spent on is linked below,
+       * once that row exists.
+       */
+      const beforeReferral =
+        (input.discountAmount ?? 0) + couponDiscount + offerDiscount;
+      const referral = await this.referrals.applyToOrder(tx, {
+        tenantId,
+        customerId: customer?.id ?? null,
+        orderId: null,
+        referralCode: input.referralCode,
+        rewardId: input.referralRewardId,
+        lines,
+        discountableSubtotal: Math.max(0, subtotal - beforeReferral),
+      });
+
+      // Membership pricing is computed server-side. The browser only supplies
+      // identity (phone); it cannot choose its own discount or free delivery.
+      const discountBeforeMembership = beforeReferral + referral.discount;
+      const membership = await this.memberships.quote(
+        tx,
+        tenantId,
+        customer?.id ?? null,
+        Math.max(0, subtotal - discountBeforeMembership),
+      );
+      const originalDeliveryFee = deliveryZone?.fee ?? 0;
+      const effectiveDeliveryFee = membership.freeDelivery ? 0 : originalDeliveryFee;
+
+      /*
        * Loyalty is priced against the bill the customer would otherwise pay,
        * so the points cap is measured on a real number rather than on the raw
        * subtotal. The quote is authoritative: the request says how many points
        * to try, never what they are worth.
        */
       const beforeLoyalty = computeOrderTotals(lines, {
-        discountAmount: (input.discountAmount ?? 0) + couponDiscount,
+        discountAmount: discountBeforeMembership + membership.discount,
         taxEnabled: restaurant.taxEnabled,
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
         serviceChargeBps: restaurant.serviceChargeBps,
-        deliveryFee: deliveryZone?.fee ?? 0,
+        deliveryFee: effectiveDeliveryFee,
       });
-
-      const customer = input.customerPhone
-        ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
-        : null;
 
       const loyalty = await this.loyalty.quote(tx, tenantId, {
         customerId: customer?.id ?? null,
         requestedPoints: input.redeemPoints ?? 0,
-        orderTotal: beforeLoyalty.total,
+        // Redemption is capped against the food the discount will actually
+        // reduce (subtotal after manual + coupon discount), not the gross total
+        // that includes tax, service charge and the courier fee. Measuring on
+        // the gross total let a points redemption exceed the discountable base
+        // on delivery-heavy orders, so the ledger took points the customer
+        // never saw as a discount. This matches how points are *earned*.
+        orderTotal: Math.max(0, beforeLoyalty.subtotal - beforeLoyalty.discountTotal),
       });
       if ((input.redeemPoints ?? 0) > 0 && loyalty.points === 0 && loyalty.reason) {
         throw AppException.validation(loyalty.reason, {
@@ -326,12 +399,12 @@ export class OrdersService {
 
       const totals = computeOrderTotals(lines, {
         discountAmount:
-          (input.discountAmount ?? 0) + couponDiscount + loyalty.discount,
+          discountBeforeMembership + membership.discount + loyalty.discount,
         taxEnabled: restaurant.taxEnabled,
         taxRateBps: restaurant.taxRateBps,
         serviceChargeEnabled: restaurant.serviceChargeEnabled,
         serviceChargeBps: restaurant.serviceChargeBps,
-        deliveryFee: deliveryZone?.fee ?? 0,
+        deliveryFee: effectiveDeliveryFee,
       });
 
       const orderNumber = await nextOrderNumber(tx, branchId);
@@ -372,7 +445,7 @@ export class OrdersService {
           loyaltyPointsUsed: loyalty.points,
           loyaltyDiscount: loyalty.discount,
           deliveryZoneId: deliveryZone?.id ?? null,
-          deliveryFee: deliveryZone?.fee ?? 0,
+          deliveryFee: effectiveDeliveryFee,
           deliveryAddress: input.deliveryAddress ?? null,
           deliveryNotes: input.deliveryNotes ?? null,
           subtotal: totals.subtotal,
@@ -411,6 +484,36 @@ export class OrdersService {
         },
         include: ORDER_DETAIL_INCLUDE,
       });
+
+      await this.memberships.recordUsage(tx, {
+        tenantId,
+        membershipId: membership.membershipId,
+        orderId: order.id,
+        discount: membership.discount,
+        freeDeliverySaved: membership.freeDelivery ? originalDeliveryFee : 0,
+      });
+
+      /*
+       * The reward's link to the order it paid for, and the invitation this
+       * order accepted. Both need the order's id, so they follow its creation
+       * rather than its pricing.
+       */
+      if (referral.rewardId) {
+        await this.referrals.linkRewardToOrder(
+          tx,
+          tenantId,
+          referral.rewardId,
+          order.id,
+        );
+      }
+      if (input.referralCode && customer) {
+        await this.referrals.recordInvitation(tx, {
+          tenantId,
+          customerId: customer.id,
+          orderId: order.id,
+          referralCode: input.referralCode,
+        });
+      }
 
       if (appliedCouponId) {
         await this.coupons.redeem(tx, {
@@ -472,6 +575,7 @@ export class OrdersService {
         await this.loyalty.grantWelcome(tx, {
           tenantId,
           customerId: customer.id,
+          orderId: order.id,
           isFirstOrder: !customer.firstOrderAt,
         });
       }
@@ -557,40 +661,39 @@ export class OrdersService {
       );
 
       /*
-       * Issued together rather than one await at a time. Each item is
-       * independent - nothing here reads what the previous insert wrote - so
-       * a table of eight additions costs one round trip's latency instead of
-       * eight. `createMany` is not an option: each item carries nested
-       * modifier rows.
+       * Inserted one await at a time. Prisma's interactive transaction runs
+       * over a single connection and does not support concurrent queries on
+       * the same `tx`; issuing these with `Promise.all` risked intermittent
+       * "Transaction already closed"/connection errors under load, especially
+       * with the nested modifier creates. `createMany` is not an option: each
+       * item carries nested modifier rows.
        */
-      await Promise.all(
-        lines.map((line) =>
-          tx.orderItem.create({
-            data: {
-              tenantId: ctx.tenantId,
-              orderId,
-              productId: line.productId,
-              productName: line.productName,
-              productNameFa: line.productNameFa,
-              imageUrl: line.imageUrl,
-              quantity: line.quantity,
-              unitPrice: line.unitPrice,
-              modifiersTotal: line.modifiersTotal,
-              lineTotal: line.lineTotal,
-              notes: line.notes,
-              modifiers: {
-                create: line.modifiers.map((modifier) => ({
-                  tenantId: ctx.tenantId,
-                  modifierOptionId: modifier.modifierOptionId,
-                  name: modifier.name,
-                  nameFa: modifier.nameFa,
-                  priceDelta: modifier.priceDelta,
-                })),
-              },
+      for (const line of lines) {
+        await tx.orderItem.create({
+          data: {
+            tenantId: ctx.tenantId,
+            orderId,
+            productId: line.productId,
+            productName: line.productName,
+            productNameFa: line.productNameFa,
+            imageUrl: line.imageUrl,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice,
+            modifiersTotal: line.modifiersTotal,
+            lineTotal: line.lineTotal,
+            notes: line.notes,
+            modifiers: {
+              create: line.modifiers.map((modifier) => ({
+                tenantId: ctx.tenantId,
+                modifierOptionId: modifier.modifierOptionId,
+                name: modifier.name,
+                nameFa: modifier.nameFa,
+                priceDelta: modifier.priceDelta,
+              })),
             },
-          }),
-        ),
-      );
+          },
+        });
+      }
 
       return recalculateTotals(tx, ctx.tenantId, orderId, restaurant);
     });
@@ -685,11 +788,15 @@ export class OrdersService {
          * already have spent. Measured on the food after discounts - never on
          * tax, service charge or the courier fee.
          */
+        const loyaltyMultiplierBps = await this.memberships.loyaltyMultiplierTx(
+          tx, ctx.tenantId, existing.customerId,
+        );
         await this.loyalty.earnForOrder(tx, {
           tenantId: ctx.tenantId,
           customerId: existing.customerId,
           orderId,
           eligibleSpend: Math.max(0, existing.subtotal - existing.discountTotal),
+          multiplierBps: loyaltyMultiplierBps,
         });
       }
 
@@ -899,7 +1006,11 @@ export class OrdersService {
         include: {
           ...ORDER_DETAIL_INCLUDE,
           branch: {
-            select: { name: true, phone: true, restaurant: { select: { name: true } } },
+            select: {
+              name: true,
+              phone: true,
+              restaurant: { select: { name: true, slug: true } },
+            },
           },
         },
       }),
@@ -909,6 +1020,7 @@ export class OrdersService {
     return toTrackingDto(
       row,
       row.branch.restaurant.name,
+      row.branch.restaurant.slug,
       row.branch.name,
       row.branch.phone,
     );

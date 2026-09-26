@@ -36,6 +36,9 @@ describe('Order lifecycle', () => {
       .send({
         type: 'DINE_IN',
         tableId: tenant.tableIds[0],
+        // A phone is mandatory on every order since the phone-bank change;
+        // an override may still blank it to test that rule.
+        customerPhone: '09120000001',
         items: [{ productId: tenant.productId, quantity: 2, modifierOptionIds: [] }],
         ...overrides,
       });
@@ -62,6 +65,7 @@ describe('Order lifecycle', () => {
         .send({
           type: 'DINE_IN',
           tableId: tenant.tableIds[0],
+          customerPhone: '09120000001',
           total: 1,
           subtotal: 1,
           discountTotal: 999_999,

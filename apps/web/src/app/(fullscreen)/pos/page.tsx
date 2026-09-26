@@ -11,6 +11,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
+  CreditCard,
   Minus,
   Plus,
   Search,
@@ -38,7 +39,7 @@ import { useRealtime } from '@/hooks/use-realtime';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { menuService, orderService, tableService } from '@/services';
+import { menuService, orderService, paymentService, restaurantService, tableService, terminalService } from '@/services';
 
 interface TicketLine {
   key: string;
@@ -75,6 +76,8 @@ export default function PosPage() {
   const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
   const [modifierProduct, setModifierProduct] = useState<PublicProduct | null>(null);
+  const [terminalOrder, setTerminalOrder] = useState<{ id: string; orderNumber: string; total: number } | null>(null);
+  const [terminalId, setTerminalId] = useState('');
 
   const menuQuery = useQuery({
     queryKey: ['pos-menu'],
@@ -87,6 +90,25 @@ export default function PosPage() {
     queryFn: () => tableService.list(),
     refetchInterval: 45_000,
   });
+
+  const restaurantQuery = useQuery({
+    queryKey: ['restaurant'],
+    queryFn: () => restaurantService.get(),
+    staleTime: 60_000,
+  });
+  const terminalsQuery = useQuery({
+    queryKey: ['pos-terminals'],
+    queryFn: () => terminalService.list(),
+    enabled: restaurantQuery.data?.settings.posTerminalEnabled === true,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (terminalId || !terminalsQuery.data?.length) return;
+    const preferred = terminalsQuery.data.find((terminal) => terminal.isDefault && terminal.isActive)
+      ?? terminalsQuery.data.find((terminal) => terminal.isActive);
+    if (preferred) setTerminalId(preferred.id);
+  }, [terminalId, terminalsQuery.data]);
 
   const refreshTables = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['pos-tables'] });
@@ -210,7 +232,13 @@ export default function PosPage() {
       setCustomerPhone('');
       setCartOpen(false);
       refreshTables();
-      router.push(`/admin/orders/${result.order.id}`);
+      const terminalReady = restaurantQuery.data?.settings.posTerminalEnabled === true &&
+        (terminalsQuery.data ?? []).some((terminal) => terminal.isActive && terminal.bridgeUrl);
+      if (terminalReady) {
+        setTerminalOrder({ id: result.order.id, orderNumber: result.order.orderNumber, total: result.order.total });
+      } else {
+        router.push(`/admin/orders/${result.order.id}`);
+      }
     },
     onError: (error) => {
       toast.error(
@@ -218,6 +246,55 @@ export default function PosPage() {
         error instanceof ApiError ? error.message : undefined,
       );
     },
+  });
+
+  const terminalPayment = useMutation({
+    mutationFn: async () => {
+      if (!terminalOrder || !terminalId) throw new Error('کارتخوان انتخاب نشده است.');
+      const intent = await terminalService.intent(terminalOrder.id, { terminalId });
+      if (!intent.terminal.bridgeUrl) throw new Error('Terminal Bridge برای این دستگاه تنظیم نشده است.');
+
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 100_000);
+      try {
+        const bridgeResponse = await fetch(`${intent.terminal.bridgeUrl.replace(/\/$/, '')}/v1/pay`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(intent.terminal.terminalKey ? { 'X-Bridge-Key': intent.terminal.terminalKey } : {}),
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            intentId: intent.intentId,
+            amount: intent.amount,
+            currency: intent.currency,
+            orderId: intent.orderId,
+            orderNumber: intent.orderNumber,
+            terminalId: intent.terminal.id,
+            provider: intent.terminal.provider,
+          }),
+        });
+        const bridge = await bridgeResponse.json().catch(() => ({})) as { success?: boolean; trace?: string; rrn?: string; message?: string };
+        if (!bridgeResponse.ok || !bridge.success) throw new Error(bridge.message || 'پرداخت کارتخوان ناموفق بود.');
+        const reference = bridge.trace ?? bridge.rrn ?? intent.intentId;
+        return paymentService.create(intent.orderId, {
+          method: 'CARD',
+          amount: intent.amount,
+          reference,
+          note: `POS ${intent.terminal.name} / ${intent.terminal.provider}`,
+        });
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    },
+    onSuccess: () => {
+      if (!terminalOrder) return;
+      toast.success('پرداخت کارتخوان ثبت شد', `سفارش #${toPersianDigits(terminalOrder.orderNumber)}`);
+      const id = terminalOrder.id;
+      setTerminalOrder(null);
+      router.push(`/admin/orders/${id}`);
+    },
+    onError: (error) => toast.error('پرداخت کارتخوان انجام نشد', error instanceof Error ? error.message : undefined),
   });
 
   const canSubmit =
@@ -264,7 +341,7 @@ export default function PosPage() {
           <ArrowRight className="size-5" />
         </Link>
         <div className="flex items-center gap-2">
-          <ShoppingCart className="size-5 text-gold" />
+          <ShoppingCart className="size-5 text-brand" />
           <h1 className="text-lg font-bold text-ink">صندوق</h1>
         </div>
 
@@ -352,14 +429,14 @@ export default function PosPage() {
                   className={cn(
                     'flex h-28 flex-col justify-between rounded-xl border p-3 text-start transition-colors',
                     product.isAvailable
-                      ? 'border-line bg-surface hover:border-gold/50 hover:bg-surface-raised active:scale-[0.98]'
+                      ? 'border-line bg-surface hover:border-brand/50 hover:bg-surface-raised active:scale-[0.98]'
                       : 'cursor-not-allowed border-line bg-surface-sunken opacity-50',
                   )}
                 >
                   <span className="line-clamp-2 text-sm font-medium leading-snug text-ink">
                     {product.nameFa}
                   </span>
-                  <span className="text-sm font-semibold text-gold">
+                  <span className="text-sm font-semibold text-brand">
                     {formatMoney(product.effectivePrice, 'IRT', { withUnit: false })}
                   </span>
                 </button>
@@ -378,7 +455,7 @@ export default function PosPage() {
       {lines.length > 0 ? (
         <button
           onClick={() => setCartOpen(true)}
-          className="flex items-center justify-between gap-3 border-t border-line bg-gold px-5 py-4 text-ink-inverse xl:hidden"
+          className="flex items-center justify-between gap-3 border-t border-line bg-brand px-5 py-4 text-ink-inverse xl:hidden"
         >
           <span className="flex items-center gap-2 font-semibold">
             <span className="flex size-7 items-center justify-center rounded-full bg-black/15 text-sm tabular-nums">
@@ -410,6 +487,35 @@ export default function PosPage() {
         }}
       />
 
+      <Modal
+        open={terminalOrder !== null}
+        onClose={() => {
+          const id = terminalOrder?.id;
+          setTerminalOrder(null);
+          if (id) router.push(`/admin/orders/${id}`);
+        }}
+        title={terminalOrder ? `پرداخت سفارش #${toPersianDigits(terminalOrder.orderNumber)}` : 'پرداخت کارتخوان'}
+        size="sm"
+        footer={
+          <div className="grid w-full grid-cols-2 gap-2">
+            <Button variant="secondary" onClick={() => { const id = terminalOrder?.id; setTerminalOrder(null); if (id) router.push(`/admin/orders/${id}`); }}>بعداً پرداخت</Button>
+            <Button loading={terminalPayment.isPending} disabled={!terminalId} onClick={() => terminalPayment.mutate()}><CreditCard className="size-4" />ارسال مبلغ</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-brand/20 bg-brand/[0.06] p-4 text-center">
+            <p className="text-xs text-ink-muted">مبلغ قابل پرداخت</p>
+            <p className="mt-1 text-2xl font-bold text-brand">{terminalOrder ? formatMoney(terminalOrder.total) : '—'}</p>
+          </div>
+          <select value={terminalId} onChange={(e) => setTerminalId(e.target.value)} className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-ink">
+            <option value="">انتخاب کارتخوان</option>
+            {(terminalsQuery.data ?? []).filter((terminal) => terminal.isActive).map((terminal) => <option key={terminal.id} value={terminal.id}>{terminal.name}{terminal.isDefault ? ' — پیش‌فرض' : ''}</option>)}
+          </select>
+          <p className="text-xs leading-6 text-ink-muted">FoodOS مبلغ را به Terminal Bridge محلی می‌فرستد. اطلاعات کارت وارد FoodOS نمی‌شود؛ پس از تأیید دستگاه، شماره پیگیری در پرداخت سفارش ثبت می‌شود.</p>
+        </div>
+      </Modal>
+
       <ModifierPicker
         product={modifierProduct}
         open={modifierProduct !== null}
@@ -440,7 +546,7 @@ function CategoryButton({
       className={cn(
         'mb-1 flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
         active
-          ? 'bg-gold/12 text-gold'
+          ? 'bg-brand/12 text-brand'
           : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
       )}
     >
@@ -464,7 +570,7 @@ function ChipButton({
       onClick={onClick}
       className={cn(
         'shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors',
-        active ? 'bg-gold text-ink-inverse' : 'bg-surface-raised text-ink-muted',
+        active ? 'bg-brand text-ink-inverse' : 'bg-surface-raised text-ink-muted',
       )}
     >
       {label}
@@ -514,7 +620,7 @@ function TicketPanel({
             className={cn(
               'rounded-lg py-2 text-sm font-medium transition-colors',
               mode === 'DINE_IN'
-                ? 'bg-gold text-ink-inverse'
+                ? 'bg-brand text-ink-inverse'
                 : 'bg-surface-sunken text-ink-muted',
             )}
           >
@@ -525,7 +631,7 @@ function TicketPanel({
             className={cn(
               'rounded-lg py-2 text-sm font-medium transition-colors',
               mode === 'TAKEAWAY'
-                ? 'bg-gold text-ink-inverse'
+                ? 'bg-brand text-ink-inverse'
                 : 'bg-surface-sunken text-ink-muted',
             )}
           >
@@ -624,7 +730,7 @@ function TicketPanel({
       <div className="space-y-3 border-t border-line p-3">
         <div className="flex items-center justify-between">
           <span className="text-sm text-ink-muted">جمع اقلام</span>
-          <span className="text-lg font-bold text-gold">{formatMoney(total)}</span>
+          <span className="text-lg font-bold text-brand">{formatMoney(total)}</span>
         </div>
         <p className="text-[0.7rem] text-ink-subtle">
           مالیات و حق سرویس هنگام ثبت، توسط سرور محاسبه می‌شود.
@@ -686,7 +792,7 @@ function TablePicker({
                   table.status === TableStatus.AVAILABLE &&
                     'border-positive/40 bg-positive/[0.08] text-positive hover:border-positive',
                   table.status === TableStatus.OCCUPIED &&
-                    'border-gold/40 bg-gold/[0.08] text-gold hover:border-gold',
+                    'border-brand/40 bg-brand/[0.08] text-brand hover:border-brand',
                   table.status === TableStatus.WAITING_PAYMENT &&
                     'border-caution/40 bg-caution/[0.08] text-caution',
                   table.status === TableStatus.RESERVED &&
@@ -787,7 +893,7 @@ function ModifierPicker({
             <legend className="mb-2 text-sm font-semibold text-ink">
               {group.nameFa}
               {group.isRequired ? (
-                <Badge tone="gold" className="ms-2">
+                <Badge tone="brand" className="ms-2">
                   الزامی
                 </Badge>
               ) : null}
@@ -816,7 +922,7 @@ function ModifierPicker({
                     className={cn(
                       'rounded-xl border p-3 text-start text-sm transition-colors',
                       checked
-                        ? 'border-gold/50 bg-gold/[0.08] text-ink'
+                        ? 'border-brand/50 bg-brand/[0.08] text-ink'
                         : 'border-line bg-surface-sunken text-ink-muted',
                       !option.isAvailable && 'cursor-not-allowed opacity-45',
                     )}

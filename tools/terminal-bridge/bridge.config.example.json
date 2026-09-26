@@ -1,0 +1,71 @@
+{
+  "defaultProfile": "local-mock",
+  "profiles": {
+    "local-mock": {
+      "driver": "mock",
+      "approve": true
+    },
+    "vendor-sdk": {
+      "driver": "command",
+      "executable": "C:\\Program Files\\PSP\\EcrAdapter.exe",
+      "args": [],
+      "response": {
+        "successPath": "success",
+        "tracePath": "trace",
+        "rrnPath": "rrn",
+        "messagePath": "message"
+      }
+    },
+    "local-http-ecr": {
+      "driver": "http-json",
+      "url": "http://127.0.0.1:9090/payment",
+      "method": "POST",
+      "headers": { "X-Terminal-Key": "replace-me" },
+      "body": {
+        "amount": "{{amount}}",
+        "invoice": "{{orderNumber}}",
+        "requestId": "{{intentId}}"
+      },
+      "response": {
+        "successPath": "approved",
+        "successEquals": true,
+        "tracePath": "traceNo",
+        "rrnPath": "rrn",
+        "messagePath": "message"
+      }
+    },
+    "lan-json-ecr": {
+      "driver": "tcp-json",
+      "host": "192.168.1.50",
+      "port": 9100,
+      "body": {
+        "command": "SALE",
+        "amount": "{{amount}}",
+        "reference": "{{orderNumber}}"
+      },
+      "response": {
+        "successPath": "status",
+        "successEquals": "OK",
+        "tracePath": "trace",
+        "rrnPath": "rrn",
+        "messagePath": "message"
+      }
+    },
+    "lan-text-ecr": {
+      "driver": "tcp-text",
+      "host": "192.168.1.51",
+      "port": 5000,
+      "requestTemplate": "SALE|{{amount}}|{{orderNumber}}|{{intentId}}\n",
+      "responseDelimiter": "\n",
+      "response": {
+        "successRegex": "^(APPROVED|OK)",
+        "traceRegex": "TRACE=([A-Za-z0-9-]+)",
+        "rrnRegex": "RRN=([A-Za-z0-9-]+)"
+      }
+    }
+  },
+  "terminalMap": {
+    "provider:mock": "local-mock",
+    "provider:vendor-sdk": "vendor-sdk"
+  }
+}
