@@ -23,6 +23,7 @@ export const PlatformAction = {
   TENANT_RESTORE: 'tenant.restore',
   TENANT_NOTES: 'tenant.notes',
   SUBSCRIPTION_UPDATE: 'subscription.update',
+  ENTITLEMENT_OVERRIDE: 'subscription.entitlement_override',
   SUBSCRIPTION_EXTEND: 'subscription.extend',
   PLAN_CHANGE: 'subscription.plan_change',
   PLAN_CREATE: 'plan.create',

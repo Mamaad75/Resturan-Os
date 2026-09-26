@@ -1437,6 +1437,19 @@ model Subscription {
   suspendedAt     DateTime?
   suspendedReason String?   @db.VarChar(300)
 
+  /// Per-tenant exceptions to the plan, set by the platform.
+  ///
+  /// One restaurant negotiating a second branch, or being given inventory for
+  /// a month, must not require inventing a plan that then shows up in the
+  /// pricing page for everyone. Each holds a partial object keyed exactly like
+  /// the plan's own columns; anything absent falls through to the plan, so an
+  /// override is a note about one tenant rather than a copy of their whole
+  /// entitlement set that would silently stop tracking the plan.
+  limitOverrides   Json?
+  featureOverrides Json?
+  /// Why the exception exists, for whoever reads this in six months.
+  overrideNote     String? @db.VarChar(300)
+
   cancelledAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

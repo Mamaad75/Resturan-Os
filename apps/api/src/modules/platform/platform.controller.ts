@@ -9,6 +9,7 @@ import {
   rejectInvoiceSchema,
   reviewInvoiceSchema,
   suspendTenantSchema,
+  entitlementOverridesSchema,
   tenantNotesSchema,
   updatePlanSchema,
   updateBankAccountSchema,
@@ -23,6 +24,7 @@ import {
   type ReviewInvoiceInput,
   type UpdateBankAccountInput,
   type SuspendTenantInput,
+  type EntitlementOverridesInput,
   type TenantNotesInput,
   type UpdatePlanInput,
   type UpdateSubscriptionInput,
@@ -219,6 +221,22 @@ export class PlatformController {
     @ClientInfo() meta: AuditMeta,
   ) {
     return this.tenants.setNotes(admin, id, dto, meta);
+  }
+
+  @Put('tenants/:id/entitlements')
+  @ApiOperation({
+    summary: 'Grant or withdraw one tenant s exceptions to their plan',
+    description:
+      'A complete replacement of the exception set. Anything not sent follows ' +
+      'the plan, including whatever the plan becomes later.',
+  })
+  setEntitlements(
+    @PlatformCtx() admin: PlatformContext,
+    @ZodParam('id', uuidSchema) id: string,
+    @ZodBody(entitlementOverridesSchema) dto: EntitlementOverridesInput,
+    @ClientInfo() meta: AuditMeta,
+  ) {
+    return this.tenants.setEntitlementOverrides(admin, id, dto, meta);
   }
 
   /* --------------------------------------------------------- subscription */

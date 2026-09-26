@@ -1,5 +1,10 @@
 'use client';
 
+import type {
+  PlanFeatureKey,
+  PlanLimitKey,
+  PlatformTenantDetail,
+} from '@restaurant-os/types';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
@@ -450,6 +455,8 @@ function TenantDetail() {
         </Card>
       </div>
 
+      <EntitlementOverrides tenant={tenant} onSaved={refresh} onError={onError} />
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader title="شعبه‌ها" />
@@ -586,4 +593,239 @@ function TenantDetail() {
 function toDateInput(iso: string | null | undefined): string {
   if (!iso) return '';
   return new Date(iso).toISOString().slice(0, 10);
+}
+
+const LIMIT_LABELS: Array<[PlanLimitKey, string]> = [
+  ['maxBranches', 'شعبه'],
+  ['maxStaff', 'کاربر'],
+  ['maxProducts', 'محصول'],
+  ['maxTables', 'میز'],
+  ['maxMonthlyOrders', 'سفارش ماهانه'],
+  ['smsAllowance', 'پیامک تبلیغاتی'],
+];
+
+const FEATURE_LABELS: Array<[PlanFeatureKey, string]> = [
+  ['customThemeEnabled', 'تم سفارشی'],
+  ['advancedThemeEnabled', 'تم پیشرفته'],
+  ['customCssEnabled', 'CSS سفارشی'],
+  ['crmEnabled', 'باشگاه مشتریان'],
+  ['campaignsEnabled', 'کمپین پیامکی'],
+  ['takeawayEnabled', 'بیرون‌بر'],
+  ['dineInEnabled', 'سرو در محل'],
+  ['waiterCallEnabled', 'صدا زدن گارسون'],
+  ['reportsEnabled', 'گزارش‌ها'],
+  ['couponsEnabled', 'کد تخفیف'],
+  ['multiBranchEnabled', 'چند شعبه'],
+];
+
+/**
+ * One tenant's exceptions to their plan.
+ *
+ * Support says yes to a restaurant - a second branch for a month, inventory
+ * while they trial it - and the alternative to this screen is inventing a plan
+ * that then appears on the pricing page for everyone.
+ *
+ * Each row shows the plan's own answer beside the exception, so nobody has to
+ * remember what the plan said, and clearing an exception puts the tenant back
+ * on the plan rather than freezing today's value.
+ */
+function EntitlementOverrides({
+  tenant,
+  onSaved,
+  onError,
+}: {
+  tenant: PlatformTenantDetail;
+  onSaved: () => void;
+  onError: (error: unknown) => void;
+}) {
+  const toast = useToast();
+  const { overrides } = tenant;
+
+  const [limits, setLimits] = useState<Record<string, string>>({});
+  const [features, setFeatures] = useState<Record<string, boolean>>({});
+  const [note, setNote] = useState('');
+  const [open, setOpen] = useState(false);
+
+  // Seeded from the server each time the tenant is (re)loaded.
+  useEffect(() => {
+    setLimits(
+      Object.fromEntries(
+        Object.entries(overrides.limits).map(([key, value]) => [
+          key,
+          value === null ? '' : String(value),
+        ]),
+      ),
+    );
+    setFeatures({ ...overrides.features });
+    setNote(overrides.note ?? '');
+  }, [overrides]);
+
+  const save = useMutation({
+    mutationFn: () =>
+      platformService.setEntitlements(tenant.id, {
+        limits: Object.fromEntries(
+          Object.entries(limits).map(([key, value]) => [
+            key,
+            // An empty box on a row that is switched on means "unlimited".
+            value.trim() === '' ? null : Number(value),
+          ]),
+        ),
+        features,
+        note: note.trim() || null,
+      }),
+    onSuccess: () => {
+      toast.success('استثناها ذخیره شد');
+      onSaved();
+    },
+    onError,
+  });
+
+  const count =
+    Object.keys(overrides.limits).length + Object.keys(overrides.features).length;
+
+  return (
+    <Card>
+      <CardHeader
+        title="استثناهای این مجموعه"
+        description="بدون ساختن پلن جدید، برای همین مجموعه سقف یا امکانی را تغییر دهید."
+        action={
+          count > 0 ? (
+            <Badge tone="caution">{toPersianDigits(count)} استثنا</Badge>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setOpen((value) => !value)}
+              className="text-xs text-ink-muted underline"
+            >
+              {open ? 'بستن' : 'افزودن استثنا'}
+            </button>
+          )
+        }
+      />
+      {count > 0 || open ? (
+        <CardBody className="space-y-5">
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-ink-muted">سقف‌ها</p>
+            {LIMIT_LABELS.map(([key, label]) => {
+              const active = key in limits;
+              const planValue = overrides.planLimits[key];
+              return (
+                <div
+                  key={key}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-3 py-2"
+                >
+                  <label className="flex flex-1 items-center gap-2 text-sm text-ink">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={active}
+                      onChange={(e) =>
+                        setLimits((current) => {
+                          const next = { ...current };
+                          if (e.target.checked) {
+                            next[key] = planValue === null ? '' : String(planValue);
+                          } else {
+                            delete next[key];
+                          }
+                          return next;
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                  <span className="text-xs text-ink-subtle">
+                    پلن:{' '}
+                    {planValue === null ? 'نامحدود' : toPersianDigits(planValue)}
+                  </span>
+                  <input
+                    dir="ltr"
+                    inputMode="numeric"
+                    disabled={!active}
+                    placeholder="نامحدود"
+                    value={limits[key] ?? ''}
+                    onChange={(e) =>
+                      setLimits((current) => ({
+                        ...current,
+                        [key]: e.target.value.replace(/[^\d]/g, ''),
+                      }))
+                    }
+                    className="w-28 rounded-lg border border-line bg-surface px-2 py-1 text-sm text-ink disabled:opacity-40"
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-ink-muted">امکانات</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {FEATURE_LABELS.map(([key, label]) => {
+                const active = key in features;
+                const planValue = overrides.planFeatures[key];
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center gap-2 rounded-lg border border-line px-3 py-2 text-sm"
+                  >
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={active}
+                      onChange={(e) =>
+                        setFeatures((current) => {
+                          const next = { ...current };
+                          if (e.target.checked) next[key] = !planValue;
+                          else delete next[key];
+                          return next;
+                        })
+                      }
+                    />
+                    <span className="min-w-0 flex-1 text-ink">{label}</span>
+                    {active ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFeatures((current) => ({ ...current, [key]: !current[key] }))
+                        }
+                        className={
+                          features[key]
+                            ? 'rounded-md bg-positive/15 px-2 py-0.5 text-xs text-positive'
+                            : 'rounded-md bg-critical/15 px-2 py-0.5 text-xs text-critical'
+                        }
+                      >
+                        {features[key] ? 'روشن' : 'خاموش'}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-subtle">
+                        پلن: {planValue ? 'روشن' : 'خاموش'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <input
+            placeholder="دلیل این استثنا (برای سابقه)"
+            maxLength={300}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm text-ink"
+          />
+
+          <div className="flex justify-end">
+            <Button
+              variant="primary"
+              size="sm"
+              loading={save.isPending}
+              onClick={() => save.mutate()}
+            >
+              ذخیره استثناها
+            </Button>
+          </div>
+        </CardBody>
+      ) : null}
+    </Card>
+  );
 }

@@ -712,6 +712,20 @@ export const platformService = {
     planKey?: string;
   }) => api.get<ListResult<PlatformTenantSummary>>('/platform/tenants', { query: params }),
   tenant: (id: string) => api.get<PlatformTenantDetail>(`/platform/tenants/${id}`),
+  /**
+   * Replaces this tenant's exceptions to their plan, in full.
+   *
+   * Anything left out follows the plan again, including whatever the plan
+   * becomes later - which is why the screen sends the whole set.
+   */
+  setEntitlements: (
+    id: string,
+    body: {
+      limits: Record<string, number | null>;
+      features: Record<string, boolean>;
+      note?: string | null;
+    },
+  ) => api.put<PlatformTenantDetail>(`/platform/tenants/${id}/entitlements`, body),
 
   suspend: (id: string, reason: string) =>
     api.post<SubscriptionDto>(`/platform/tenants/${id}/suspend`, { reason }),
