@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Dices, Flame, Plus, Save, Trash2, Users } from 'lucide-react';
+import { Dices, Flame, Plus, Save, Trash2, Trophy, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Badge,
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { ApiError } from '@/lib/api-client';
-import { formatDateFa } from '@/lib/format';
+import { formatDateFa, toPersianDigits } from '@/lib/format';
 import {
   gameService,
   type ArcadeConfig,
@@ -44,6 +44,19 @@ const DEFAULT_ARCADE: ArcadeConfig = {
     ],
     cooldownHours: 24,
     scorePerPlay: 10,
+  },
+  leaderboardEnabled: false,
+  leaderboard: {
+    scorePerPlay: 10,
+    cooldownHours: 24,
+    periodDays: 30,
+    topN: 10,
+    rewards: [
+      { rank: 1, label: 'نفر اول ماه', rewardType: 'PERCENTAGE', rewardValue: 30, minOrderTotal: 0, expiryDays: 14 },
+      { rank: 2, label: 'نفر دوم ماه', rewardType: 'PERCENTAGE', rewardValue: 20, minOrderTotal: 0, expiryDays: 14 },
+      { rank: 3, label: 'نفر سوم ماه', rewardType: 'PERCENTAGE', rewardValue: 10, minOrderTotal: 0, expiryDays: 14 },
+    ],
+    seasonStartedAt: null,
   },
   memoryDuelEnabled: false,
   memoryDuel: {
@@ -102,6 +115,23 @@ export default function GamesPage() {
       void queryClient.invalidateQueries({ queryKey: ['game'] });
     },
     onError: (error) => toast.error('ذخیره نشد', error instanceof ApiError ? error.message : undefined),
+  });
+
+  const closeSeason = useMutation({
+    mutationFn: () => gameService.closeSeason(),
+    onSuccess: (result) => {
+      const winners = result.winners.length;
+      toast.success(
+        'دوره بسته شد',
+        winners > 0
+          ? `${toPersianDigits(winners)} جایزه صادر شد. کدها در «بازی‌های اخیر» دیده می‌شوند.`
+          : 'کسی در این دوره امتیازی نگرفته بود، پس جایزه‌ای صادر نشد.',
+      );
+      void queryClient.invalidateQueries({ queryKey: ['game'] });
+      void queryClient.invalidateQueries({ queryKey: ['game-plays'] });
+    },
+    onError: (error) =>
+      toast.error('پایان دوره انجام نشد', error instanceof ApiError ? error.message : undefined),
   });
 
   if (query.isPending) return <Skeleton className="h-96 rounded-2xl" />;
@@ -285,6 +315,132 @@ export default function GamesPage() {
               کارت‌ها از همین آیتم‌ها ساخته می‌شوند:{' '}
               {config.memoryDuel.itemLabels.join('، ')}
             </p>
+          </section>
+
+          <section className="rounded-2xl border border-line p-4">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+                  <Trophy className="size-5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-ink">مسابقهٔ فصلی</p>
+                  <p className="text-xs text-ink-subtle">
+                    امتیاز همهٔ بازی‌ها در یک جدول جمع می‌شود و نفرات برتر دوره
+                    جایزه می‌گیرند. جدول برای مشتری‌ها دیده می‌شود.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={config.leaderboardEnabled}
+                disabled={!editable || !isEnabled}
+                onChange={(checked) =>
+                  setConfig({ ...config, leaderboardEnabled: checked })
+                }
+                label={config.leaderboardEnabled ? 'روشن' : 'خاموش'}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="طول هر دوره (روز)"
+                dir="ltr"
+                inputMode="numeric"
+                disabled={!editable}
+                value={String(config.leaderboard.periodDays)}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    leaderboard: {
+                      ...config.leaderboard,
+                      periodDays: Math.min(365, Math.max(1, num(e.target.value) || 1)),
+                    },
+                  })
+                }
+              />
+              <Input
+                label="چند نفر در جدول دیده شوند"
+                dir="ltr"
+                inputMode="numeric"
+                disabled={!editable}
+                value={String(config.leaderboard.topN)}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    leaderboard: {
+                      ...config.leaderboard,
+                      topN: Math.min(100, Math.max(1, num(e.target.value) || 1)),
+                    },
+                  })
+                }
+              />
+            </div>
+
+            <div className="mt-4 space-y-2">
+              <p className="text-sm font-medium text-ink-muted">جایزهٔ نفرات برتر</p>
+              {config.leaderboard.rewards.map((reward, index) => (
+                <div
+                  key={reward.rank}
+                  className="grid gap-2 rounded-xl border border-line p-3 sm:grid-cols-[4rem_1fr_7rem]"
+                >
+                  <span className="self-center text-sm text-ink-muted">
+                    نفر {toPersianDigits(reward.rank)}
+                  </span>
+                  <Input
+                    aria-label={`عنوان جایزه نفر ${reward.rank}`}
+                    disabled={!editable}
+                    value={reward.label}
+                    onChange={(e) => {
+                      const rewards = [...config.leaderboard.rewards];
+                      rewards[index] = { ...reward, label: e.target.value };
+                      setConfig({
+                        ...config,
+                        leaderboard: { ...config.leaderboard, rewards },
+                      });
+                    }}
+                  />
+                  <Input
+                    aria-label={`مقدار جایزه نفر ${reward.rank}`}
+                    dir="ltr"
+                    inputMode="numeric"
+                    rightAddon={reward.rewardType === 'FIXED' ? 'ت' : '٪'}
+                    disabled={!editable}
+                    value={String(reward.rewardValue)}
+                    onChange={(e) => {
+                      const rewards = [...config.leaderboard.rewards];
+                      rewards[index] = {
+                        ...reward,
+                        rewardValue: Math.max(1, num(e.target.value) || 1),
+                      };
+                      setConfig({
+                        ...config,
+                        leaderboard: { ...config.leaderboard, rewards },
+                      });
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {config.leaderboardEnabled ? (
+              <div className="mt-4 rounded-xl border border-caution/30 bg-caution/[0.08] p-3">
+                <p className="text-xs leading-relaxed text-ink-muted">
+                  با پایان دادن به دوره، کد تخفیف نفرات برتر همین حالا صادر
+                  می‌شود و دورهٔ جدید از امروز شروع می‌شود. این کار برگشت‌پذیر
+                  نیست.
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  disabled={!editable}
+                  loading={closeSeason.isPending}
+                  onClick={() => closeSeason.mutate()}
+                >
+                  پایان دوره و اهدای جوایز
+                </Button>
+              </div>
+            ) : null}
           </section>
 
           <div className="flex justify-end">

@@ -1,4 +1,4 @@
-import { Controller, Get, Put } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Put } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Permission } from '@restaurant-os/types';
 import {
@@ -30,6 +30,20 @@ export class GamesController {
     @ZodBody(updateGameConfigSchema) dto: UpdateGameConfigInput,
   ) {
     return this.games.updateConfig(ctx, dto);
+  }
+
+  @Post('leaderboard/close')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(Permission.SETTINGS_MANAGE)
+  @ApiOperation({
+    summary: 'End the season, pay the winners and start the next one',
+    description:
+      'An action the owner takes rather than a job that fires at midnight: ' +
+      'a board that pays out while nobody is looking pays out wrongly ' +
+      'without anybody noticing.',
+  })
+  closeSeason(@Ctx() ctx: RequestContext) {
+    return this.games.closeSeason(ctx);
   }
 
   @Get('plays')

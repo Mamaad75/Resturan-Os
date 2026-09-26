@@ -94,7 +94,41 @@ export const leaderboardConfigSchema = z.object({
   cooldownHours: z.coerce.number().int().min(0).max(168).default(24),
   periodDays: z.coerce.number().int().min(1).max(365).default(30),
   topN: z.coerce.number().int().min(1).max(100).default(10),
-  rewards: z.array(leaderboardRewardSchema).min(1, 'حداقل ۱ جایزه لازم است').max(20),
+  rewards: z
+    .array(leaderboardRewardSchema)
+    .min(1, 'حداقل ۱ جایزه لازم است')
+    .max(20)
+    .default([
+      {
+        rank: 1,
+        label: 'نفر اول ماه',
+        rewardType: 'PERCENTAGE',
+        rewardValue: 30,
+        minOrderTotal: 0,
+        expiryDays: 14,
+      },
+      {
+        rank: 2,
+        label: 'نفر دوم ماه',
+        rewardType: 'PERCENTAGE',
+        rewardValue: 20,
+        minOrderTotal: 0,
+        expiryDays: 14,
+      },
+      {
+        rank: 3,
+        label: 'نفر سوم ماه',
+        rewardType: 'PERCENTAGE',
+        rewardValue: 10,
+        minOrderTotal: 0,
+        expiryDays: 14,
+      },
+    ]),
+  /**
+   * When the current season began. Absent means "when the game row was
+   * created", which is what a competition that has never been closed uses.
+   */
+  seasonStartedAt: z.string().datetime({ offset: true }).nullable().default(null),
 });
 export type LeaderboardConfigInput = z.infer<typeof leaderboardConfigSchema>;
 
@@ -191,6 +225,13 @@ export const arcadeConfigSchema = z.object({
    * a game that appears on a restaurant's menu without the owner switching it
    * on is a surprise, and this one hands out discounts.
    */
+  /*
+   * The season-long competition. Off by default for the same reason as the
+   * duel: it publishes a board of a restaurant's customers and hands out
+   * prizes, neither of which should start because the platform deployed.
+   */
+  leaderboardEnabled: z.boolean().default(false),
+  leaderboard: leaderboardConfigSchema.default({}),
   memoryDuelEnabled: z.boolean().default(false),
   /*
    * Defaulted, so a config saved before this game existed still parses. Without

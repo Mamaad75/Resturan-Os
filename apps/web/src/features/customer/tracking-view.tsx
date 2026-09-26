@@ -23,6 +23,7 @@ import { cn } from '@/lib/cn';
 import { formatMoney, formatTimeFa, toPersianDigits } from '@/lib/format';
 import { publicService } from '@/services';
 import { FeedbackCard } from './feedback-card';
+import { LeaderboardCard } from './leaderboard-card';
 import { ReferralPanel } from './referral-panel';
 import { BillGame } from './bill-game';
 import { GamePanel } from './game-panel';
@@ -162,6 +163,9 @@ export function TrackingView({ token }: { token: string }) {
       ) : null}
 
       {!isCancelled ? <GamePanel token={token} /> : null}
+
+      {/* The season board, under the games that feed it. */}
+      {!isCancelled ? <LeaderboardCard token={token} /> : null}
 
       {!isCancelled && order.tableNumber != null ? (
         <BillGame total={order.total} currency={order.currency} />

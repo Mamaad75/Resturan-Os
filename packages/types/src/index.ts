@@ -10,3 +10,4 @@ export * from './platform';
 export * from './labels';
 export * from './format';
 export * from './games/memory-duel';
+export * from './games/leaderboard';

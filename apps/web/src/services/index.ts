@@ -1169,6 +1169,8 @@ export interface LeaderboardConfig {
   periodDays: number;
   topN: number;
   rewards: LeaderboardRewardDto[];
+  /** When the current season began; null means "since the game was created". */
+  seasonStartedAt: string | null;
 }
 
 export interface KitchenRushRewardDto {
@@ -1216,6 +1218,8 @@ export interface ArcadeConfig {
   spin: SpinConfig;
   kitchenRushEnabled: boolean;
   kitchenRush: KitchenRushConfig;
+  leaderboardEnabled: boolean;
+  leaderboard: LeaderboardConfig;
   memoryDuelEnabled: boolean;
   memoryDuel: MemoryDuelConfig;
 }
@@ -1242,6 +1246,17 @@ export const gameService = {
   update: (body: { isEnabled: boolean; model: GameConfigModel; config: ArcadeConfig | AnyGameConfig }) =>
     api.put<GameConfigDto>('/game', body),
   plays: () => api.get<GamePlayRow[]>('/game/plays'),
+  closeSeason: () =>
+    api.post<{
+      closedAt: string;
+      winners: Array<{
+        rank: number;
+        displayName: string;
+        score: number;
+        couponCode: string | null;
+        label: string | null;
+      }>;
+    }>('/game/leaderboard/close'),
 };
 
 /* --- public game (customer) --- */
@@ -1278,6 +1293,25 @@ export interface PublicGameState {
     rewardLabel: string | null;
     rewardOnDraw: boolean;
   };
+}
+
+/** One row of the public season board. */
+export interface LeaderboardStanding {
+  rank: number;
+  displayName: string;
+  score: number;
+  isYou: boolean;
+}
+
+export interface LeaderboardDto {
+  enabled: boolean;
+  periodDays?: number;
+  seasonStartsAt?: string;
+  seasonEndsAt?: string;
+  standings?: LeaderboardStanding[];
+  you?: { rank: number | null; score: number } | null;
+  prizes?: Array<{ rank: number; label: string }>;
+  playerCount?: number;
 }
 
 /** A dealt Memory Duel board. The seed is what both sides deal from. */
@@ -1394,6 +1428,15 @@ export const publicGameService = {
     }),
   finishKitchenRushByToken: (token: string, body: FinishKitchenRushPayload) =>
     api.post<PlayResultDto>(`/public/orders/track/${token}/game/kitchen-rush/finish`, body, {
+      retryOnAuthFailure: false,
+    }),
+  leaderboard: (slug: string, phone?: string) =>
+    api.get<LeaderboardDto>(`/public/restaurants/${slug}/game/leaderboard`, {
+      query: phone ? { phone } : {},
+      retryOnAuthFailure: false,
+    }),
+  leaderboardByToken: (token: string) =>
+    api.get<LeaderboardDto>(`/public/orders/track/${token}/game/leaderboard`, {
       retryOnAuthFailure: false,
     }),
   startMemoryDuelByToken: (token: string) =>

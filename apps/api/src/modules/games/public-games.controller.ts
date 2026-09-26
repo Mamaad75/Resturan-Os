@@ -58,6 +58,21 @@ export class PublicGamesController {
   }
 
   @Public()
+  @Get('leaderboard')
+  @ApiOperation({
+    summary: 'The current season s board',
+    description:
+      'Public, so nobody appears under their full phone number: a guest is ' +
+      'shown by the name they gave, or a masked number.',
+  })
+  leaderboard(
+    @ZodParam('slug', slugSchema) slug: string,
+    @Query('phone') phone?: string,
+  ) {
+    return this.games.leaderboard(slug, phone?.trim() || undefined);
+  }
+
+  @Public()
   @Post('memory-duel/start')
   @HttpCode(HttpStatus.OK)
   @Throttle(PUBLIC_ORDER_THROTTLE)

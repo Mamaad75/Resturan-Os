@@ -5,6 +5,13 @@ import {
   CouponType,
   duelWinner,
   isPlausibleDuel,
+  maskPlayerName,
+  prizeForRank,
+  rankEntries,
+  rankOf,
+  rankStandings,
+  seasonEnd,
+  seasonStart,
 } from '@restaurant-os/types';
 import {
   arcadeConfigSchema,
@@ -14,6 +21,7 @@ import {
   type FinishKitchenRushInput,
   type FinishMemoryDuelInput,
   type KitchenRushConfigInput,
+  type LeaderboardConfigInput,
   type MemoryDuelConfigInput,
   type PlayGameInput,
   type SpinConfigInput,
@@ -68,12 +76,27 @@ const DEFAULT_MEMORY_DUEL_CONFIG: MemoryDuelConfigInput = {
   rewardOnDraw: false,
 };
 
+const DEFAULT_LEADERBOARD_CONFIG: LeaderboardConfigInput = {
+  scorePerPlay: 10,
+  cooldownHours: 24,
+  periodDays: 30,
+  topN: 10,
+  rewards: [
+    { rank: 1, label: 'نفر اول ماه', rewardType: 'PERCENTAGE', rewardValue: 30, minOrderTotal: 0, expiryDays: 14 },
+    { rank: 2, label: 'نفر دوم ماه', rewardType: 'PERCENTAGE', rewardValue: 20, minOrderTotal: 0, expiryDays: 14 },
+    { rank: 3, label: 'نفر سوم ماه', rewardType: 'PERCENTAGE', rewardValue: 10, minOrderTotal: 0, expiryDays: 14 },
+  ],
+  seasonStartedAt: null,
+};
+
 const DEFAULT_ARCADE_CONFIG: ArcadeConfigInput = {
   spinEnabled: true,
   spin: DEFAULT_SPIN_CONFIG,
   kitchenRushEnabled: true,
   kitchenRush: DEFAULT_KITCHEN_RUSH_CONFIG,
   // Off until an owner turns it on: see the schema's note.
+  leaderboardEnabled: false,
+  leaderboard: DEFAULT_LEADERBOARD_CONFIG,
   memoryDuelEnabled: false,
   memoryDuel: DEFAULT_MEMORY_DUEL_CONFIG,
 };
@@ -560,6 +583,190 @@ export class GamesService {
     // that still have that default get the longer 120-second game automatically;
     // explicit values above 90 are respected.
     return config.durationSeconds === 90 ? { ...config, durationSeconds: 120, lives: Math.max(4, config.lives) } : config;
+  }
+
+  /* ---------------------------------------------------------- competition */
+
+  async leaderboard(slug: string, phone?: string) {
+    const { tenantId } = await this.restaurants.findPublicBySlug(slug);
+    return this.leaderboardForTenant(tenantId, phone);
+  }
+
+  async leaderboardByToken(token: string) {
+    const order = await this.resolveOrderByToken(token);
+    return this.leaderboardForTenant(order.tenantId, order.phone ?? undefined);
+  }
+
+  /**
+   * The season's board.
+   *
+   * Scores are summed from the plays inside the current season rather than
+   * read off the player's lifetime total: a competition a regular won in March
+   * should not still be won by them in June. The board is public, so nobody
+   * appears on it under their full phone number.
+   */
+  private async leaderboardForTenant(tenantId: string, phone?: string) {
+    return runAsSystem('game: leaderboard', async () => {
+      const game = await this.prisma.game.findUnique({ where: { tenantId } });
+      if (!game || !game.isEnabled) return { enabled: false as const };
+      const arcade = this.arcadeFromStored(game.model, game.config, game.isEnabled);
+      if (!arcade.leaderboardEnabled) return { enabled: false as const };
+      const cfg = arcade.leaderboard;
+
+      const anchor = cfg.seasonStartedAt
+        ? new Date(cfg.seasonStartedAt)
+        : game.createdAt;
+      const from = seasonStart(anchor, cfg.periodDays);
+      const to = seasonEnd(anchor, cfg.periodDays);
+
+      const entries = await this.seasonStandings(tenantId, from);
+      const you = phone
+        ? await this.prisma.gamePlayer.findUnique({
+            where: { tenantId_phone: { tenantId, phone } },
+            select: { id: true },
+          })
+        : null;
+
+      const yourRank = you ? rankOf(entries, you.id) : null;
+      const yourScore = you
+        ? (entries.find((entry) => entry.playerId === you.id)?.score ?? 0)
+        : null;
+
+      return {
+        enabled: true as const,
+        periodDays: cfg.periodDays,
+        seasonStartsAt: from.toISOString(),
+        seasonEndsAt: to.toISOString(),
+        standings: rankStandings(entries, {
+          topN: cfg.topN,
+          youPlayerId: you?.id ?? null,
+        }),
+        you: you ? { rank: yourRank, score: yourScore ?? 0 } : null,
+        // Labels only: what each position wins, without the coupon values.
+        prizes: cfg.rewards.map((reward) => ({
+          rank: reward.rank,
+          label: reward.label,
+        })),
+        playerCount: entries.length,
+      };
+    });
+  }
+
+  /** Every player's score for the season, from the plays inside it. */
+  private async seasonStandings(tenantId: string, from: Date) {
+    const plays = await this.prisma.gamePlay.findMany({
+      where: { tenantId, createdAt: { gte: from } },
+      select: { playerId: true, scoreDelta: true, createdAt: true },
+    });
+    if (plays.length === 0) return [];
+
+    const totals = new Map<string, { score: number; lastPlayAt: Date }>();
+    for (const play of plays) {
+      const current = totals.get(play.playerId);
+      if (current) {
+        current.score += play.scoreDelta;
+        if (play.createdAt > current.lastPlayAt) current.lastPlayAt = play.createdAt;
+      } else {
+        totals.set(play.playerId, {
+          score: play.scoreDelta,
+          lastPlayAt: play.createdAt,
+        });
+      }
+    }
+
+    const players = await this.prisma.gamePlayer.findMany({
+      where: { tenantId, id: { in: [...totals.keys()] } },
+      select: { id: true, name: true, phone: true },
+    });
+
+    return players.map((player) => ({
+      playerId: player.id,
+      name: player.name,
+      phone: player.phone,
+      score: totals.get(player.id)?.score ?? 0,
+      lastPlayAt: totals.get(player.id)?.lastPlayAt ?? null,
+    }));
+  }
+
+  /**
+   * Ends the season, pays the winners and starts the next one.
+   *
+   * Deliberately an action the owner takes rather than a job that fires at
+   * midnight: handing out discounts is the restaurant's decision, and a board
+   * that pays out while nobody is looking is one that pays out wrongly without
+   * anybody noticing. Tied players each get the prize for the rank they share.
+   */
+  async closeSeason(ctx: RequestContext) {
+    return runAsSystem('game: close season', async () => {
+      const game = await this.prisma.game.findUnique({
+        where: { tenantId: ctx.tenantId },
+      });
+      if (!game) throw AppException.notFound('بازی');
+      const arcade = this.arcadeFromStored(game.model, game.config, game.isEnabled);
+      if (!arcade.leaderboardEnabled) throw AppException.notFound('مسابقه');
+      const cfg = arcade.leaderboard;
+
+      const anchor = cfg.seasonStartedAt
+        ? new Date(cfg.seasonStartedAt)
+        : game.createdAt;
+      const from = seasonStart(anchor, cfg.periodDays);
+
+      const entries = await this.seasonStandings(ctx.tenantId, from);
+      // Ranked with the players still attached: matching a masked row back to a
+      // person by name and score would hand the wrong coupon to one of two
+      // nameless guests who tied.
+      const board = rankEntries(entries, { topN: cfg.topN });
+
+      const winners: Array<{
+        rank: number;
+        displayName: string;
+        score: number;
+        couponCode: string | null;
+        label: string | null;
+      }> = [];
+
+      for (const entry of board) {
+        const prize = prizeForRank(cfg.rewards, entry.rank);
+        if (!prize) continue;
+
+        const minted = await this.mintReward(ctx.tenantId, prize, 'SEASON');
+        await this.prisma.gamePlay.create({
+          data: {
+            tenantId: ctx.tenantId,
+            playerId: entry.playerId,
+            model: 'LEADERBOARD',
+            // The prize is not itself worth season points: the next season
+            // starts everyone level.
+            scoreDelta: 0,
+            rewardType: prize.rewardType,
+            rewardValue: prize.rewardValue,
+            couponId: minted.id,
+            couponCode: minted.code,
+            label: prize.label,
+          },
+        });
+        winners.push({
+          rank: entry.rank,
+          displayName: maskPlayerName(entry.name, entry.phone),
+          score: entry.score,
+          couponCode: minted.code,
+          label: prize.label,
+        });
+      }
+
+      // The next season starts now, so the board a guest sees tomorrow is the
+      // new one rather than the one that was just paid out.
+      const nextConfig: ArcadeConfigInput = {
+        ...arcade,
+        leaderboard: { ...cfg, seasonStartedAt: new Date().toISOString() },
+      };
+      await this.prisma.game.update({
+        where: { tenantId: ctx.tenantId },
+        data: { config: nextConfig as object },
+      });
+
+      return { winners, closedAt: new Date().toISOString() };
+    });
   }
 
   /* --------------------------------------------------------- memory duel */

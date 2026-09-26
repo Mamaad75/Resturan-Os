@@ -53,6 +53,13 @@ export class PublicGameTrackController {
   }
 
   @Public()
+  @Get('leaderboard')
+  @ApiOperation({ summary: 'The current season s board, for this order s player' })
+  leaderboard(@ZodParam('token', trackingTokenSchema) token: string) {
+    return this.games.leaderboardByToken(token);
+  }
+
+  @Public()
   @Post('memory-duel/start')
   @HttpCode(HttpStatus.OK)
   @Throttle(PUBLIC_ORDER_THROTTLE)
