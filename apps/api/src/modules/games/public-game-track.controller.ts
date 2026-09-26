@@ -2,7 +2,12 @@ import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/commo
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { z } from 'zod';
-import { finishKitchenRushSchema, type FinishKitchenRushInput } from '@restaurant-os/validation';
+import {
+  finishKitchenRushSchema,
+  finishMemoryDuelSchema,
+  type FinishKitchenRushInput,
+  type FinishMemoryDuelInput,
+} from '@restaurant-os/validation';
 import { PUBLIC_ORDER_THROTTLE } from '../../common/throttle';
 import { Public } from '../../common/decorators/auth.decorators';
 import { ZodBody, ZodParam } from '../../common/decorators/validation.decorators';
@@ -45,6 +50,27 @@ export class PublicGameTrackController {
     @ZodBody(finishKitchenRushSchema) dto: FinishKitchenRushInput,
   ) {
     return this.games.finishKitchenRushByToken(token, dto);
+  }
+
+  @Public()
+  @Post('memory-duel/start')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(PUBLIC_ORDER_THROTTLE)
+  @ApiOperation({ summary: 'Deal a Memory Duel board for this order' })
+  startMemoryDuel(@ZodParam('token', trackingTokenSchema) token: string) {
+    return this.games.startMemoryDuelByToken(token);
+  }
+
+  @Public()
+  @Post('memory-duel/finish')
+  @HttpCode(HttpStatus.OK)
+  @Throttle(PUBLIC_ORDER_THROTTLE)
+  @ApiOperation({ summary: 'Submit a Memory Duel result from the tracking page' })
+  finishMemoryDuel(
+    @ZodParam('token', trackingTokenSchema) token: string,
+    @ZodBody(finishMemoryDuelSchema) dto: FinishMemoryDuelInput,
+  ) {
+    return this.games.finishMemoryDuelByToken(token, dto);
   }
 
   @Public()

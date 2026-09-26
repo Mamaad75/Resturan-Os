@@ -1192,12 +1192,32 @@ export interface KitchenRushConfig {
   rewards: KitchenRushRewardDto[];
 }
 
+/** What the winner of a duel gets. Null for a game played for its own sake. */
+export interface MemoryDuelRewardDto {
+  label: string;
+  rewardType: 'PERCENTAGE' | 'FIXED';
+  rewardValue: number;
+  minOrderTotal: number;
+  expiryDays: number;
+}
+
+export interface MemoryDuelConfig {
+  pairs: number;
+  cooldownHours: number;
+  scorePerPlay: number;
+  itemLabels: string[];
+  reward: MemoryDuelRewardDto | null;
+  rewardOnDraw: boolean;
+}
+
 export type AnyGameConfig = SpinConfig | KitchenRushConfig | ThresholdConfig | LeaderboardConfig;
 export interface ArcadeConfig {
   spinEnabled: boolean;
   spin: SpinConfig;
   kitchenRushEnabled: boolean;
   kitchenRush: KitchenRushConfig;
+  memoryDuelEnabled: boolean;
+  memoryDuel: MemoryDuelConfig;
 }
 
 
@@ -1249,6 +1269,46 @@ export interface PublicGameState {
     itemLabels: string[];
     rewards: Array<{ label: string; minScore: number }>;
   };
+  memoryDuel?: {
+    enabled: boolean;
+    cooldownHours: number;
+    canPlay: boolean;
+    nextPlayAt: string | null;
+    pairs: number;
+    rewardLabel: string | null;
+    rewardOnDraw: boolean;
+  };
+}
+
+/** A dealt Memory Duel board. The seed is what both sides deal from. */
+export interface MemoryDuelSessionDto {
+  sessionToken: string;
+  seed: number;
+  pairs: number;
+  itemLabels: string[];
+  rewardLabel: string | null;
+  rewardOnDraw: boolean;
+  expiresAt: string;
+  /** True when this is a duel already in progress rather than a fresh deal. */
+  resumes: boolean;
+}
+
+export interface MemoryDuelResultDto {
+  winner: 0 | 1 | 2;
+  scoreOne: number;
+  scoreTwo: number;
+  couponCode: string | null;
+  rewardLabel: string | null;
+  playerScore: number;
+  level: number;
+}
+
+export interface FinishMemoryDuelPayload {
+  sessionToken: string;
+  scoreOne: number;
+  scoreTwo: number;
+  turns: number;
+  durationMs: number;
 }
 
 export interface GameRewardResult {
@@ -1336,6 +1396,30 @@ export const publicGameService = {
     api.post<PlayResultDto>(`/public/orders/track/${token}/game/kitchen-rush/finish`, body, {
       retryOnAuthFailure: false,
     }),
+  startMemoryDuelByToken: (token: string) =>
+    api.post<MemoryDuelSessionDto>(
+      `/public/orders/track/${token}/game/memory-duel/start`,
+      {},
+      { retryOnAuthFailure: false },
+    ),
+  finishMemoryDuelByToken: (token: string, body: FinishMemoryDuelPayload) =>
+    api.post<MemoryDuelResultDto>(
+      `/public/orders/track/${token}/game/memory-duel/finish`,
+      body,
+      { retryOnAuthFailure: false },
+    ),
+  startMemoryDuel: (slug: string, body: { phone: string; name?: string | null }) =>
+    api.post<MemoryDuelSessionDto>(
+      `/public/restaurants/${slug}/game/memory-duel/start`,
+      body,
+      { retryOnAuthFailure: false },
+    ),
+  finishMemoryDuel: (slug: string, phone: string, body: FinishMemoryDuelPayload) =>
+    api.post<MemoryDuelResultDto>(
+      `/public/restaurants/${slug}/game/memory-duel/finish`,
+      { ...body, phone },
+      { retryOnAuthFailure: false },
+    ),
   startKitchenRush: (slug: string, body: { phone: string; name?: string | null }) =>
     api.post<KitchenRushSessionDto>(`/public/restaurants/${slug}/game/kitchen-rush/start`, body, { retryOnAuthFailure: false }),
   finishKitchenRush: (slug: string, phone: string, body: FinishKitchenRushPayload) =>

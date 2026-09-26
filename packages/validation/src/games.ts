@@ -137,16 +137,68 @@ export const finishKitchenRushSchema = z.object({
 export type FinishKitchenRushInput = z.infer<typeof finishKitchenRushSchema>;
 
 
+/** MEMORY DUEL: two guests, one phone, one prize for whoever wins. */
+export const memoryDuelRewardSchema = z
+  .object({
+    label: z.string().trim().min(1, 'عنوان لازم است').max(80),
+    rewardType: z.enum(['PERCENTAGE', 'FIXED']),
+    rewardValue: z.coerce.number().int().min(1).max(1_000_000_000),
+    minOrderTotal: z.coerce.number().int().min(0).default(0),
+    expiryDays: z.coerce.number().int().min(1).max(365).default(7),
+  })
+  .superRefine(refineReward);
+export type MemoryDuelRewardInput = z.infer<typeof memoryDuelRewardSchema>;
+
+export const memoryDuelConfigSchema = z.object({
+  /** Six pairs is twelve cards, which fits a phone without scrolling. */
+  pairs: z.coerce.number().int().min(3).max(10).default(6),
+  cooldownHours: z.coerce.number().int().min(0).max(168).default(24),
+  scorePerPlay: z.coerce.number().int().min(1).max(1000).default(20),
+  itemLabels: z
+    .array(z.string().trim().min(1).max(40))
+    .min(3)
+    .max(12)
+    .default(['برگر', 'پیتزا', 'قهوه', 'سیب‌زمینی', 'سالاد', 'نوشیدنی']),
+  /** What the winner gets. Null for a game played for its own sake. */
+  reward: memoryDuelRewardSchema.nullable().default(null),
+  /** A draw is possible with an even board; this says whether it pays. */
+  rewardOnDraw: z.boolean().default(false),
+});
+export type MemoryDuelConfigInput = z.infer<typeof memoryDuelConfigSchema>;
+
+export const finishMemoryDuelSchema = z.object({
+  sessionToken: z.string().regex(/^[a-f0-9]{48}$/i, 'نشست بازی معتبر نیست.'),
+  scoreOne: z.coerce.number().int().min(0).max(12),
+  scoreTwo: z.coerce.number().int().min(0).max(12),
+  turns: z.coerce.number().int().min(0).max(500),
+  durationMs: z.coerce.number().int().min(0).max(1_800_000),
+});
+export type FinishMemoryDuelInput = z.infer<typeof finishMemoryDuelSchema>;
+
 /**
- * ARCADE: Wheel of Fortune and Kitchen Rush are independent games that can be
- * enabled together. The database still keeps one JSON row per tenant, so this
- * ships without a schema migration while avoiding the old single-model switch.
+ * ARCADE: Wheel of Fortune, Kitchen Rush and Memory Duel are independent games
+ * that can be enabled together. The database still keeps one JSON row per
+ * tenant, so this ships without a schema migration while avoiding the old
+ * single-model switch.
  */
 export const arcadeConfigSchema = z.object({
   spinEnabled: z.boolean().default(true),
   spin: spinConfigSchema,
   kitchenRushEnabled: z.boolean().default(true),
   kitchenRush: kitchenRushConfigSchema,
+  /*
+   * Off by default, including for tenants whose stored config predates it:
+   * a game that appears on a restaurant's menu without the owner switching it
+   * on is a surprise, and this one hands out discounts.
+   */
+  memoryDuelEnabled: z.boolean().default(false),
+  /*
+   * Defaulted, so a config saved before this game existed still parses. Without
+   * it the whole arcade config would fail to validate and fall back to
+   * defaults, quietly resetting every restaurant's wheel segments and Kitchen
+   * Rush settings the first time they were read.
+   */
+  memoryDuel: memoryDuelConfigSchema.default({}),
 });
 export type ArcadeConfigInput = z.infer<typeof arcadeConfigSchema>;
 

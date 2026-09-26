@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Dices, Flame, Plus, Save, Trash2 } from 'lucide-react';
+import { Dices, Flame, Plus, Save, Trash2, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Badge,
@@ -44,6 +44,21 @@ const DEFAULT_ARCADE: ArcadeConfig = {
     ],
     cooldownHours: 24,
     scorePerPlay: 10,
+  },
+  memoryDuelEnabled: false,
+  memoryDuel: {
+    pairs: 6,
+    cooldownHours: 24,
+    scorePerPlay: 20,
+    itemLabels: ['برگر', 'پیتزا', 'قهوه', 'سیب‌زمینی', 'سالاد', 'نوشیدنی'],
+    reward: {
+      label: '۱۰٪ تخفیف برندهٔ دوئل',
+      rewardType: 'PERCENTAGE',
+      rewardValue: 10,
+      minOrderTotal: 0,
+      expiryDays: 7,
+    },
+    rewardOnDraw: false,
   },
   kitchenRushEnabled: true,
   kitchenRush: {
@@ -145,6 +160,131 @@ export default function GamesPage() {
               <Input label="امتیاز باشگاه بعد از هر اجرا" dir="ltr" inputMode="numeric" disabled={!editable} value={String(config.kitchenRush.scorePerPlay)} onChange={(e) => setConfig({ ...config, kitchenRush: { ...config.kitchenRush, scorePerPlay: Math.max(1, num(e.target.value) || 1) } })} />
             </div>
             <KitchenRushEditor config={config.kitchenRush} setConfig={(kitchenRush) => setConfig({ ...config, kitchenRush })} editable={editable} />
+          </section>
+
+          <section className="rounded-2xl border border-line p-4">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand/10 text-brand">
+                  <Users className="size-5" />
+                </span>
+                <div>
+                  <p className="font-semibold text-ink">دوئل حافظه</p>
+                  <p className="text-xs text-ink-subtle">
+                    دو نفره روی یک گوشی: به نوبت کارت برمی‌گردانند و برنده جایزه
+                    می‌گیرد.
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={config.memoryDuelEnabled}
+                disabled={!editable || !isEnabled}
+                onChange={(checked) => setConfig({ ...config, memoryDuelEnabled: checked })}
+                label={config.memoryDuelEnabled ? 'روشن' : 'خاموش'}
+              />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="تعداد جفت کارت"
+                hint="بین ۳ تا ۱۰؛ ۶ جفت روی موبایل بدون اسکرول جا می‌شود."
+                dir="ltr"
+                inputMode="numeric"
+                disabled={!editable}
+                value={String(config.memoryDuel.pairs)}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    memoryDuel: {
+                      ...config.memoryDuel,
+                      pairs: Math.min(10, Math.max(3, num(e.target.value) || 3)),
+                    },
+                  })
+                }
+              />
+              <Input
+                label="فاصله هر دوئل (ساعت)"
+                hint="۰ یعنی بدون محدودیت"
+                dir="ltr"
+                inputMode="numeric"
+                disabled={!editable}
+                value={String(config.memoryDuel.cooldownHours)}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    memoryDuel: { ...config.memoryDuel, cooldownHours: num(e.target.value) },
+                  })
+                }
+              />
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Input
+                label="عنوان جایزهٔ برنده"
+                disabled={!editable}
+                value={config.memoryDuel.reward?.label ?? ''}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    memoryDuel: {
+                      ...config.memoryDuel,
+                      reward: {
+                        label: e.target.value,
+                        rewardType: config.memoryDuel.reward?.rewardType ?? 'PERCENTAGE',
+                        rewardValue: config.memoryDuel.reward?.rewardValue ?? 10,
+                        minOrderTotal: config.memoryDuel.reward?.minOrderTotal ?? 0,
+                        expiryDays: config.memoryDuel.reward?.expiryDays ?? 7,
+                      },
+                    },
+                  })
+                }
+              />
+              <Input
+                label={
+                  config.memoryDuel.reward?.rewardType === 'FIXED'
+                    ? 'مبلغ تخفیف (تومان)'
+                    : 'درصد تخفیف'
+                }
+                dir="ltr"
+                inputMode="numeric"
+                disabled={!editable}
+                value={String(config.memoryDuel.reward?.rewardValue ?? 10)}
+                onChange={(e) =>
+                  setConfig({
+                    ...config,
+                    memoryDuel: {
+                      ...config.memoryDuel,
+                      reward: {
+                        label: config.memoryDuel.reward?.label ?? 'جایزهٔ دوئل',
+                        rewardType: config.memoryDuel.reward?.rewardType ?? 'PERCENTAGE',
+                        rewardValue: Math.max(1, num(e.target.value) || 1),
+                        minOrderTotal: config.memoryDuel.reward?.minOrderTotal ?? 0,
+                        expiryDays: config.memoryDuel.reward?.expiryDays ?? 7,
+                      },
+                    },
+                  })
+                }
+              />
+            </div>
+
+            <div className="mt-3">
+              <Switch
+                checked={config.memoryDuel.rewardOnDraw}
+                disabled={!editable}
+                onChange={(checked) =>
+                  setConfig({
+                    ...config,
+                    memoryDuel: { ...config.memoryDuel, rewardOnDraw: checked },
+                  })
+                }
+                label="در صورت مساوی هم جایزه بده"
+              />
+            </div>
+
+            <p className="mt-3 text-xs text-ink-subtle">
+              کارت‌ها از همین آیتم‌ها ساخته می‌شوند:{' '}
+              {config.memoryDuel.itemLabels.join('، ')}
+            </p>
           </section>
 
           <div className="flex justify-end">

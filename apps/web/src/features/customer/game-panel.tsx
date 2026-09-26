@@ -1,13 +1,20 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Dices, Flame, Gift, PartyPopper, Sparkles } from 'lucide-react';
+import { Dices, Flame, Gift, PartyPopper, Sparkles, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Badge, Button, Card, useToast } from '@/components/ui';
 import { ApiError } from '@/lib/api-client';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { publicGameService, type GameRewardResult, type PlayResultDto } from '@/services';
+import {
+  publicGameService,
+  type GameRewardResult,
+  type MemoryDuelResultDto,
+  type MemoryDuelSessionDto,
+  type PlayResultDto,
+} from '@/services';
 import { KitchenRushGame } from './kitchen-rush-game';
+import { DuelIntro, MemoryDuelGame, type DuelOutcome } from './memory-duel-game';
 
 /* Alternating brand and charcoal, so the wheel belongs to the same app. */
 const SLICE_COLORS = ['#0D7666', '#1C1E21', '#12907C', '#26292D', '#3FB39C', '#15171A'];
@@ -33,6 +40,8 @@ export function GamePanel({ token }: { token: string }) {
   const [spinning, setSpinning] = useState(false);
   const [spinResult, setSpinResult] = useState<PlayResultDto | null>(null);
   const [rushResult, setRushResult] = useState<PlayResultDto | null>(null);
+  const [duel, setDuel] = useState<MemoryDuelSessionDto | null>(null);
+  const [duelResult, setDuelResult] = useState<MemoryDuelResultDto | null>(null);
 
   const query = useQuery({
     queryKey: ['game-state', token],
@@ -61,11 +70,43 @@ export function GamePanel({ token }: { token: string }) {
     },
   });
 
+  const startDuel = useMutation({
+    mutationFn: () => publicGameService.startMemoryDuelByToken(token),
+    onSuccess: (session) => {
+      setDuelResult(null);
+      setDuel(session);
+    },
+    onError: (error) =>
+      toast.error(
+        'دوئل شروع نشد',
+        error instanceof ApiError ? error.message : undefined,
+      ),
+  });
+
+  const finishDuel = useMutation({
+    mutationFn: (outcome: DuelOutcome) =>
+      publicGameService.finishMemoryDuelByToken(token, {
+        sessionToken: duel!.sessionToken,
+        ...outcome,
+      }),
+    onSuccess: (result) => {
+      setDuelResult(result);
+      setDuel(null);
+      void queryClient.invalidateQueries({ queryKey: ['game-state', token] });
+    },
+    onError: (error) =>
+      toast.error(
+        'ثبت نتیجه انجام نشد',
+        error instanceof ApiError ? error.message : undefined,
+      ),
+  });
+
   const state = query.data;
   if (!state || !state.enabled) return null;
   const hasSpin = state.spin?.enabled;
   const hasRush = state.kitchenRush?.enabled;
-  if (!hasSpin && !hasRush) return null;
+  const hasDuel = state.memoryDuel?.enabled;
+  if (!hasSpin && !hasRush && !hasDuel) return null;
 
   return (
     <Card className="mt-4 overflow-hidden p-0">
@@ -130,8 +171,96 @@ export function GamePanel({ token }: { token: string }) {
             {rushResult ? <div className="mt-3"><ResultView result={rushResult} /></div> : null}
           </section>
         ) : null}
+
+        {hasDuel && state.memoryDuel ? (
+          <section className="rounded-2xl border border-line bg-surface-sunken/50 p-4">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="flex items-center gap-2 text-sm font-bold text-ink">
+                  <Users className="size-4 text-brand" />
+                  دوئل حافظه
+                </p>
+                <p className="mt-1 text-xs text-ink-subtle">
+                  دو نفره، روی همین گوشی. به نوبت کارت برگردانید و جفت‌ها را پیدا
+                  کنید.
+                </p>
+              </div>
+              <Badge tone="neutral">بازی سوم</Badge>
+            </div>
+
+            {duel ? (
+              <MemoryDuelGame
+                seed={duel.seed}
+                pairs={duel.pairs}
+                itemLabels={duel.itemLabels}
+                finishing={finishDuel.isPending}
+                onFinish={(outcome) => finishDuel.mutate(outcome)}
+              />
+            ) : duelResult ? (
+              <DuelResultView
+                result={duelResult}
+                onAgain={() => startDuel.mutate()}
+                canPlayAgain={state.memoryDuel.canPlay}
+                starting={startDuel.isPending}
+              />
+            ) : state.memoryDuel.canPlay ? (
+              <DuelIntro
+                rewardLabel={state.memoryDuel.rewardLabel}
+                starting={startDuel.isPending}
+                onStart={() => startDuel.mutate()}
+              />
+            ) : (
+              <p className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-center text-xs text-ink-subtle">
+                {state.memoryDuel.nextPlayAt
+                  ? `نوبت بعدی دوئل: ${new Date(state.memoryDuel.nextPlayAt).toLocaleString('fa-IR')}`
+                  : 'فعلاً امکان بازی دوئل نیست.'}
+              </p>
+            )}
+          </section>
+        ) : null}
       </div>
     </Card>
+  );
+}
+
+/** The duel's own result, which has a winner rather than a score band. */
+function DuelResultView({
+  result,
+  onAgain,
+  canPlayAgain,
+  starting,
+}: {
+  result: MemoryDuelResultDto;
+  onAgain: () => void;
+  canPlayAgain: boolean;
+  starting: boolean;
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-brand/30 bg-brand/[0.08] p-4 text-center">
+      <p className="font-bold text-ink">
+        {result.winner === 0
+          ? 'مساوی شد!'
+          : `بازیکن ${toPersianDigits(result.winner)} برنده شد!`}
+      </p>
+      <p className="text-sm text-ink-muted">
+        {toPersianDigits(result.scoreOne)} — {toPersianDigits(result.scoreTwo)}
+      </p>
+      {result.couponCode ? (
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-xs text-ink-subtle">
+            {result.rewardLabel ?? 'کد تخفیف'}:
+          </span>
+          <Badge tone="brand">{result.couponCode}</Badge>
+        </div>
+      ) : (
+        <p className="text-xs text-ink-subtle">این دور جایزه‌ای نداشت.</p>
+      )}
+      {canPlayAgain ? (
+        <Button variant="secondary" fullWidth loading={starting} onClick={onAgain}>
+          یک دور دیگر
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

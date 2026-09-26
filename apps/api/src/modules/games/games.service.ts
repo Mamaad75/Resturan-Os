@@ -1,13 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomBytes, randomInt } from 'node:crypto';
-import { ApiErrorCode, CouponType } from '@restaurant-os/types';
+import {
+  ApiErrorCode,
+  CouponType,
+  duelWinner,
+  isPlausibleDuel,
+} from '@restaurant-os/types';
 import {
   arcadeConfigSchema,
   kitchenRushConfigSchema,
   spinConfigSchema,
   type ArcadeConfigInput,
   type FinishKitchenRushInput,
+  type FinishMemoryDuelInput,
   type KitchenRushConfigInput,
+  type MemoryDuelConfigInput,
   type PlayGameInput,
   type SpinConfigInput,
   type SpinSegmentInput,
@@ -46,12 +53,42 @@ const DEFAULT_KITCHEN_RUSH_CONFIG: KitchenRushConfigInput = {
   ],
 };
 
+const DEFAULT_MEMORY_DUEL_CONFIG: MemoryDuelConfigInput = {
+  pairs: 6,
+  cooldownHours: 24,
+  scorePerPlay: 20,
+  itemLabels: ['برگر', 'پیتزا', 'قهوه', 'سیب‌زمینی', 'سالاد', 'نوشیدنی'],
+  reward: {
+    label: '۱۰٪ تخفیف برندهٔ دوئل',
+    rewardType: 'PERCENTAGE',
+    rewardValue: 10,
+    minOrderTotal: 0,
+    expiryDays: 7,
+  },
+  rewardOnDraw: false,
+};
+
 const DEFAULT_ARCADE_CONFIG: ArcadeConfigInput = {
   spinEnabled: true,
   spin: DEFAULT_SPIN_CONFIG,
   kitchenRushEnabled: true,
   kitchenRush: DEFAULT_KITCHEN_RUSH_CONFIG,
+  // Off until an owner turns it on: see the schema's note.
+  memoryDuelEnabled: false,
+  memoryDuel: DEFAULT_MEMORY_DUEL_CONFIG,
 };
+
+/**
+ * How many pairs this board actually has.
+ *
+ * An owner can ask for six pairs and then delete labels until only four
+ * remain; dealing six from four would put the same picture on two different
+ * pairs, which makes the game unwinnable rather than hard. The board follows
+ * the labels.
+ */
+function duelPairs(cfg: MemoryDuelConfigInput): number {
+  return Math.max(3, Math.min(cfg.pairs, cfg.itemLabels.length));
+}
 
 function levelFor(score: number): number {
   return 1 + Math.floor(score / 100);
@@ -159,7 +196,13 @@ export class GamesService {
       if (!game || !game.isEnabled) return { enabled: false as const };
 
       const arcade = this.arcadeFromStored(game.model, game.config, game.isEnabled);
-      if (!arcade.spinEnabled && !arcade.kitchenRushEnabled) return { enabled: false as const };
+      if (
+        !arcade.spinEnabled &&
+        !arcade.kitchenRushEnabled &&
+        !arcade.memoryDuelEnabled
+      ) {
+        return { enabled: false as const };
+      }
 
       const player = phone
         ? await this.prisma.gamePlayer.findUnique({
@@ -168,15 +211,17 @@ export class GamesService {
           })
         : null;
 
-      const [lastSpin, lastRush] = player
+      const [lastSpin, lastRush, lastDuel] = player
         ? await Promise.all([
             this.lastPlayAt(player.id, 'SPIN'),
             this.lastPlayAt(player.id, 'KITCHEN_RUSH'),
+            this.lastPlayAt(player.id, 'MEMORY_DUEL'),
           ])
-        : [null, null];
+        : [null, null, null];
 
       const spinAvailability = availability(lastSpin, arcade.spin.cooldownHours);
       const rushAvailability = availability(lastRush, arcade.kitchenRush.cooldownHours);
+      const duelAvailability = availability(lastDuel, arcade.memoryDuel.cooldownHours);
 
       return {
         enabled: true as const,
@@ -203,6 +248,14 @@ export class GamesService {
             label: reward.label,
             minScore: reward.minScore,
           })),
+        },
+        memoryDuel: {
+          enabled: arcade.memoryDuelEnabled,
+          cooldownHours: arcade.memoryDuel.cooldownHours,
+          ...duelAvailability,
+          pairs: duelPairs(arcade.memoryDuel),
+          rewardLabel: arcade.memoryDuel.reward?.label ?? null,
+          rewardOnDraw: arcade.memoryDuel.rewardOnDraw,
         },
       };
     });
@@ -509,7 +562,242 @@ export class GamesService {
     return config.durationSeconds === 90 ? { ...config, durationSeconds: 120, lives: Math.max(4, config.lives) } : config;
   }
 
-  private async lastPlayAt(playerId: string, model: 'SPIN' | 'KITCHEN_RUSH') {
+  /* --------------------------------------------------------- memory duel */
+
+  async startMemoryDuelByToken(token: string) {
+    const order = await this.resolveOrderByToken(token);
+    if (!order.phone) throw AppException.validation('برای بازی، شمارهٔ موبایل لازم است.');
+    return this.startMemoryDuelForTenant(order.tenantId, order.phone, order.name ?? null);
+  }
+
+  async finishMemoryDuelByToken(token: string, input: FinishMemoryDuelInput) {
+    const order = await this.resolveOrderByToken(token);
+    if (!order.phone) throw AppException.validation('برای بازی، شمارهٔ موبایل لازم است.');
+    return this.finishMemoryDuelForTenant(order.tenantId, order.phone, input);
+  }
+
+  async startMemoryDuel(slug: string, input: PlayGameInput) {
+    const { tenantId } = await this.restaurants.findPublicBySlug(slug);
+    return this.startMemoryDuelForTenant(tenantId, input.phone, input.name ?? null);
+  }
+
+  async finishMemoryDuel(slug: string, phone: string, input: FinishMemoryDuelInput) {
+    const { tenantId } = await this.restaurants.findPublicBySlug(slug);
+    if (!phone) throw AppException.validation('برای بازی، شمارهٔ موبایل لازم است.');
+    return this.finishMemoryDuelForTenant(tenantId, phone, input);
+  }
+
+  /**
+   * Deals a board.
+   *
+   * The seed is the whole contract with the browser: the same seed deals the
+   * same table on both sides, so a submitted result can be checked against a
+   * board the server can reproduce rather than taken on trust.
+   */
+  private async startMemoryDuelForTenant(
+    tenantId: string,
+    phone: string,
+    name: string | null,
+  ) {
+    return runAsSystem('game: memory duel start', async () => {
+      const game = await this.prisma.game.findUnique({ where: { tenantId } });
+      if (!game || !game.isEnabled) throw AppException.notFound('دوئل حافظه');
+      const arcade = this.arcadeFromStored(game.model, game.config, game.isEnabled);
+      if (!arcade.memoryDuelEnabled) throw AppException.notFound('دوئل حافظه');
+      const cfg = arcade.memoryDuel;
+      const pairs = duelPairs(cfg);
+
+      const player = await this.prisma.gamePlayer.upsert({
+        where: { tenantId_phone: { tenantId, phone } },
+        create: { tenantId, phone, name },
+        update: name ? { name } : {},
+      });
+
+      const lastPlayedAt = await this.lastPlayAt(player.id, 'MEMORY_DUEL');
+      this.assertCooldown(lastPlayedAt, cfg.cooldownHours, 'دوئل حافظه');
+
+      const now = new Date();
+      await this.prisma.gameSession.updateMany({
+        where: {
+          playerId: player.id,
+          model: 'MEMORY_DUEL',
+          finishedAt: null,
+          expiresAt: { lt: now },
+        },
+        data: { finishedAt: now, metadata: { abandoned: true } },
+      });
+
+      // A duel already in progress is resumed rather than re-dealt: two people
+      // who reloaded the page should find their board, not a new one.
+      const live = await this.prisma.gameSession.findFirst({
+        where: {
+          playerId: player.id,
+          model: 'MEMORY_DUEL',
+          finishedAt: null,
+          expiresAt: { gt: now },
+        },
+        orderBy: { startedAt: 'desc' },
+      });
+      if (live) return this.duelSessionDto(live, cfg, pairs, true);
+
+      const token = randomBytes(24).toString('hex');
+      const seed = randomBytes(4).readUInt32BE(0) & 0x7fffffff;
+      const session = await this.prisma.gameSession.create({
+        data: {
+          tenantId,
+          playerId: player.id,
+          model: 'MEMORY_DUEL',
+          token,
+          seed,
+          // Generous: this is a game two people play between courses, and
+          // being timed out mid-duel is worse than a stale row.
+          expiresAt: new Date(now.getTime() + 20 * 60_000),
+        },
+      });
+      return this.duelSessionDto(session, cfg, pairs, false);
+    });
+  }
+
+  private async finishMemoryDuelForTenant(
+    tenantId: string,
+    phone: string,
+    input: FinishMemoryDuelInput,
+  ) {
+    return runAsSystem('game: memory duel finish', async () => {
+      const game = await this.prisma.game.findUnique({ where: { tenantId } });
+      if (!game || !game.isEnabled) throw AppException.notFound('دوئل حافظه');
+      const arcade = this.arcadeFromStored(game.model, game.config, game.isEnabled);
+      if (!arcade.memoryDuelEnabled) throw AppException.notFound('دوئل حافظه');
+      const cfg = arcade.memoryDuel;
+      const pairs = duelPairs(cfg);
+
+      const session = await this.prisma.gameSession.findUnique({
+        where: { token: input.sessionToken },
+        include: { player: true },
+      });
+      if (
+        !session ||
+        session.tenantId !== tenantId ||
+        session.player.phone !== phone ||
+        session.model !== 'MEMORY_DUEL'
+      ) {
+        throw AppException.validation('نشست بازی معتبر نیست.');
+      }
+      if (session.finishedAt) throw AppException.validation('این نشست قبلاً ثبت شده است.');
+
+      const now = new Date();
+      if (session.expiresAt.getTime() < now.getTime()) {
+        throw AppException.validation('زمان این بازی تمام شده است.');
+      }
+
+      /*
+       * A hot-seat game is played entirely in the browser, so the honest claim
+       * is not that this result is true but that it is possible: every pair
+       * accounted for, more turns than pairs, and no faster than two people
+       * can tap. The elapsed time on the session is the outer bound.
+       */
+      const elapsed = Math.max(0, now.getTime() - session.startedAt.getTime());
+      const result = {
+        pairs,
+        scoreOne: input.scoreOne,
+        scoreTwo: input.scoreTwo,
+        turns: input.turns,
+        durationMs: input.durationMs,
+      };
+      if (!isPlausibleDuel(result, { maxDurationMs: elapsed + 5_000 })) {
+        throw AppException.validation('نتیجهٔ بازی معتبر نیست.');
+      }
+
+      const winner = duelWinner(input.scoreOne, input.scoreTwo);
+      const paysOut = winner !== 0 || cfg.rewardOnDraw;
+
+      let couponCode: string | null = null;
+      let couponId: string | null = null;
+      if (cfg.reward && paysOut) {
+        const minted = await this.mintReward(tenantId, cfg.reward, 'DUEL');
+        couponCode = minted.code;
+        couponId = minted.id;
+      }
+
+      const newScore = session.player.score + cfg.scorePerPlay;
+      const updated = await this.prisma.gameSession.updateMany({
+        where: { id: session.id, finishedAt: null },
+        data: {
+          finishedAt: now,
+          score: Math.max(input.scoreOne, input.scoreTwo),
+          correct: pairs,
+          mistakes: 0,
+          comboMax: 0,
+          metadata: {
+            durationMs: input.durationMs,
+            turns: input.turns,
+            scoreOne: input.scoreOne,
+            scoreTwo: input.scoreTwo,
+            winner,
+          },
+        },
+      });
+      // Lost the race with another tab submitting the same duel.
+      if (updated.count !== 1) throw AppException.validation('این نشست قبلاً ثبت شده است.');
+
+      await this.prisma.gamePlayer.update({
+        where: { id: session.playerId },
+        data: {
+          score: newScore,
+          level: levelFor(newScore),
+          playsCount: { increment: 1 },
+          lastPlayAt: now,
+        },
+      });
+      await this.prisma.gamePlay.create({
+        data: {
+          tenantId,
+          playerId: session.playerId,
+          model: 'MEMORY_DUEL',
+          scoreDelta: cfg.scorePerPlay,
+          rewardType: couponCode ? (cfg.reward?.rewardType ?? null) : null,
+          rewardValue: couponCode ? (cfg.reward?.rewardValue ?? null) : null,
+          couponId,
+          couponCode,
+          label: cfg.reward?.label ?? null,
+        },
+      });
+
+      return {
+        winner,
+        scoreOne: input.scoreOne,
+        scoreTwo: input.scoreTwo,
+        couponCode,
+        rewardLabel: couponCode ? (cfg.reward?.label ?? null) : null,
+        playerScore: newScore,
+        level: levelFor(newScore),
+      };
+    });
+  }
+
+  private duelSessionDto(
+    session: { token: string; seed: number; expiresAt: Date },
+    cfg: MemoryDuelConfigInput,
+    pairs: number,
+    resumes: boolean,
+  ) {
+    return {
+      sessionToken: session.token,
+      seed: session.seed,
+      pairs,
+      // Only the labels the board will actually use.
+      itemLabels: cfg.itemLabels.slice(0, pairs),
+      rewardLabel: cfg.reward?.label ?? null,
+      rewardOnDraw: cfg.rewardOnDraw,
+      expiresAt: session.expiresAt.toISOString(),
+      resumes,
+    };
+  }
+
+  private async lastPlayAt(
+    playerId: string,
+    model: 'SPIN' | 'KITCHEN_RUSH' | 'MEMORY_DUEL',
+  ) {
     const play = await this.prisma.gamePlay.findFirst({
       where: { playerId, model },
       orderBy: { createdAt: 'desc' },
