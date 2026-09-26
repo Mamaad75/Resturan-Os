@@ -55,6 +55,7 @@ import {
 import { CouponsService } from '../coupons/coupons.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { MembershipsService } from '../memberships/memberships.service';
+import { OffersService } from '../offers/offers.service';
 import { OrderPricingService, type ResolvedLine } from './order-pricing.service';
 
 @Injectable()
@@ -69,6 +70,7 @@ export class OrdersService {
     private readonly coupons: CouponsService,
     private readonly loyalty: LoyaltyService,
     private readonly memberships: MembershipsService,
+    private readonly offers: OffersService,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
     private readonly plans: PlansService,
@@ -122,7 +124,13 @@ export class OrdersService {
       this.createOrder({
         tenantId: resolved.tenantId,
         branchId: resolved.branchId,
-        input: { ...input, discountAmount: 0, sendToKitchen: false, couponCode: input.couponCode },
+        input: {
+          ...input,
+          discountAmount: 0,
+          sendToKitchen: false,
+          couponCode: input.couponCode,
+          offerId: input.offerId ?? null,
+        },
         actor: 'customer',
         actorUserId: null,
       }),
@@ -190,6 +198,7 @@ export class OrdersService {
       discountAmount?: number;
       sendToKitchen?: boolean;
       couponCode?: string | null;
+      offerId?: string | null;
     };
     actor: 'customer' | 'staff';
     actorUserId: string | null;
@@ -296,13 +305,34 @@ export class OrdersService {
         appliedCouponId = evaluation.couponId;
       }
 
+      /*
+       * The checkout offer. The request names the offer it accepted and
+       * nothing else - the window, the percentage and which line it applies to
+       * are all read here, so a guest who keeps an expired popup open, or edits
+       * the id to one from another restaurant, gets a discount of zero rather
+       * than a price of their own choosing.
+       */
+      let offerDiscount = 0;
+      if (input.offerId) {
+        offerDiscount = await this.offers.discountFor(
+          tx,
+          tenantId,
+          input.offerId,
+          lines,
+        );
+        if (offerDiscount > 0) {
+          await this.offers.markAccepted(tx, tenantId, input.offerId);
+        }
+      }
+
       const customer = input.customerPhone
         ? await upsertCustomer(tx, tenantId, input.customerPhone, input.customerName)
         : null;
 
       // Membership pricing is computed server-side. The browser only supplies
       // identity (phone); it cannot choose its own discount or free delivery.
-      const discountBeforeMembership = (input.discountAmount ?? 0) + couponDiscount;
+      const discountBeforeMembership =
+        (input.discountAmount ?? 0) + couponDiscount + offerDiscount;
       const membership = await this.memberships.quote(
         tx,
         tenantId,

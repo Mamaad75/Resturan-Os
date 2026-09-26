@@ -17,13 +17,14 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Input, Modal, Textarea, useToast } from '@/components/ui';
 import { ApiError } from '@/lib/api-client';
 import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
-import { couponService, publicService } from '@/services';
+import { couponService, publicService, type CheckoutOfferDto } from '@/services';
 import { useCart } from './cart';
+import { OfferPopup } from './offer-popup';
 
 type OrderType = 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY';
 
@@ -80,6 +81,48 @@ export function CheckoutSheet({
   const [couponError, setCouponError] = useState<string | null>(null);
   const [checkingCoupon, setCheckingCoupon] = useState(false);
 
+  /*
+   * The offer shown on the way to paying. Fetched once when the sheet opens so
+   * that editing the cart does not keep re-asking the server (and inflating the
+   * offer's impression count), and asked at most once per checkout: a popup
+   * that comes back after being declined is the kind of thing that loses a
+   * customer rather than sells a croissant.
+   */
+  const [offer, setOffer] = useState<CheckoutOfferDto | null>(null);
+  const [offerAsked, setOfferAsked] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [acceptedOffer, setAcceptedOffer] = useState<CheckoutOfferDto | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    // Products already in the basket are excluded: a discount on something the
+    // guest was buying anyway is money the restaurant gives away.
+    const inCart = [...new Set(cart.lines.map((line) => line.productId))];
+    if (inCart.length === 0) return;
+    publicService
+      .checkoutOffer(slug, inCart)
+      .then((result) => {
+        if (!cancelled) setOffer(result);
+      })
+      // No offer is the normal case, so a failure here is silent - it must
+      // never be the reason someone cannot order.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, slug]);
+
+  // A fresh checkout starts with a fresh offer, so closing and reopening the
+  // sheet does not carry an accepted croissant into an order without it.
+  useEffect(() => {
+    if (open) return;
+    setOfferAsked(false);
+    setOfferOpen(false);
+    setAcceptedOffer(null);
+  }, [open]);
+
   async function applyCoupon() {
     const code = couponInput.trim();
     if (!code) return;
@@ -111,8 +154,30 @@ export function CheckoutSheet({
     }
   }
 
-  async function submit() {
+  async function submit(accepted: CheckoutOfferDto | null = acceptedOffer) {
     setErrors({});
+
+    const items = cart.lines.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      notes: line.notes,
+      modifierOptionIds: line.modifiers.map((m) => m.id),
+    }));
+
+    /*
+     * The accepted offer becomes a normal order line. It is only appended when
+     * the cart does not already carry that product, so a guest who accepts,
+     * hits a validation error and submits again is charged for one croissant
+     * rather than two.
+     */
+    if (accepted && !items.some((item) => item.productId === accepted.productId)) {
+      items.push({
+        productId: accepted.productId,
+        quantity: 1,
+        notes: null,
+        modifierOptionIds: [],
+      });
+    }
 
     const payload = {
       type: orderType,
@@ -121,16 +186,13 @@ export function CheckoutSheet({
       customerPhone: customerPhone.trim() || null,
       notes: notes.trim() || null,
       couponCode: appliedCoupon?.code ?? null,
+      // The offer, not its price: the server decides what it is worth.
+      offerId: accepted?.id ?? null,
       deliveryZoneId: orderType === 'DELIVERY' ? deliveryZoneId || null : null,
       deliveryAddress:
         orderType === 'DELIVERY' ? deliveryAddress.trim() || null : null,
       deliveryNotes: orderType === 'DELIVERY' ? deliveryNotes.trim() || null : null,
-      items: cart.lines.map((line) => ({
-        productId: line.productId,
-        quantity: line.quantity,
-        notes: line.notes,
-        modifierOptionIds: line.modifiers.map((m) => m.id),
-      })),
+      items,
     };
 
     // Dine-in phone is enforced by the restaurant setting, not the base schema.
@@ -147,6 +209,13 @@ export function CheckoutSheet({
         fieldErrors[String(issue.path[0])] = issue.message;
       }
       setErrors(fieldErrors);
+      return;
+    }
+
+    // Everything about the order is valid; this is the moment before paying.
+    if (offer && !offerAsked && !accepted) {
+      setOfferAsked(true);
+      setOfferOpen(true);
       return;
     }
 
@@ -201,9 +270,22 @@ export function CheckoutSheet({
             <div className="flex items-center justify-between text-sm">
               <span className="text-ink-muted">جمع اقلام</span>
               <span className="font-semibold text-ink">
-                {formatMoney(cart.estimatedSubtotal)}
+                {formatMoney(cart.estimatedSubtotal + (acceptedOffer?.price ?? 0))}
               </span>
             </div>
+            {acceptedOffer ? (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-positive">
+                  تخفیف پیشنهاد ویژه ({acceptedOffer.productNameFa})
+                </span>
+                <span className="font-semibold text-positive">
+                  -{' '}
+                  {formatMoney(
+                    Math.max(0, acceptedOffer.price - acceptedOffer.offerPrice),
+                  )}
+                </span>
+              </div>
+            ) : null}
             {appliedCoupon ? (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-positive">تخفیف ({appliedCoupon.code})</span>
@@ -230,7 +312,7 @@ export function CheckoutSheet({
               size="lg"
               fullWidth
               loading={submitting}
-              onClick={submit}
+              onClick={() => void submit()}
             >
               ثبت سفارش
             </Button>
@@ -526,6 +608,26 @@ export function CheckoutSheet({
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             error={errors.notes}
+          />
+
+          {/*
+            The last screen before paying. It renders through a portal, so
+            sitting inside the sheet in the tree still puts it on top of it.
+            Either answer continues to the order the guest already confirmed -
+            neither is a dead end.
+          */}
+          <OfferPopup
+            offer={offer}
+            open={offerOpen}
+            onAccept={() => {
+              setAcceptedOffer(offer);
+              setOfferOpen(false);
+              void submit(offer);
+            }}
+            onDecline={() => {
+              setOfferOpen(false);
+              void submit(null);
+            }}
           />
         </div>
       )}

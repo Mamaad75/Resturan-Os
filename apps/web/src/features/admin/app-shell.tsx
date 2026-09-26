@@ -7,6 +7,7 @@ import {
 } from '@restaurant-os/types';
 import { useQuery } from '@tanstack/react-query';
 import {
+  BadgePercent,
   BarChart3,
   Bell,
   CalendarDays,
@@ -135,6 +136,12 @@ const NAV_ITEMS: NavItem[] = [
     href: '/admin/coupons',
     label: 'کدهای تخفیف',
     icon: Tag,
+    permissions: [Permission.SETTINGS_MANAGE],
+  },
+  {
+    href: '/admin/offers',
+    label: 'پیشنهاد ویژه',
+    icon: BadgePercent,
     permissions: [Permission.SETTINGS_MANAGE],
   },
   {

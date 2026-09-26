@@ -30,6 +30,7 @@ import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { EventsModule } from './modules/events/events.module';
 import { GamesModule } from './modules/games/games.module';
 import { AccountingModule } from './modules/accounting/accounting.module';
+import { OffersModule } from './modules/offers/offers.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { TerminalsModule } from './modules/terminals/terminals.module';
@@ -87,6 +88,7 @@ import { HealthController } from './health.controller';
     EventsModule,
     GamesModule,
     AccountingModule,
+    OffersModule,
     InventoryModule,
     MembershipsModule,
     TerminalsModule,

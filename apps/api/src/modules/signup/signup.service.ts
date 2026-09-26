@@ -53,6 +53,8 @@ const BUSINESS_PRESETS = {
   },
 } as const;
 
+import { STARTER_MENUS, type StarterMenuKey } from './starter-menus';
+
 @Injectable()
 export class SignupService {
   private readonly logger = new Logger(SignupService.name);
@@ -159,16 +161,38 @@ export class SignupService {
           data: { tenantId: tenant.id, branchId: branch.id },
         });
 
-        // Starter categories so the menu screen is never an empty void.
-        await tx.category.createMany({
-          data: preset.starterCategories.map((nameFa, index) => ({
-            tenantId: tenant.id,
-            menuId: menu.id,
-            name: nameFa,
-            nameFa,
-            displayOrder: index,
-          })),
-        });
+        /*
+         * A starter menu, not just starter headings.
+         *
+         * Signing up used to leave an owner looking at three empty categories
+         * with twenty items to type before they could take an order. These are
+         * the items the business almost certainly sells; everything is
+         * editable and deletable, and the prices are deliberately round so
+         * nobody mistakes them for a recommendation.
+         */
+        const starter = STARTER_MENUS[input.businessType as StarterMenuKey] ?? [];
+        for (const [index, category] of starter.entries()) {
+          await tx.category.create({
+            data: {
+              tenantId: tenant.id,
+              menuId: menu.id,
+              name: category.nameFa,
+              nameFa: category.nameFa,
+              displayOrder: index,
+              products: {
+                create: category.products.map((product, productIndex) => ({
+                  tenantId: tenant.id,
+                  name: product.name,
+                  nameFa: product.nameFa,
+                  descriptionFa: product.descriptionFa ?? null,
+                  price: product.price,
+                  preparationMinutes: product.preparationMinutes ?? null,
+                  displayOrder: productIndex,
+                })),
+              },
+            },
+          });
+        }
 
         const owner = await tx.user.create({
           data: {

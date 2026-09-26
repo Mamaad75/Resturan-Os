@@ -303,6 +303,8 @@ model Tenant {
   expenseCategories ExpenseCategory[]
   expenses          Expense[]
 
+  checkoutOffers CheckoutOffer[]
+
   @@index([slug])
   @@map("tenants")
 }
@@ -630,6 +632,8 @@ model Product {
   modifierGroups ModifierGroup[]
   orderItems     OrderItem[]
   recipeItems    RecipeItem[]
+
+  checkoutOffers CheckoutOffer[]
 
   @@index([tenantId])
   @@index([categoryId, displayOrder])
@@ -2255,4 +2259,44 @@ model Expense {
   @@index([tenantId, categoryId, spentAt])
   @@index([branchId, spentAt])
   @@map("expenses")
+}
+
+/**
+ * ------------------------------------------------------------------
+ * Checkout offers
+ * ------------------------------------------------------------------
+ */
+
+/// A timed upsell shown to a guest just before they pay.
+model CheckoutOffer {
+  id        String @id @default(uuid()) @db.Uuid
+  tenantId  String @db.Uuid
+  productId String @db.Uuid
+
+  /// Headline the guest reads. Defaults are generated from the product.
+  title       String? @db.VarChar(120)
+  /// Percentage off, in basis points. 2000 = 20%.
+  discountBps Int     @default(0)
+
+  /// The window the offer runs in. An offer outside its window is invisible
+  /// without anyone having to remember to switch it off.
+  startsAt DateTime @default(now())
+  endsAt   DateTime
+
+  isActive Boolean @default(true)
+  /// How many times it has been shown and taken, so the owner can tell
+  /// whether the offer is worth running again.
+  shownCount    Int @default(0)
+  acceptedCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  /// The guest-facing lookup: this tenant, live right now.
+  @@index([tenantId, isActive, startsAt, endsAt])
+  @@index([productId])
+  @@map("checkout_offers")
 }

@@ -46,6 +46,11 @@ export const createPublicOrderSchema = z
     /** Discount code; the server re-evaluates it and ignores any client total. */
     couponCode: optionalText(32, 'کد تخفیف'),
     /**
+     * A checkout offer the guest accepted in the popup. Carries the offer, not
+     * the price: the server re-reads the offer and decides what it is worth.
+     */
+    offerId: uuidSchema.nullable().optional(),
+    /**
      * Points to spend on this order. The server decides what they are worth;
      * a request never states the discount.
      */

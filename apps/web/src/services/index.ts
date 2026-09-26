@@ -162,6 +162,8 @@ export const publicService = {
       deliveryAddress?: string | null;
       deliveryNotes?: string | null;
       couponCode?: string | null;
+      /** A checkout offer the guest accepted. The server prices it. */
+      offerId?: string | null;
       marketingConsent?: boolean;
       items: Array<{
         productId: string;
@@ -175,6 +177,23 @@ export const publicService = {
       `/public/restaurants/${slug}/orders`,
       body,
       { retryOnAuthFailure: false },
+    ),
+  /**
+   * The offer to show before payment, or null when nothing is running.
+   *
+   * `exclude` carries what is already in the cart: offering a discount on
+   * something the guest has ordered anyway costs the restaurant money for
+   * nothing.
+   */
+  checkoutOffer: (slug: string, excludeProductIds: string[] = []) =>
+    api.get<CheckoutOfferDto | null>(
+      `/public/restaurants/${slug}/checkout-offer`,
+      {
+        query: excludeProductIds.length
+          ? { exclude: excludeProductIds.join(',') }
+          : undefined,
+        retryOnAuthFailure: false,
+      },
     ),
   track: (token: string) =>
     api.get<OrderTrackingDto>(`/public/orders/track/${token}`, {
@@ -201,6 +220,21 @@ export const publicService = {
       { retryOnAuthFailure: false },
     ),
 };
+
+/** One live checkout offer, priced by the server. */
+export interface CheckoutOfferDto {
+  id: string;
+  title: string;
+  productId: string;
+  productNameFa: string;
+  imageUrl: string | null;
+  /** Normal price of one unit. */
+  price: number;
+  /** What one unit costs with the offer applied. */
+  offerPrice: number;
+  discountBps: number;
+  endsAt: string;
+}
 
 export interface PayOptionsDto {
   orderNumber: string;
@@ -263,6 +297,49 @@ export const menuService = {
   deleteProduct: (id: string) => api.delete<{ deleted: boolean }>(`/products/${id}`),
   reorderProducts: (items: Array<{ id: string; displayOrder: number }>) =>
     api.post<{ reordered: number }>('/products/reorder', { items }),
+};
+
+/* ------------------------------------------------------------------ */
+/* Checkout offers                                                     */
+/* ------------------------------------------------------------------ */
+
+/** One offer as the owner sees it, with how it has performed. */
+export interface CheckoutOfferAdminDto {
+  id: string;
+  productId: string;
+  productNameFa: string;
+  title: string | null;
+  discountBps: number;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+  shownCount: number;
+  acceptedCount: number;
+  /** Active *and* inside its window. Active alone is not the same thing. */
+  isLive: boolean;
+}
+
+export const offerService = {
+  list: () => api.get<CheckoutOfferAdminDto[]>('/offers'),
+  create: (body: {
+    productId: string;
+    title?: string | null;
+    discountBps: number;
+    days: number;
+    startsAt?: string;
+    isActive?: boolean;
+  }) => api.post<{ id: string }>('/offers', body),
+  update: (
+    id: string,
+    body: {
+      title?: string | null;
+      discountBps?: number;
+      days?: number;
+      startsAt?: string;
+      isActive?: boolean;
+    },
+  ) => api.patch<{ id: string }>(`/offers/${id}`, body),
+  remove: (id: string) => api.delete<{ deleted: boolean }>(`/offers/${id}`),
 };
 
 /* ------------------------------------------------------------------ */

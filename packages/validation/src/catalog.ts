@@ -148,3 +148,34 @@ export const reorderSchema = z.object({
 export const toggleAvailabilitySchema = z.object({
   isAvailable: z.boolean(),
 });
+
+/* ------------------------------------------------------------------ */
+/* Checkout offers                                                     */
+/* ------------------------------------------------------------------ */
+
+export const checkoutOfferSchema = z.object({
+  productId: uuidSchema,
+  title: optionalText(120, 'عنوان'),
+  /** Percentage off, entered as a percentage and stored as basis points. */
+  discountBps: z.coerce
+    .number()
+    .int('درصد تخفیف باید عدد صحیح باشد.')
+    .min(100, 'حداقل ۱٪ تخفیف.')
+    .max(9_000, 'حداکثر ۹۰٪ تخفیف.'),
+  startsAt: z
+    .union([z.string().datetime({ offset: true }), z.string().date()])
+    .optional(),
+  /** How many days it runs. An owner thinks in days, not end dates. */
+  days: z.coerce
+    .number()
+    .int('تعداد روز باید عدد صحیح باشد.')
+    .min(1, 'حداقل یک روز.')
+    .max(365, 'حداکثر یک سال.'),
+  isActive: z.boolean().optional(),
+});
+export type CheckoutOfferInput = z.infer<typeof checkoutOfferSchema>;
+
+export const updateCheckoutOfferSchema = checkoutOfferSchema.partial().omit({
+  productId: true,
+});
+export type UpdateCheckoutOfferInput = z.infer<typeof updateCheckoutOfferSchema>;
