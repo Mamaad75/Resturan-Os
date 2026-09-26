@@ -79,7 +79,7 @@ export function MenuThemePreview({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={coverUrl} alt="" className="size-full object-cover" />
               ) : (
-                <div className="size-full bg-[radial-gradient(120%_100%_at_50%_0%,rgb(var(--gold)/0.25),transparent_70%)]" />
+                <div className="size-full bg-[radial-gradient(120%_100%_at_50%_0%,rgb(var(--brand)/0.25),transparent_70%)]" />
               )}
             </div>
           ) : null}
@@ -98,7 +98,7 @@ export function MenuThemePreview({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={logoUrl} alt="" className="size-full object-cover" />
                   ) : (
-                    <div className="flex size-full items-center justify-center text-sm font-bold text-gold">
+                    <div className="flex size-full items-center justify-center text-sm font-bold text-brand">
                       {restaurantName.charAt(0)}
                     </div>
                   )}
@@ -127,7 +127,7 @@ export function MenuThemePreview({
                   config.header.logoPlacement === 'center' && 'justify-center',
                 )}
               >
-                <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[0.6rem] text-gold">
+                <span className="rounded-full bg-brand/15 px-2 py-0.5 text-[0.6rem] text-brand">
                   میز ۷
                 </span>
                 <span className="rounded-full bg-positive/15 px-2 py-0.5 text-[0.6rem] text-positive">
@@ -206,9 +206,9 @@ function PreviewCard({
   );
 
   const swatch = (
-    <div className="relative size-full bg-[linear-gradient(135deg,rgb(var(--gold)/0.35),rgb(var(--gold)/0.08))]">
+    <div className="relative size-full bg-[linear-gradient(135deg,rgb(var(--brand)/0.35),rgb(var(--brand)/0.08))]">
       {productCard.showAddButton ? (
-        <span className="absolute bottom-1 end-1 flex size-5 items-center justify-center rounded-[var(--menu-radius)] bg-gold text-ink-inverse">
+        <span className="absolute bottom-1 end-1 flex size-5 items-center justify-center rounded-[var(--menu-radius)] bg-brand text-ink-inverse">
           <ShoppingBag className="size-2.5" />
         </span>
       ) : null}

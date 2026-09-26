@@ -257,8 +257,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 start-0 z-40 hidden w-64 flex-col border-e border-line bg-surface lg:flex">
         <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">
-          <span className="flex size-9 items-center justify-center rounded-xl border border-gold/25 bg-gold/10">
-            <ChefHat className="size-4.5 text-gold" />
+          <span className="flex size-9 items-center justify-center rounded-xl border border-brand/25 bg-brand/10">
+            <ChefHat className="size-4.5 text-brand" />
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
@@ -339,7 +339,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </p>
               <p className="text-xs text-ink-subtle">{roleLabel(user.role)}</p>
             </div>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-gold/12 text-sm font-semibold text-gold">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-brand/12 text-sm font-semibold text-brand">
               {user.fullName.charAt(0)}
             </span>
           </div>
@@ -362,7 +362,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               aria-current={active ? 'page' : undefined}
               className={cn(
                 'flex flex-1 flex-col items-center gap-1 py-2.5 text-xs transition-colors',
-                active ? 'text-gold' : 'text-ink-subtle',
+                active ? 'text-brand' : 'text-ink-subtle',
               )}
             >
               <item.icon className="size-5" />
@@ -391,7 +391,7 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
       className={cn(
         'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
         active
-          ? 'bg-gold/12 text-gold'
+          ? 'bg-brand/12 text-brand'
           : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
       )}
     >
@@ -406,7 +406,7 @@ function UserCard({ onLogout }: { onLogout: () => void }) {
   if (!user) return null;
   return (
     <div className="flex items-center gap-2.5 rounded-xl bg-surface-sunken p-2.5">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/12 text-sm font-semibold text-gold">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand/12 text-sm font-semibold text-brand">
         {user.fullName.charAt(0)}
       </span>
       <div className="min-w-0 flex-1">

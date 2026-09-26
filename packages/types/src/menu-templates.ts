@@ -11,11 +11,11 @@
  */
 
 export const MenuTemplate = {
-  /** The default: dark, gold, list rows with a square thumbnail. */
+  /** The default: light, green, list rows with a square thumbnail. */
   CLASSIC: 'CLASSIC',
   /** Warm Persian tea-house feel: saffron and terracotta, ornamented headings. */
   TRADITIONAL: 'TRADITIONAL',
-  /** Third-wave coffee shop: moody, two-column, photography-led. */
+  /** Third-wave coffee shop: warm, two-column, photography-led. */
   CAFE: 'CAFE',
   /** High-energy fast food: bright, chunky, big photos and loud prices. */
   FASTFOOD: 'FASTFOOD',
@@ -63,15 +63,15 @@ export const MENU_TEMPLATE_SPECS: Record<MenuTemplate, MenuTemplateSpec> = {
   [MenuTemplate.CLASSIC]: {
     id: MenuTemplate.CLASSIC,
     labelFa: 'کلاسیک',
-    descriptionFa: 'تیره و آراسته، با عکس کوچک کنار هر آیتم. مناسب اغلب رستوران‌ها.',
+    descriptionFa: 'روشن و تمیز، با عکس کوچک کنار هر آیتم. مناسب اغلب رستوران‌ها.',
     layout: 'list',
     heading: 'rule',
     radius: 'soft',
     density: 'comfortable',
     showFeaturedRail: true,
     price: 'inline',
-    defaultAccent: '#C9A24B',
-    defaultTheme: 'dark',
+    defaultAccent: '#0D7666',
+    defaultTheme: 'light',
   },
   [MenuTemplate.TRADITIONAL]: {
     id: MenuTemplate.TRADITIONAL,
@@ -83,8 +83,8 @@ export const MENU_TEMPLATE_SPECS: Record<MenuTemplate, MenuTemplateSpec> = {
     density: 'comfortable',
     showFeaturedRail: true,
     price: 'inline',
-    defaultAccent: '#C2410C',
-    defaultTheme: 'dark',
+    defaultAccent: '#B4460F',
+    defaultTheme: 'light',
   },
   [MenuTemplate.CAFE]: {
     id: MenuTemplate.CAFE,
@@ -96,7 +96,7 @@ export const MENU_TEMPLATE_SPECS: Record<MenuTemplate, MenuTemplateSpec> = {
     density: 'airy',
     showFeaturedRail: false,
     price: 'inline',
-    defaultAccent: '#0F766E',
+    defaultAccent: '#7A5236',
     defaultTheme: 'dark',
   },
   [MenuTemplate.FASTFOOD]: {

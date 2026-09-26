@@ -389,9 +389,9 @@ model Restaurant {
   // Branding
   logoUrl      String? @db.VarChar(500)
   coverUrl     String? @db.VarChar(500)
-  primaryColor String  @default("#0B0B0D") @db.VarChar(9)
-  accentColor  String  @default("#C9A24B") @db.VarChar(9)
-  theme        String  @default("dark") @db.VarChar(10)
+  primaryColor String  @default("#FAFAF7") @db.VarChar(9)
+  accentColor  String  @default("#0D7666") @db.VarChar(9)
+  theme        String  @default("light") @db.VarChar(10)
   tagline      String? @db.VarChar(160)
   // Which customer-menu layout this restaurant renders. Stored as a string
   // rather than an enum so a new template ships without a migration.

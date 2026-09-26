@@ -115,7 +115,7 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
     return (
       <Card className="mt-4 p-4">
         <div className="flex items-center gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gold/10 text-gold"><Dice5 className="size-5" /></span>
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand"><Dice5 className="size-5" /></span>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-ink">شرط ببند</p>
             <p className="mt-0.5 text-xs text-ink-subtle">سه راند سرعت؛ کندترین میانگین، حساب میز را می‌دهد!</p>
@@ -130,7 +130,7 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
     <Card className="mt-4 overflow-hidden p-0">
       <div className="flex items-center justify-between border-b border-line px-4 py-3">
         <div>
-          <p className="flex items-center gap-2 text-sm font-semibold text-ink"><Dice5 className="size-4 text-gold" />شرط ببند</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-ink"><Dice5 className="size-4 text-brand" />شرط ببند</p>
           {phase !== 'setup' && phase !== 'done' ? <p className="mt-0.5 text-[0.68rem] text-ink-subtle">راند {toPersianDigits(currentRound + 1)} از {toPersianDigits(ROUNDS_PER_PLAYER)}</p> : null}
         </div>
         <button type="button" onClick={() => { setOpen(false); reset(); }} aria-label="بستن" className="text-ink-subtle hover:text-ink"><X className="size-4" /></button>
@@ -139,7 +139,7 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
       <div className="p-4">
         {phase === 'setup' ? (
           <div className="space-y-3">
-            <div className="rounded-2xl border border-gold/20 bg-gold/5 p-3 text-xs leading-6 text-ink-muted">
+            <div className="rounded-2xl border border-brand/20 bg-brand/5 p-3 text-xs leading-6 text-ink-muted">
               هر نفر سه بار تست واکنش می‌دهد. گوشی بین بازیکن‌ها می‌چرخد؛ لمس قبل از سبزشدن صفحه جریمه دارد و در پایان <span className="font-semibold text-ink">بالاترین میانگین زمان</span> بازنده است.
             </div>
             <div className="space-y-2">
@@ -158,7 +158,7 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
         {phase !== 'setup' && phase !== 'done' ? (
           <div className="mb-4">
             <div className="mb-1 flex items-center justify-between text-[0.68rem] text-ink-subtle"><span>پیشرفت مسابقه</span><span>{toPersianDigits(Math.min(totalTurns, completedTurns + (phase === 'scored' ? 1 : 0)))} / {toPersianDigits(totalTurns)}</span></div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full rounded-full bg-gold transition-all" style={{ width: `${Math.min(100, ((completedTurns + (phase === 'scored' ? 1 : 0)) / totalTurns) * 100)}%` }} /></div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full rounded-full bg-brand transition-all" style={{ width: `${Math.min(100, ((completedTurns + (phase === 'scored' ? 1 : 0)) / totalTurns) * 100)}%` }} /></div>
           </div>
         ) : null}
 
@@ -166,7 +166,7 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
           <div className="space-y-4 text-center">
             <div className="rounded-2xl border border-line bg-surface-sunken p-4">
               <p className="text-xs text-ink-subtle">گوشی را بده به</p>
-              <p className="mt-1 text-xl font-extrabold text-gold-bright">{players[currentPlayer]?.name}</p>
+              <p className="mt-1 text-xl font-extrabold text-brand-bright">{players[currentPlayer]?.name}</p>
               <p className="mt-2 text-xs text-ink-muted">تا صفحه سبز نشده دست نزن. زمان انتظار هر بار تصادفی است.</p>
             </div>
             <Button variant="primary" fullWidth onClick={beginRound}>آماده‌ام</Button>
@@ -182,7 +182,7 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
         {phase === 'scored' ? (
           <div className="space-y-4 text-center">
             <div className={cn('rounded-2xl border p-4', earlyTap ? 'border-critical/30 bg-critical/10' : 'border-line bg-surface-sunken')}>
-              {earlyTap ? <><p className="font-bold text-critical">زود زدی! 😬</p><p className="mt-1 text-xs text-ink-subtle">این راند {toPersianDigits(EARLY_PENALTY_MS)} میلی‌ثانیه ثبت شد.</p></> : <><p className="text-xs text-ink-subtle">زمان واکنش</p><p className="mt-1 text-2xl font-black tabular-nums text-gold">{toPersianDigits(lastMs ?? 0)} ms</p></>}
+              {earlyTap ? <><p className="font-bold text-critical">زود زدی! 😬</p><p className="mt-1 text-xs text-ink-subtle">این راند {toPersianDigits(EARLY_PENALTY_MS)} میلی‌ثانیه ثبت شد.</p></> : <><p className="text-xs text-ink-subtle">زمان واکنش</p><p className="mt-1 text-2xl font-black tabular-nums text-brand">{toPersianDigits(lastMs ?? 0)} ms</p></>}
             </div>
             <Button variant="primary" fullWidth onClick={nextTurn}>{currentPlayer + 1 < players.length ? 'بازیکن بعدی' : currentRound + 1 < ROUNDS_PER_PLAYER ? 'شروع راند بعد' : 'دیدن نتیجه نهایی'}</Button>
           </div>
@@ -190,10 +190,10 @@ export function BillGame({ total, currency }: { total: number; currency: Currenc
 
         {phase === 'done' && loser ? (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-gold/30 bg-gold/10 p-5 text-center">
-              <Trophy className="mx-auto size-10 text-gold" />
+            <div className="rounded-2xl border border-brand/30 bg-brand/10 p-5 text-center">
+              <Trophy className="mx-auto size-10 text-brand" />
               <p className="mt-2 text-sm text-ink-muted">حسابِ میز با…</p>
-              <p className="mt-1 text-2xl font-black text-gold-bright">{loser.name}</p>
+              <p className="mt-1 text-2xl font-black text-brand-bright">{loser.name}</p>
               <p className="mt-1 text-sm text-ink-muted">مبلغ: {formatMoney(total, currency)}</p>
               <p className="mt-2 text-xs text-ink-subtle">میانگین واکنش: {toPersianDigits(loser.avg)} ms</p>
             </div>

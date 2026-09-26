@@ -80,7 +80,7 @@ export default function DeliveryBoardPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-5">
       <header className="mb-4 flex items-center gap-3">
-        <Bike className="size-5 text-gold" />
+        <Bike className="size-5 text-brand" />
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-bold text-ink">ارسال با پیک</h1>
           <p className="text-xs text-ink-subtle">
@@ -163,7 +163,7 @@ function OrderCard({
           </p>
         </div>
         <div className="text-end">
-          <p className="font-bold tabular-nums text-gold">
+          <p className="font-bold tabular-nums text-brand">
             {formatMoney(order.total, 'IRT')}
           </p>
           <Badge tone={order.paymentStatus === 'PAID' ? 'positive' : 'caution'}>
@@ -194,7 +194,7 @@ function OrderCard({
           <a
             href={`tel:${order.customerPhone}`}
             dir="ltr"
-            className="flex items-center gap-2 text-gold hover:text-gold-bright"
+            className="flex items-center gap-2 text-brand hover:text-brand-bright"
           >
             <Phone className="size-4 shrink-0" />
             {order.customerPhone}

@@ -116,7 +116,7 @@ function Accounting() {
               className={cn(
                 'shrink-0 rounded-lg px-3 py-2 text-sm transition-colors',
                 preset === value
-                  ? 'bg-gold/10 text-gold'
+                  ? 'bg-brand/10 text-brand'
                   : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
               )}
             >
@@ -203,7 +203,7 @@ function Accounting() {
                       </span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
                         <div
-                          className="h-full rounded-full bg-gold"
+                          className="h-full rounded-full bg-brand"
                           style={{ width: `${Math.round(share * 100)}%` }}
                         />
                       </div>

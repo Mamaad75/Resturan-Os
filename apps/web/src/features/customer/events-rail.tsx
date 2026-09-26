@@ -48,7 +48,7 @@ export function EventsRail({
         id="events-heading"
         className={cn('flex items-center gap-2', headingClassName)}
       >
-        <CalendarDays className="size-4 text-gold" />
+        <CalendarDays className="size-4 text-brand" />
         رویدادها
       </h2>
       <div className="no-scrollbar -mx-4 flex gap-3 overflow-x-auto px-4 pb-2">
@@ -56,7 +56,7 @@ export function EventsRail({
           <Link
             key={event.id}
             href={`/r/${slug}/e/${event.slug}`}
-            className="group w-56 shrink-0 overflow-hidden rounded-[var(--menu-radius)] border border-line bg-surface transition-colors hover:border-gold/40"
+            className="group w-56 shrink-0 overflow-hidden rounded-[var(--menu-radius)] border border-line bg-surface transition-colors hover:border-brand/40"
           >
             <div className="relative aspect-[16/9] bg-surface-sunken">
               {event.coverUrl ? (
@@ -68,7 +68,7 @@ export function EventsRail({
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-gold/40">
+                <div className="flex h-full items-center justify-center text-brand/40">
                   <CalendarDays className="size-8" />
                 </div>
               )}
@@ -79,7 +79,7 @@ export function EventsRail({
                 <CalendarDays className="size-3" />
                 {faDate(event.startsAt)}
                 {event.rsvpEnabled ? (
-                  <span className="ms-auto rounded-md bg-gold/10 px-1.5 py-0.5 text-[0.65rem] text-gold">
+                  <span className="ms-auto rounded-md bg-brand/10 px-1.5 py-0.5 text-[0.65rem] text-brand">
                     ثبت‌نام
                   </span>
                 ) : null}

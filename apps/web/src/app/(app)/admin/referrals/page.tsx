@@ -328,7 +328,7 @@ function Stat({
   return (
     <div className="rounded-xl border border-line bg-surface-sunken p-4">
       <p className="flex items-center gap-2 text-xs text-ink-muted">
-        <span className="text-gold">{icon}</span>
+        <span className="text-brand">{icon}</span>
         {label}
       </p>
       <p className="mt-1.5 text-xl font-bold tabular-nums text-ink">{value}</p>

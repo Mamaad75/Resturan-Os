@@ -31,8 +31,8 @@ const COLUMNS = [
     id: 'preparing',
     title: 'در حال آماده‌سازی',
     statuses: [OrderStatus.PREPARING],
-    accent: 'border-gold/40 bg-gold/[0.06]',
-    headerAccent: 'text-gold',
+    accent: 'border-brand/40 bg-brand/[0.06]',
+    headerAccent: 'text-brand',
   },
   {
     id: 'ready',
@@ -101,7 +101,7 @@ export default function KitchenDisplayPage() {
         </Link>
 
         <div className="flex items-center gap-2.5">
-          <ChefHat className="size-6 text-gold" />
+          <ChefHat className="size-6 text-brand" />
           <h1 className="text-xl font-bold text-ink sm:text-2xl">آشپزخانه</h1>
         </div>
 
@@ -113,7 +113,7 @@ export default function KitchenDisplayPage() {
             <Radio className="size-3" />
             {connection === 'live' ? 'زنده' : 'در حال اتصال'}
           </Badge>
-          <span className="text-2xl font-bold tabular-nums text-gold">
+          <span className="text-2xl font-bold tabular-nums text-brand">
             {toPersianDigits(orders.length)}
           </span>
           <Button
@@ -249,7 +249,7 @@ function TicketCard({
       <ul className="my-4 space-y-2.5">
         {order.items.map((item) => (
           <li key={item.id} className="flex gap-3">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-base font-bold tabular-nums text-gold">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-brand/15 text-base font-bold tabular-nums text-brand">
               {toPersianDigits(item.quantity)}
             </span>
             <div className="min-w-0 flex-1 pt-0.5">

@@ -129,7 +129,7 @@ export default function OffersPage() {
                       <span className="text-sm font-semibold text-ink">
                         {offer.productNameFa}
                       </span>
-                      <Badge tone="gold">
+                      <Badge tone="brand">
                         {toPersianDigits(Math.round(offer.discountBps / 100))}٪ تخفیف
                       </Badge>
                       {offer.isLive ? (
@@ -371,7 +371,7 @@ function OfferFormModal({
               <span className="text-ink-subtle line-through">
                 {formatMoney(basePrice)}
               </span>{' '}
-              <span className="text-gold">{formatMoney(preview)}</span>
+              <span className="text-brand">{formatMoney(preview)}</span>
             </p>
           </div>
         ) : null}

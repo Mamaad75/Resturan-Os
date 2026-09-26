@@ -168,13 +168,13 @@ export default function SignupPage() {
     <main className="relative flex min-h-dvh items-center justify-center overflow-hidden px-4 py-10">
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-48 start-1/2 size-[42rem] -translate-x-1/2 rounded-full bg-gold/[0.07] blur-3xl"
+        className="pointer-events-none absolute -top-48 start-1/2 size-[42rem] -translate-x-1/2 rounded-full bg-brand/[0.07] blur-3xl"
       />
 
       <div className="relative w-full max-w-lg">
         <div className="mb-7 text-center">
-          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-gold/25 bg-gold/10">
-            <ChefHat className="size-7 text-gold" />
+          <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-2xl border border-brand/25 bg-brand/10">
+            <ChefHat className="size-7 text-brand" />
           </div>
           <h1 className="text-2xl font-bold text-ink">رستوران خود را بسازید</h1>
           <p className="mt-1.5 text-sm text-ink-muted">
@@ -209,14 +209,14 @@ export default function SignupPage() {
                   className={cn(
                     'flex flex-col items-center gap-1.5 rounded-xl border p-3 transition-colors',
                     businessType === type.id
-                      ? 'border-gold/50 bg-gold/[0.08]'
+                      ? 'border-brand/50 bg-brand/[0.08]'
                       : 'border-line bg-surface-sunken hover:border-line-strong',
                   )}
                 >
                   <type.icon
                     className={cn(
                       'size-5',
-                      businessType === type.id ? 'text-gold' : 'text-ink-subtle',
+                      businessType === type.id ? 'text-brand' : 'text-ink-subtle',
                     )}
                   />
                   <span className="text-sm font-medium text-ink">{type.label}</span>
@@ -342,7 +342,7 @@ export default function SignupPage() {
               type="checkbox"
               checked={acceptedTerms}
               onChange={(e) => setAcceptedTerms(e.target.checked)}
-              className="mt-0.5 size-4 shrink-0 accent-[rgb(var(--gold))]"
+              className="mt-0.5 size-4 shrink-0 accent-[rgb(var(--brand))]"
             />
             <span>
               قوانین و شرایط استفاده از سرویس را می‌پذیرم.
@@ -367,7 +367,7 @@ export default function SignupPage() {
 
           <p className="text-center text-sm text-ink-muted">
             قبلاً ثبت‌نام کرده‌اید؟{' '}
-            <Link href="/login" className="font-medium text-gold hover:text-gold-bright">
+            <Link href="/login" className="font-medium text-brand hover:text-brand-bright">
               وارد شوید
             </Link>
           </p>

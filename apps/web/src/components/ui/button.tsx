@@ -8,9 +8,9 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline' | 'succe
 type Size = 'sm' | 'md' | 'lg' | 'xl' | 'icon';
 
 const VARIANTS: Record<Variant, string> = {
-  // Gold is reserved for the single primary action on a screen.
+  // The brand colour is reserved for the single primary action on a screen.
   primary:
-    'bg-gold text-ink-inverse hover:bg-gold-bright active:bg-gold shadow-sm font-semibold',
+    'bg-brand text-ink-inverse hover:bg-brand-bright active:bg-brand shadow-sm font-semibold',
   secondary:
     'bg-surface-raised text-ink hover:bg-line border border-line hover:border-line-strong',
   outline:

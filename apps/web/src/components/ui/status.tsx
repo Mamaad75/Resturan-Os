@@ -18,12 +18,12 @@ const ORDER_STATUS_TONE: Record<OrderStatus, BadgeTone> = {
   [OrderStatus.PENDING]: 'caution',
   [OrderStatus.CONFIRMED]: 'info',
   [OrderStatus.SENT_TO_KITCHEN]: 'info',
-  [OrderStatus.PREPARING]: 'gold',
+  [OrderStatus.PREPARING]: 'brand',
   [OrderStatus.READY]: 'positive',
   [OrderStatus.READY_FOR_PICKUP]: 'positive',
   [OrderStatus.SERVED]: 'neutral',
   // A run in progress reads like PREPARING: work is happening right now.
-  [OrderStatus.OUT_FOR_DELIVERY]: 'gold',
+  [OrderStatus.OUT_FOR_DELIVERY]: 'brand',
   [OrderStatus.DELIVERED]: 'neutral',
   [OrderStatus.PICKED_UP]: 'neutral',
   [OrderStatus.COMPLETED]: 'neutral',
@@ -57,7 +57,7 @@ export function PaymentStatusBadge({ status }: { status: PaymentStatus }) {
 
 const TABLE_STATUS_TONE: Record<TableStatus, BadgeTone> = {
   [TableStatus.AVAILABLE]: 'positive',
-  [TableStatus.OCCUPIED]: 'gold',
+  [TableStatus.OCCUPIED]: 'brand',
   [TableStatus.WAITING_PAYMENT]: 'caution',
   [TableStatus.RESERVED]: 'info',
   [TableStatus.DISABLED]: 'neutral',
@@ -69,7 +69,7 @@ export function TableStatusBadge({ status }: { status: TableStatus }) {
 
 export function OrderTypeBadge({ type }: { type: OrderType }) {
   return (
-    <Badge tone={type === OrderType.DINE_IN ? 'info' : 'gold'}>
+    <Badge tone={type === OrderType.DINE_IN ? 'info' : 'brand'}>
       {ORDER_TYPE_LABELS_FA[type]}
     </Badge>
   );
@@ -77,7 +77,7 @@ export function OrderTypeBadge({ type }: { type: OrderType }) {
 
 export function RoleBadge({ role }: { role: UserRole }) {
   return (
-    <Badge tone={role === UserRole.OWNER ? 'gold' : 'neutral'}>
+    <Badge tone={role === UserRole.OWNER ? 'brand' : 'neutral'}>
       {USER_ROLE_LABELS_FA[role]}
     </Badge>
   );

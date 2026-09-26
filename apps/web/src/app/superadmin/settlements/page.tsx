@@ -93,7 +93,7 @@ function Settlements() {
             icon={<Banknote className="size-5" />}
             label="مجموع کارمزد پلتفرم (در انتظار)"
             value={formatMoney(query.data.totals?.pendingCommission ?? 0, 'IRT')}
-            tone="gold"
+            tone="brand"
           />
         </div>
       ) : null}
@@ -110,7 +110,7 @@ function Settlements() {
               className={cn(
                 'shrink-0 rounded-lg px-3 py-2 text-sm transition-colors',
                 status === tab.value
-                  ? 'bg-gold/10 text-gold'
+                  ? 'bg-brand/10 text-brand'
                   : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
               )}
             >
@@ -182,7 +182,7 @@ function SummaryCard({
   icon: React.ReactNode;
   label: string;
   value: string;
-  tone?: 'gold';
+  tone?: 'brand';
 }) {
   return (
     <Card>
@@ -190,7 +190,7 @@ function SummaryCard({
         <span
           className={cn(
             'flex size-11 shrink-0 items-center justify-center rounded-xl',
-            tone === 'gold' ? 'bg-gold/10 text-gold' : 'bg-surface-raised text-ink-muted',
+            tone === 'brand' ? 'bg-brand/10 text-brand' : 'bg-surface-raised text-ink-muted',
           )}
         >
           {icon}
@@ -223,7 +223,7 @@ function SettlementRow({
             type="checkbox"
             checked={checked}
             onChange={onToggle}
-            className="size-5 shrink-0 accent-gold"
+            className="size-5 shrink-0 accent-brand"
             aria-label="انتخاب برای تسویه"
           />
         ) : null}
@@ -248,7 +248,7 @@ function SettlementRow({
         </div>
         <div className="text-end">
           <p className="text-xs text-ink-subtle">سهم رستوران</p>
-          <p className="font-bold tabular-nums text-gold">{formatMoney(s.netAmount, 'IRT')}</p>
+          <p className="font-bold tabular-nums text-brand">{formatMoney(s.netAmount, 'IRT')}</p>
         </div>
 
         <div className="flex flex-col items-end gap-1">

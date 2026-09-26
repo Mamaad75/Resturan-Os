@@ -219,7 +219,7 @@ function BankCard({ account }: { account: BankAccountDto }) {
         <p className="text-sm font-medium text-ink">
           {account.bankName} · {account.holderName}
         </p>
-        <p dir="ltr" className="mt-0.5 font-mono text-sm tabular-nums text-gold">
+        <p dir="ltr" className="mt-0.5 font-mono text-sm tabular-nums text-brand">
           {groupCard(account.cardNumber)}
         </p>
         {account.iban ? (
@@ -353,7 +353,7 @@ function PaymentModal({
                 className={cn(
                   'rounded-xl border px-4 py-2 text-sm transition-colors',
                   months === choice
-                    ? 'border-gold/50 bg-gold/10 text-gold'
+                    ? 'border-brand/50 bg-brand/10 text-brand'
                     : 'border-line bg-surface-sunken text-ink-muted hover:text-ink',
                 )}
               >
@@ -363,10 +363,10 @@ function PaymentModal({
           </div>
         </div>
 
-        <div className="rounded-xl border border-gold/30 bg-gold/[0.06] p-3">
+        <div className="rounded-xl border border-brand/30 bg-brand/[0.06] p-3">
           <p className="flex items-center justify-between text-sm">
             <span className="text-ink-muted">مبلغ قابل واریز</span>
-            <span className="font-bold text-gold">{formatMoney(total, 'IRT')}</span>
+            <span className="font-bold text-brand">{formatMoney(total, 'IRT')}</span>
           </p>
         </div>
 

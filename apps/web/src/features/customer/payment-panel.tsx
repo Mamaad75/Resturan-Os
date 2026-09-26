@@ -64,7 +64,7 @@ export function PaymentPanel({
     <Card className="mt-4 p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-ink">پرداخت سفارش</p>
-        <p className="tabular-nums text-gold">
+        <p className="tabular-nums text-brand">
           <span className="text-xs text-ink-subtle">قابل پرداخت: </span>
           {formatMoney(opts.outstanding, 'IRT')}
         </p>

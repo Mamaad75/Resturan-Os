@@ -135,24 +135,31 @@ export type DeepPartial<T> = {
 /* Preset defaults                                                     */
 /* ------------------------------------------------------------------ */
 
-const DARK: ThemeColors = {
-  background: '#0B0B0D',
-  surface: '#131316',
-  text: '#F5F5F4',
-  textMuted: '#A1A1AA',
-  primary: '#C9A24B',
-  secondary: '#8A6F33',
-  border: '#26262C',
+/*
+ * The two neutral bases every preset starts from.
+ *
+ * Both are warm rather than blue-grey, because food photography sits badly on
+ * a cold surface, and neither carries gold: the accent is a per-preset choice
+ * and the owner's first edit, not a house style baked into the neutrals.
+ */
+const LIGHT: ThemeColors = {
+  background: '#FAFAF7',
+  surface: '#FFFFFF',
+  text: '#1A1A18',
+  textMuted: '#5B5B56',
+  primary: '#0D7666',
+  secondary: '#0A5A4E',
+  border: '#E5E4DE',
 };
 
-const LIGHT: ThemeColors = {
-  background: '#FAFAF9',
-  surface: '#FFFFFF',
-  text: '#18181B',
-  textMuted: '#52525B',
-  primary: '#A17C2A',
-  secondary: '#D6BD85',
-  border: '#E4E4E7',
+const DARK: ThemeColors = {
+  background: '#141517',
+  surface: '#1C1E21',
+  text: '#F0F1EF',
+  textMuted: '#A4A6A3',
+  primary: '#2DB29A',
+  secondary: '#186054',
+  border: '#2D3034',
 };
 
 function baseConfig(colors: ThemeColors): MenuThemeConfig {
@@ -205,10 +212,10 @@ function baseConfig(colors: ThemeColors): MenuThemeConfig {
  * preset simply loads these values, and every one of them stays editable.
  */
 export const MENU_THEME_PRESETS: Record<MenuTemplate, MenuThemeConfig> = {
-  [MenuTemplate.CLASSIC]: baseConfig(DARK),
+  [MenuTemplate.CLASSIC]: baseConfig(LIGHT),
 
   [MenuTemplate.TRADITIONAL]: {
-    ...baseConfig({ ...DARK, primary: '#C2410C', secondary: '#7C2D12' }),
+    ...baseConfig({ ...LIGHT, primary: '#B4460F', secondary: '#7C2D12' }),
     typography: {
       headlineFont: 'serif',
       bodyFont: 'vazirmatn',
@@ -217,7 +224,7 @@ export const MENU_THEME_PRESETS: Record<MenuTemplate, MenuThemeConfig> = {
       headingStyle: 'ornament',
     },
     layout: {
-      ...baseConfig(DARK).layout,
+      ...baseConfig(LIGHT).layout,
       radius: 'sm',
       productLayout: 'list',
       categoryNav: 'pills',
@@ -225,7 +232,7 @@ export const MENU_THEME_PRESETS: Record<MenuTemplate, MenuThemeConfig> = {
   },
 
   [MenuTemplate.CAFE]: {
-    ...baseConfig({ ...DARK, primary: '#0F766E', secondary: '#134E4A' }),
+    ...baseConfig({ ...DARK, primary: '#C2925F', secondary: '#7A5236' }),
     typography: {
       headlineFont: 'vazirmatn-tight',
       bodyFont: 'vazirmatn',
@@ -418,7 +425,7 @@ export function scopeCustomCss(css: string | null | undefined): string {
 /* Colour mode                                                         */
 /* ------------------------------------------------------------------ */
 
-/** "#C9A24B" -> "201 162 75", the channel form the design tokens expect. */
+/** "#0D7666" -> "13 118 102", the channel form the design tokens expect. */
 export function hexToRgbChannels(hex: string): string | null {
   const match = /^#?([0-9a-f]{6}|[0-9a-f]{3})$/i.exec(hex.trim());
   if (!match) return null;

@@ -83,7 +83,7 @@ export function LoyaltyProgram({ editable }: { editable: boolean }) {
       <CardHeader
         title="باشگاه مشتریان"
         description="مشتری با هر خرید امتیاز می‌گیرد و در سفارش بعدی خرج می‌کند."
-        action={<Sparkles className="size-4 text-gold" />}
+        action={<Sparkles className="size-4 text-brand" />}
       />
       <CardBody className="space-y-4">
         <Switch
@@ -165,11 +165,11 @@ export function LoyaltyProgram({ editable }: { editable: boolean }) {
               />
             </div>
 
-            <div className="flex items-start gap-2 rounded-xl border border-gold/30 bg-gold/[0.06] p-3 text-xs leading-relaxed text-ink-muted">
-              <Gift className="mt-0.5 size-3.5 shrink-0 text-gold" />
+            <div className="flex items-start gap-2 rounded-xl border border-brand/30 bg-brand/[0.06] p-3 text-xs leading-relaxed text-ink-muted">
+              <Gift className="mt-0.5 size-3.5 shrink-0 text-brand" />
               <span>
                 مثال: خرید {formatMoney(sample, 'IRT')} به مشتری{' '}
-                <b className="text-gold">{toPersianDigits(earned)} امتیاز</b> می‌دهد،
+                <b className="text-brand">{toPersianDigits(earned)} امتیاز</b> می‌دهد،
                 معادل {formatMoney(earned * form.tomanPerPoint, 'IRT')} برای سفارش
                 بعدی.
               </span>

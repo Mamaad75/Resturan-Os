@@ -472,7 +472,7 @@ export function CheckoutSheet({
                         className={cn(
                           'flex items-center justify-between gap-3 rounded-xl border p-3 text-start transition-colors',
                           deliveryZoneId === zone.id
-                            ? 'border-gold/50 bg-gold/[0.08]'
+                            ? 'border-brand/50 bg-brand/[0.08]'
                             : 'border-line bg-surface-raised',
                         )}
                       >
@@ -490,7 +490,7 @@ export function CheckoutSheet({
                         <span
                           className={cn(
                             'shrink-0 text-sm font-semibold tabular-nums',
-                            belowMinimum ? 'text-critical' : 'text-gold',
+                            belowMinimum ? 'text-critical' : 'text-brand',
                           )}
                         >
                           {formatMoney(zone.fee, 'IRT')}
@@ -655,7 +655,7 @@ export function CheckoutSheet({
                   <input
                     type="radio"
                     name="referral-reward"
-                    className="size-4 accent-[var(--color-gold)]"
+                    className="size-4 accent-[var(--brand)]"
                     checked={rewardId === reward.id}
                     onChange={() => setRewardId(reward.id)}
                   />
@@ -755,11 +755,11 @@ function ModeButton({
       className={cn(
         'flex flex-col items-center gap-1 rounded-xl border p-3 transition-colors',
         active
-          ? 'border-gold/50 bg-gold/[0.08] text-ink'
+          ? 'border-brand/50 bg-brand/[0.08] text-ink'
           : 'border-line bg-surface-sunken text-ink-muted hover:border-line-strong',
       )}
     >
-      <span className={active ? 'text-gold' : ''}>{icon}</span>
+      <span className={active ? 'text-brand' : ''}>{icon}</span>
       <span className="text-sm font-medium">{label}</span>
       <span className="text-[0.7rem] text-ink-subtle">{sub}</span>
     </button>

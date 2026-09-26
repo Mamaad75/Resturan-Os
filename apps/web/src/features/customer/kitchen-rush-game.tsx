@@ -328,7 +328,7 @@ export function KitchenRushGame({ token, state, onFinished }: { token: string; s
     if (!config.canPlay) {
       return (
         <div className="w-full rounded-2xl border border-line bg-surface p-4 text-center">
-          <Flame className="mx-auto size-8 text-gold" />
+          <Flame className="mx-auto size-8 text-brand" />
           <p className="mt-2 text-sm font-semibold text-ink">Kitchen Rush</p>
           <p className="mt-1 text-xs text-ink-subtle">
             {config.nextPlayAt ? `نوبت بعدی: ${new Date(config.nextPlayAt).toLocaleString('fa-IR')}` : 'فعلاً امکان بازی نیست.'}
@@ -337,18 +337,18 @@ export function KitchenRushGame({ token, state, onFinished }: { token: string; s
       );
     }
     return (
-      <div className="w-full overflow-hidden rounded-2xl border border-gold/25 bg-gradient-to-b from-gold/10 to-surface p-4">
+      <div className="w-full overflow-hidden rounded-2xl border border-brand/25 bg-gradient-to-b from-brand/10 to-surface p-4">
         <div className="flex items-center gap-3">
-          <span className="flex size-12 items-center justify-center rounded-2xl bg-gold/15"><Flame className="size-6 text-gold" /></span>
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-brand/15"><Flame className="size-6 text-brand" /></span>
           <div className="min-w-0 flex-1">
             <p className="font-bold text-ink">Kitchen Rush: Memory Service</p>
             <p className="mt-0.5 text-xs leading-5 text-ink-muted">سفارش چندآیتمی چند لحظه نمایش داده می‌شود؛ به خاطر بسپار و بعد آیتم‌ها را دقیقاً به همان ترتیب بزن. هرچه جلوتر بروی سفارش‌ها بلندتر و سریع‌تر می‌شوند.</p>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
-          <div className="rounded-xl bg-surface-sunken p-2"><Timer className="mx-auto mb-1 size-4 text-gold" />{toPersianDigits(config.durationSeconds)} ثانیه</div>
+          <div className="rounded-xl bg-surface-sunken p-2"><Timer className="mx-auto mb-1 size-4 text-brand" />{toPersianDigits(config.durationSeconds)} ثانیه</div>
           <div className="rounded-xl bg-surface-sunken p-2"><Heart className="mx-auto mb-1 size-4 text-critical" />{toPersianDigits(config.lives)} جان</div>
-          <div className="rounded-xl bg-surface-sunken p-2"><Zap className="mx-auto mb-1 size-4 text-gold" />Fever ×2</div>
+          <div className="rounded-xl bg-surface-sunken p-2"><Zap className="mx-auto mb-1 size-4 text-brand" />Fever ×2</div>
         </div>
         <Button className="mt-4" variant="primary" fullWidth leftIcon={<Play className="size-4" />} loading={start.isPending} onClick={() => start.mutate()}>
           شروع Kitchen Rush
@@ -363,9 +363,9 @@ export function KitchenRushGame({ token, state, onFinished }: { token: string; s
   if (phase === 'done') return null;
 
   return (
-    <div className={cn('w-full overflow-hidden rounded-2xl border p-3 transition-colors', fever ? 'border-gold bg-gold/10' : 'border-line bg-surface')}>
+    <div className={cn('w-full overflow-hidden rounded-2xl border p-3 transition-colors', fever ? 'border-brand bg-brand/10' : 'border-line bg-surface')}>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2"><Badge tone={stage.label === 'RUSH!' ? 'critical' : 'gold'}>{stage.label}</Badge>{fever ? <Badge tone="gold">🔥 FEVER ×2</Badge> : null}</div>
+        <div className="flex items-center gap-2"><Badge tone={stage.label === 'RUSH!' ? 'critical' : 'brand'}>{stage.label}</Badge>{fever ? <Badge tone="brand">🔥 FEVER ×2</Badge> : null}</div>
         <div className="flex items-center gap-1 text-critical" aria-label={`${stats.lives} جان`}>
           {Array.from({ length: session?.lives ?? config.lives }).map((_, index) => <Heart key={index} className={cn('size-4', index < stats.lives ? 'fill-current' : 'opacity-20')} />)}
         </div>
@@ -377,23 +377,23 @@ export function KitchenRushGame({ token, state, onFinished }: { token: string; s
         <Stat label="Combo" value={`×${toPersianDigits(stats.combo)}`} icon={<Zap className="size-3.5" />} />
       </div>
 
-      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full bg-gold transition-all" style={{ width: `${Math.min(100, progress * 100)}%` }} /></div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-surface-sunken"><div className="h-full bg-brand transition-all" style={{ width: `${Math.min(100, progress * 100)}%` }} /></div>
 
       <div className={cn('mt-4 rounded-2xl border p-4 text-center transition-colors', feedback === 'wrong' || feedback === 'timeout' ? 'border-critical/40 bg-critical/10' : feedback === 'correct' ? 'border-positive/40 bg-positive/10' : 'border-line bg-surface-sunken')}>
-        {roundMode === 'preview' ? <Eye className="mx-auto size-6 text-gold" /> : <UtensilsCrossed className="mx-auto size-6 text-gold" />}
+        {roundMode === 'preview' ? <Eye className="mx-auto size-6 text-brand" /> : <UtensilsCrossed className="mx-auto size-6 text-brand" />}
         <p className="mt-2 text-xs text-ink-subtle">سفارش #{toPersianDigits(round?.index ?? 1)}</p>
         {roundMode === 'preview' ? (
           <>
             <p className="mt-1 text-sm font-bold text-ink">سفارش را به خاطر بسپار</p>
             <div className="mt-3 flex flex-wrap justify-center gap-2">
-              {(round?.order ?? []).map((item, index) => <span key={`${item}-${index}`} className="rounded-xl border border-gold/30 bg-gold/10 px-3 py-2 text-sm font-semibold text-ink"><span className="me-1 text-[0.65rem] text-gold">{toPersianDigits(index + 1)}</span>{item}</span>)}
+              {(round?.order ?? []).map((item, index) => <span key={`${item}-${index}`} className="rounded-xl border border-brand/30 bg-brand/10 px-3 py-2 text-sm font-semibold text-ink"><span className="me-1 text-[0.65rem] text-brand">{toPersianDigits(index + 1)}</span>{item}</span>)}
             </div>
           </>
         ) : (
           <>
             <p className="mt-1 text-sm font-bold text-ink">آیتم بعدی را انتخاب کن</p>
             <div className="mt-3 flex justify-center gap-1.5">
-              {(round?.order ?? []).map((_, index) => <span key={index} className={cn('h-2.5 w-8 rounded-full', index < (round?.position ?? 0) ? 'bg-positive' : index === (round?.position ?? 0) ? 'bg-gold' : 'bg-line-strong')} />)}
+              {(round?.order ?? []).map((_, index) => <span key={index} className={cn('h-2.5 w-8 rounded-full', index < (round?.position ?? 0) ? 'bg-positive' : index === (round?.position ?? 0) ? 'bg-brand' : 'bg-line-strong')} />)}
             </div>
             {feedback === 'wrong' ? <p className="mt-2 text-xs font-medium text-critical">اشتباه بود؛ یک جان کم شد.</p> : feedback === 'timeout' ? <p className="mt-2 text-xs font-medium text-critical">زمان سفارش تمام شد.</p> : null}
           </>
@@ -402,7 +402,7 @@ export function KitchenRushGame({ token, state, onFinished }: { token: string; s
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
         {(round?.options ?? []).map((option) => (
-          <button type="button" key={option} disabled={roundMode !== 'answer' || answerLocked} onClick={() => answer(option)} className="min-h-14 rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm font-semibold text-ink transition active:scale-[0.98] enabled:hover:border-gold/60 enabled:hover:bg-gold/5 disabled:cursor-wait disabled:opacity-45">
+          <button type="button" key={option} disabled={roundMode !== 'answer' || answerLocked} onClick={() => answer(option)} className="min-h-14 rounded-xl border border-line bg-surface-sunken px-3 py-2 text-sm font-semibold text-ink transition active:scale-[0.98] enabled:hover:border-brand/60 enabled:hover:bg-brand/5 disabled:cursor-wait disabled:opacity-45">
             {option}
           </button>
         ))}

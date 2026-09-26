@@ -129,12 +129,12 @@ export default function MembershipsPage() {
               {(plans.data ?? []).map((item) => (
                 <div
                   key={item.id}
-                  className="relative overflow-hidden rounded-2xl border border-line bg-surface-sunken/40 p-4 transition-colors hover:border-gold/30"
+                  className="relative overflow-hidden rounded-2xl border border-line bg-surface-sunken/40 p-4 transition-colors hover:border-brand/30"
                 >
-                  <div className="absolute -start-12 -top-12 size-28 rounded-full bg-gold/[0.06] blur-2xl" />
+                  <div className="absolute -start-12 -top-12 size-28 rounded-full bg-brand/[0.06] blur-2xl" />
                   <div className="relative mb-3 flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="flex size-9 items-center justify-center rounded-xl bg-gold/12 text-gold">
+                      <span className="flex size-9 items-center justify-center rounded-xl bg-brand/12 text-brand">
                         <Crown className="size-4.5" />
                       </span>
                       <div>
@@ -162,7 +162,7 @@ export default function MembershipsPage() {
           {editable ? (
             <div className="rounded-2xl border border-line bg-surface-sunken/35 p-4">
               <div className="mb-4 flex items-center gap-2">
-                <Sparkles className="size-4 text-gold" />
+                <Sparkles className="size-4 text-brand" />
                 <div>
                   <h3 className="text-sm font-semibold text-ink">ساخت پلن جدید</h3>
                   <p className="text-xs text-ink-subtle">مشخصات تجاری و مزایای پلن را در یک ردیف تکمیل کنید.</p>
@@ -420,7 +420,7 @@ function LabeledSwitch({
           role="switch"
           aria-checked={checked}
           onClick={() => onChange(!checked)}
-          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-gold' : 'bg-line-strong'}`}
+          className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${checked ? 'bg-brand' : 'bg-line-strong'}`}
         >
           <span
             className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-all ${checked ? 'start-[1.375rem]' : 'start-0.5'}`}

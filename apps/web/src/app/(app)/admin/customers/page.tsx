@@ -33,9 +33,9 @@ import { cn } from '@/lib/cn';
 import { formatMoney, toPersianDigits } from '@/lib/format';
 import { campaignService, customerService } from '@/services';
 
-const SEGMENT_TONE: Partial<Record<CustomerSegment, 'gold' | 'positive' | 'caution' | 'neutral'>> = {
-  [CustomerSegment.VIP]: 'gold',
-  [CustomerSegment.HIGH_VALUE]: 'gold',
+const SEGMENT_TONE: Partial<Record<CustomerSegment, 'brand' | 'positive' | 'caution' | 'neutral'>> = {
+  [CustomerSegment.VIP]: 'brand',
+  [CustomerSegment.HIGH_VALUE]: 'brand',
   [CustomerSegment.NEW]: 'positive',
   [CustomerSegment.RETURNING]: 'positive',
   [CustomerSegment.INACTIVE_30]: 'caution',
@@ -114,7 +114,7 @@ export default function CustomersPage() {
               className={cn(
                 'flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-sm transition-colors',
                 segment === entry.segment
-                  ? 'bg-gold text-ink-inverse'
+                  ? 'bg-brand text-ink-inverse'
                   : 'bg-surface-raised text-ink-muted hover:text-ink',
               )}
             >
@@ -200,7 +200,7 @@ export default function CustomersPage() {
                     </div>
 
                     <div className="text-end">
-                      <p className="font-semibold tabular-nums text-gold">
+                      <p className="font-semibold tabular-nums text-brand">
                         {formatMoney(customer.totalSpent, 'IRT', { withUnit: false })}
                       </p>
                       <p className="text-xs text-ink-subtle">
@@ -374,7 +374,7 @@ function CustomerSheet({
                   <span className="text-ink-subtle">
                     {new Date(order.createdAt).toLocaleDateString('fa-IR')}
                   </span>
-                  <span className="font-medium tabular-nums text-gold">
+                  <span className="font-medium tabular-nums text-brand">
                     {formatMoney(order.total, 'IRT', { withUnit: false })}
                   </span>
                 </li>

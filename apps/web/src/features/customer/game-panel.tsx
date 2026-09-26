@@ -9,8 +9,9 @@ import { formatMoney, toPersianDigits } from '@/lib/format';
 import { publicGameService, type GameRewardResult, type PlayResultDto } from '@/services';
 import { KitchenRushGame } from './kitchen-rush-game';
 
-const SLICE_COLORS = ['#C9A24B', '#1c1c22', '#B8873B', '#26262e', '#D7B865', '#15151A'];
-const TEXT_ON = ['#16161b', '#F4EFE5', '#16161b', '#F4EFE5', '#16161b', '#F4EFE5'];
+/* Alternating brand and charcoal, so the wheel belongs to the same app. */
+const SLICE_COLORS = ['#0D7666', '#1C1E21', '#12907C', '#26292D', '#3FB39C', '#15171A'];
+const TEXT_ON = ['#F4F7F5', '#F4F7F5', '#0B1F1B', '#F4F7F5', '#0B1F1B', '#F4F7F5'];
 
 function polar(cx: number, cy: number, r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180;
@@ -71,7 +72,7 @@ export function GamePanel({ token }: { token: string }) {
       <div className="border-b border-line px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <Sparkles className="size-4 text-gold" />
+            <Sparkles className="size-4 text-brand" />
             بازی و جایزه
           </p>
           {state.player ? (
@@ -87,10 +88,10 @@ export function GamePanel({ token }: { token: string }) {
           <section className="rounded-2xl border border-line bg-surface-sunken/50 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <p className="flex items-center gap-2 text-sm font-bold text-ink"><Dices className="size-4 text-gold" />گردونهٔ شانس</p>
+                <p className="flex items-center gap-2 text-sm font-bold text-ink"><Dices className="size-4 text-brand" />گردونهٔ شانس</p>
                 <p className="mt-1 text-xs text-ink-subtle">بچرخان؛ نتیجه و جایزه مستقیم از سرور ثبت می‌شود.</p>
               </div>
-              <Badge tone="gold">بازی اول</Badge>
+              <Badge tone="brand">بازی اول</Badge>
             </div>
 
             <div className="flex flex-col items-center gap-4">
@@ -113,7 +114,7 @@ export function GamePanel({ token }: { token: string }) {
           <section className="rounded-2xl border border-line bg-surface-sunken/50 p-4">
             <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <p className="flex items-center gap-2 text-sm font-bold text-ink"><Flame className="size-4 text-gold" />Kitchen Rush</p>
+                <p className="flex items-center gap-2 text-sm font-bold text-ink"><Flame className="size-4 text-brand" />Kitchen Rush</p>
                 <p className="mt-1 text-xs text-ink-subtle">سفارش را به خاطر بسپار و قبل از تمام‌شدن زمان، آیتم‌ها را به ترتیب آماده کن.</p>
               </div>
               <Badge tone="neutral">بازی دوم</Badge>
@@ -139,7 +140,7 @@ function SpinWheel({ segments, rotation, spinning }: { segments: Array<{ label: 
   return (
     <div className="relative" style={{ width: 272, height: 272 }}>
       <div className="absolute left-1/2 top-[-2px] z-20 -translate-x-1/2 drop-shadow" style={{ width: 0, height: 0, borderLeft: '13px solid transparent', borderRight: '13px solid transparent', borderTop: '24px solid #F1C75B' }} />
-      <div className="absolute inset-1 rounded-full bg-gold/10 blur-xl" />
+      <div className="absolute inset-1 rounded-full bg-brand/10 blur-xl" />
       <svg
         viewBox="0 0 200 200"
         width={272}
@@ -150,7 +151,7 @@ function SpinWheel({ segments, rotation, spinning }: { segments: Array<{ label: 
           transition: spinning ? 'transform 4.2s cubic-bezier(0.12,0.62,0.18,1)' : 'none',
         }}
       >
-        <circle cx="100" cy="100" r="98" fill="#111116" stroke="#C9A24B" strokeWidth="3" />
+        <circle cx="100" cy="100" r="98" fill="#14171A" stroke="#0D7666" strokeWidth="3" />
         {segments.map((segment, index) => {
           const slice = 360 / count;
           const mid = index * slice + slice / 2;
@@ -173,8 +174,8 @@ function SpinWheel({ segments, rotation, spinning }: { segments: Array<{ label: 
             </g>
           );
         })}
-        <circle cx="100" cy="100" r="15" fill="#111116" stroke="#C9A24B" strokeWidth="3" />
-        <circle cx="100" cy="100" r="6" fill="#C9A24B" />
+        <circle cx="100" cy="100" r="15" fill="#14171A" stroke="#0D7666" strokeWidth="3" />
+        <circle cx="100" cy="100" r="6" fill="#0D7666" />
       </svg>
     </div>
   );
@@ -199,7 +200,7 @@ function ResultView({ result }: { result: PlayResultDto }) {
     return (
       <div className="w-full space-y-2">
         <div className="rounded-xl border border-line bg-surface p-3 text-center">
-          <Flame className="mx-auto size-6 text-gold" />
+          <Flame className="mx-auto size-6 text-brand" />
           <p className="mt-1 text-sm font-bold text-ink">{toPersianDigits(result.runScore ?? 0)} امتیاز در Kitchen Rush</p>
           <p className="mt-1 text-xs text-ink-subtle">{toPersianDigits(result.correct ?? 0)} آیتم درست · رکورد Combo ×{toPersianDigits(result.comboMax ?? 0)}</p>
         </div>
@@ -224,14 +225,14 @@ function toReveal(reward: GameRewardResult) {
 
 function CouponReveal({ label, rewardType, rewardValue, couponCode, minOrderTotal, expiryDays }: { label: string; rewardType: string; rewardValue: number; couponCode: string | null; minOrderTotal: number; expiryDays: number }) {
   return (
-    <div className="w-full rounded-xl border border-gold/40 bg-gold/[0.08] p-4 text-center">
-      <PartyPopper className="mx-auto size-7 text-gold" />
-      <p className="mt-1.5 text-sm font-bold text-gold-bright">{label}</p>
+    <div className="w-full rounded-xl border border-brand/40 bg-brand/[0.08] p-4 text-center">
+      <PartyPopper className="mx-auto size-7 text-brand" />
+      <p className="mt-1.5 text-sm font-bold text-brand-bright">{label}</p>
       <p className="mt-1 text-xs text-ink-muted">
         {rewardType === 'PERCENTAGE' ? `${toPersianDigits(rewardValue)}٪ تخفیف` : `${formatMoney(rewardValue, 'IRT')} تخفیف`}
         {minOrderTotal > 0 ? ` · حداقل سفارش ${formatMoney(minOrderTotal, 'IRT')}` : ''}
       </p>
-      <div className="mt-2 flex items-center justify-center gap-2"><span className="text-xs text-ink-subtle">کد تخفیف:</span><Badge tone="gold">{couponCode}</Badge></div>
+      <div className="mt-2 flex items-center justify-center gap-2"><span className="text-xs text-ink-subtle">کد تخفیف:</span><Badge tone="brand">{couponCode}</Badge></div>
       <p className="mt-1.5 text-[0.65rem] text-ink-subtle">در سفارش بعدی وارد کن (اعتبار {toPersianDigits(expiryDays)} روز).</p>
     </div>
   );

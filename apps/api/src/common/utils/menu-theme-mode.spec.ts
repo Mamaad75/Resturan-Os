@@ -15,7 +15,17 @@ import {
  * new background.
  */
 describe('menu theme colour mode', () => {
-  const dark = presetConfig('CLASSIC');
+  // CAFE is the shipped dark preset. CLASSIC, the default, is light - see the
+  // assertion below, which is the one that would catch a palette drifting back
+  // towards the dark-and-gold default this product deliberately left behind.
+  const dark = presetConfig('CAFE');
+
+  it('ships a light default preset', () => {
+    const classic = presetConfig('CLASSIC');
+    expect(configMode(classic)).toBe('light');
+    expect(isLightColor(classic.colors.background)).toBe(true);
+    expect(isLightColor(classic.colors.text)).toBe(false);
+  });
 
   it('reads a dark preset as dark', () => {
     expect(configMode(dark)).toBe('dark');
@@ -55,6 +65,7 @@ describe('menu theme colour mode', () => {
   });
 
   it('darkens an accent that would wash out on a light background', () => {
+    // A pale sand that reads well on charcoal and vanishes on paper.
     const config: MenuThemeConfig = {
       ...dark,
       colors: { ...dark.colors, primary: '#e3c171' },

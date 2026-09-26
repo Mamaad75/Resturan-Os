@@ -13,7 +13,7 @@ import { cn } from '@/lib/cn';
 const FIELD_BASE =
   'w-full rounded-xl border border-line bg-surface-sunken px-3.5 text-ink ' +
   'placeholder:text-ink-subtle transition-colors ' +
-  'hover:border-line-strong focus:border-gold focus:ring-2 focus:ring-gold/25 focus:outline-none ' +
+  'hover:border-line-strong focus:border-brand focus:ring-2 focus:ring-brand/25 focus:outline-none ' +
   'disabled:cursor-not-allowed disabled:opacity-60';
 
 function FieldShell({
@@ -248,7 +248,7 @@ export function Switch({
         onClick={() => onChange(!checked)}
         className={cn(
           'relative h-6 w-11 shrink-0 rounded-full transition-colors',
-          checked ? 'bg-gold' : 'bg-line-strong',
+          checked ? 'bg-brand' : 'bg-line-strong',
         )}
       >
         <span

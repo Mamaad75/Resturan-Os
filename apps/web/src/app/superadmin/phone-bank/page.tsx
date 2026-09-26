@@ -81,7 +81,7 @@ function PhoneBank() {
             icon={<Users className="size-5" />}
             label="با رضایت تبلیغاتی"
             value={query.data.totals.consenting}
-            tone="gold"
+            tone="brand"
           />
         </div>
       ) : null}
@@ -169,15 +169,15 @@ function Stat({
   icon: React.ReactNode;
   label: string;
   value: number;
-  tone?: 'gold';
+  tone?: 'brand';
 }) {
   return (
     <Card>
       <CardBody className="flex items-center gap-3">
         <span
           className={
-            tone === 'gold'
-              ? 'flex size-11 shrink-0 items-center justify-center rounded-xl bg-gold/10 text-gold'
+            tone === 'brand'
+              ? 'flex size-11 shrink-0 items-center justify-center rounded-xl bg-brand/10 text-brand'
               : 'flex size-11 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-ink-muted'
           }
         >

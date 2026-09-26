@@ -56,7 +56,7 @@ export const THEME_INIT_SCRIPT = `(function(){try{var m=localStorage.getItem('${
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Starts at the server-rendered default; the effect below adopts whatever
   // the pre-paint script already applied, so the two never disagree.
-  const [mode, setModeState] = useState<ThemeMode>('dark');
+  const [mode, setModeState] = useState<ThemeMode>('light');
   const [chosen, setChosen] = useState(false);
 
   useEffect(() => {
@@ -64,6 +64,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     if (stored) {
       setModeState(stored);
       setChosen(true);
+      return;
+    }
+    /*
+     * Nobody has chosen, so follow the system - which is what the stylesheet
+     * already renders. Read here as well so the switch shows the mode the
+     * viewer is actually looking at rather than the one we default to, and
+     * `chosen` stays false so a customer menu still renders the restaurant's
+     * own palette.
+     */
+    try {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        setModeState('dark');
+      }
+    } catch {
+      // No matchMedia is simply no preference.
     }
   }, []);
 

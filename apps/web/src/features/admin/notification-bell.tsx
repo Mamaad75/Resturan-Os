@@ -86,7 +86,7 @@ export function NotificationBell() {
       >
         <Bell className="size-5" />
         {unread > 0 ? (
-          <span className="absolute end-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-gold px-1 text-[0.6rem] font-bold text-ink-inverse">
+          <span className="absolute end-1.5 top-1.5 flex min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[0.6rem] font-bold text-ink-inverse">
             {toPersianDigits(unread > 99 ? '۹۹+' : unread)}
           </span>
         ) : null}
@@ -100,7 +100,7 @@ export function NotificationBell() {
               <button
                 onClick={() => markRead.mutate()}
                 disabled={markRead.isPending}
-                className="flex items-center gap-1.5 text-xs text-gold hover:text-gold-bright disabled:opacity-50"
+                className="flex items-center gap-1.5 text-xs text-brand hover:text-brand-bright disabled:opacity-50"
               >
                 <CheckCheck className="size-3.5" />
                 خواندن همه
@@ -128,13 +128,13 @@ export function NotificationBell() {
                       }}
                       className={cn(
                         'flex gap-3 px-4 py-3 transition-colors hover:bg-surface-hover',
-                        !notification.readAt && 'bg-gold/[0.04]',
+                        !notification.readAt && 'bg-brand/[0.04]',
                       )}
                     >
                       <span
                         className={cn(
                           'mt-1.5 size-1.5 shrink-0 rounded-full',
-                          notification.readAt ? 'bg-line-strong' : 'bg-gold',
+                          notification.readAt ? 'bg-line-strong' : 'bg-brand',
                         )}
                       />
                       <div className="min-w-0 flex-1">

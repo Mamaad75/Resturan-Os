@@ -96,7 +96,7 @@ export default function GamesPage() {
     <div className="space-y-4">
       <div>
         <h1 className="flex items-center gap-2 text-lg font-bold text-ink">
-          <Dices className="size-5 text-gold" />
+          <Dices className="size-5 text-brand" />
           بازی‌های باشگاه مشتریان
         </h1>
         <p className="mt-0.5 text-sm text-ink-subtle">
@@ -114,7 +114,7 @@ export default function GamesPage() {
           <section className="rounded-2xl border border-line bg-surface-sunken/40 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex size-11 items-center justify-center rounded-2xl bg-gold/10 text-gold"><Dices className="size-5" /></span>
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand/10 text-brand"><Dices className="size-5" /></span>
                 <div>
                   <p className="font-semibold text-ink">گردونهٔ شانس</p>
                   <p className="text-xs text-ink-subtle">نتیجه سمت سرور تعیین می‌شود و جایزه مستقیم به کد تخفیف تبدیل می‌شود.</p>
@@ -132,7 +132,7 @@ export default function GamesPage() {
           <section className="rounded-2xl border border-line bg-surface-sunken/40 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <span className="flex size-11 items-center justify-center rounded-2xl bg-gold/10 text-gold"><Flame className="size-5" /></span>
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-brand/10 text-brand"><Flame className="size-5" /></span>
                 <div>
                   <p className="font-semibold text-ink">Kitchen Rush</p>
                   <p className="text-xs text-ink-subtle">بازی حافظه و سرعت چندمرحله‌ای با سفارش‌های چندآیتمی، Combo و Fever.</p>
@@ -166,10 +166,10 @@ export default function GamesPage() {
             <div className="space-y-2">
               {playsQuery.data.map((play) => (
                 <div key={play.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-line px-3 py-2 text-sm">
-                  <Badge tone={play.model === 'SPIN' ? 'gold' : 'neutral'}>{play.model === 'SPIN' ? 'گردونه' : 'Kitchen Rush'}</Badge>
+                  <Badge tone={play.model === 'SPIN' ? 'brand' : 'neutral'}>{play.model === 'SPIN' ? 'گردونه' : 'Kitchen Rush'}</Badge>
                   <span dir="ltr" className="font-mono tabular-nums text-ink-muted">{play.phone}</span>
                   <span className="text-ink">{play.label ?? '—'}</span>
-                  {play.couponCode ? <Badge tone="gold">{play.couponCode}</Badge> : null}
+                  {play.couponCode ? <Badge tone="brand">{play.couponCode}</Badge> : null}
                   <span className="ms-auto text-xs text-ink-subtle">{formatDateFa(play.createdAt)}</span>
                 </div>
               ))}

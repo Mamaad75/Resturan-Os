@@ -48,12 +48,12 @@ export function OfferPopup({
             />
           </div>
         ) : (
-          <div className="mx-auto mb-4 flex size-28 items-center justify-center rounded-2xl bg-gold/10">
-            <Sparkles className="size-10 text-gold" aria-hidden />
+          <div className="mx-auto mb-4 flex size-28 items-center justify-center rounded-2xl bg-brand/10">
+            <Sparkles className="size-10 text-brand" aria-hidden />
           </div>
         )}
 
-        <p className="text-xs font-medium text-gold">
+        <p className="text-xs font-medium text-brand">
           پیشنهاد ویژهٔ امروز
         </p>
         <h3 className="mt-1 text-lg font-bold leading-snug text-ink">

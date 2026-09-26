@@ -223,7 +223,7 @@ export default function OrderDetailPage() {
               ) : null}
               <div className="flex items-center justify-between border-t border-line pt-3">
                 <span className="font-semibold text-ink">مبلغ کل</span>
-                <span className="text-lg font-bold text-gold">
+                <span className="text-lg font-bold text-brand">
                   {formatMoney(order.total, order.currency)}
                 </span>
               </div>
@@ -509,7 +509,7 @@ function PaymentModal({
                 onClick={() => setMethod(option)}
                 className={
                   option === method
-                    ? 'rounded-xl border border-gold/50 bg-gold/[0.08] p-3 text-sm font-medium text-ink'
+                    ? 'rounded-xl border border-brand/50 bg-brand/[0.08] p-3 text-sm font-medium text-ink'
                     : 'rounded-xl border border-line bg-surface-sunken p-3 text-sm text-ink-muted'
                 }
               >

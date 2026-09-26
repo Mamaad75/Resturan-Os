@@ -39,7 +39,7 @@ export function Tabs({
             onClick={() => onChange(item.id)}
             className={cn(
               'relative whitespace-nowrap px-4 py-3 text-sm font-medium transition-colors',
-              isActive ? 'text-gold' : 'text-ink-muted hover:text-ink',
+              isActive ? 'text-brand' : 'text-ink-muted hover:text-ink',
             )}
           >
             {item.label}
@@ -47,14 +47,14 @@ export function Tabs({
               <span
                 className={cn(
                   'ms-2 rounded-full px-1.5 py-0.5 text-xs',
-                  isActive ? 'bg-gold/15 text-gold' : 'bg-surface-raised text-ink-subtle',
+                  isActive ? 'bg-brand/15 text-brand' : 'bg-surface-raised text-ink-subtle',
                 )}
               >
                 {item.count}
               </span>
             ) : null}
             {isActive ? (
-              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gold" />
+              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-brand" />
             ) : null}
           </button>
         );
@@ -90,7 +90,7 @@ export function SegmentedControl({
           className={cn(
             'whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors',
             item.id === activeId
-              ? 'bg-gold text-ink-inverse'
+              ? 'bg-brand text-ink-inverse'
               : 'text-ink-muted hover:bg-surface-raised hover:text-ink',
           )}
         >

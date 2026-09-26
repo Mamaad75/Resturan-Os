@@ -98,7 +98,7 @@ export function ImageUpload({
 
           {uploading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-              <Loader2 className="size-5 animate-spin text-gold" />
+              <Loader2 className="size-5 animate-spin text-brand" />
             </div>
           ) : null}
         </div>

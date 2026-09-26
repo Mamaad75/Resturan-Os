@@ -70,7 +70,7 @@ export function FeedbackCard({
                 className={cn(
                   'size-5',
                   index < (rating || 5)
-                    ? 'fill-gold text-gold'
+                    ? 'fill-brand text-brand'
                     : 'text-line-strong',
                 )}
               />
@@ -115,7 +115,7 @@ export function FeedbackCard({
                 className={cn(
                   'size-8 transition-colors',
                   value <= (hovered || rating)
-                    ? 'fill-gold text-gold'
+                    ? 'fill-brand text-brand'
                     : 'text-line-strong',
                 )}
               />

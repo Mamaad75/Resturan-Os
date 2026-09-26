@@ -17,16 +17,23 @@ import {
 import { EmptyState } from '@/components/ui';
 import { formatMoney, formatMoneyCompact, toPersianDigits } from '@/lib/format';
 
-const AXIS_STYLE = { fill: 'rgb(113 113 122)', fontSize: 11 };
-const GOLD = 'rgb(201 162 75)';
+const AXIS_STYLE = { fill: 'rgb(var(--ink-subtle))', fontSize: 11 };
 
-/** Categorical palette; gold leads, the rest stay muted so it keeps its meaning. */
+/*
+ * Taken from the design tokens rather than hardcoded, so re-theming the app
+ * reaches the charts instead of leaving them the one screen still wearing the
+ * old palette. Recharts wants a colour string, and `rgb(var(--x))` resolves the
+ * same way in SVG as it does anywhere else.
+ */
+const BRAND = 'rgb(var(--brand))';
+
+/** Categorical palette; the brand leads, the rest stay muted so it keeps its meaning. */
 export const CHART_COLORS = [
-  GOLD,
-  'rgb(96 165 250)',
-  'rgb(52 211 153)',
+  BRAND,
+  'rgb(var(--info))',
+  'rgb(var(--positive))',
   'rgb(167 139 250)',
-  'rgb(251 191 36)',
+  'rgb(var(--caution))',
 ];
 
 function ChartTooltip({
@@ -72,8 +79,8 @@ export function SalesAreaChart({
       <AreaChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
         <defs>
           <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={GOLD} stopOpacity={0.35} />
-            <stop offset="100%" stopColor={GOLD} stopOpacity={0.02} />
+            <stop offset="0%" stopColor={BRAND} stopOpacity={0.35} />
+            <stop offset="100%" stopColor={BRAND} stopOpacity={0.02} />
           </linearGradient>
         </defs>
         {/* `reversed` so the timeline reads right-to-left, like the rest of the UI. */}
@@ -98,7 +105,7 @@ export function SalesAreaChart({
         <Area
           type="monotone"
           dataKey="total"
-          stroke={GOLD}
+          stroke={BRAND}
           strokeWidth={2}
           fill="url(#salesFill)"
           name="فروش"
@@ -146,7 +153,7 @@ export function HourlyBarChart({ data }: { data: TimeSeriesPoint[] }) {
             // The busiest hour is highlighted; the rest recede.
             <Cell
               key={point.bucket}
-              fill={point.total === peak ? GOLD : 'rgb(201 162 75 / 0.28)'}
+              fill={point.total === peak ? BRAND : 'rgb(var(--brand) / 0.28)'}
             />
           ))}
         </Bar>

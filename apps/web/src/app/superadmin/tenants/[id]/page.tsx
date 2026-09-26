@@ -297,7 +297,7 @@ function TenantDetail() {
                     className={cn(
                       'rounded-xl border px-4 py-2 text-sm transition-colors',
                       activateMonths === months
-                        ? 'border-gold/50 bg-gold/10 text-gold'
+                        ? 'border-brand/50 bg-brand/10 text-brand'
                         : 'border-line bg-surface-sunken text-ink-muted hover:text-ink',
                     )}
                   >

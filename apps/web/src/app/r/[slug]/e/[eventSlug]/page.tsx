@@ -36,7 +36,7 @@ export default function PublicEventPage() {
   }, [slug, eventSlug]);
 
   const accent =
-    state.status === 'ready' ? state.data.event.accentColor ?? '#C9A24B' : '#C9A24B';
+    state.status === 'ready' ? state.data.event.accentColor ?? '#0D7666' : '#0D7666';
   const dark =
     state.status === 'ready' ? state.data.event.theme !== 'light' : true;
 

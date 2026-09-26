@@ -114,11 +114,11 @@ export function TrackingView({ token }: { token: string }) {
 
         <div className="mt-3 flex flex-wrap gap-2">
           {order.tableNumber != null ? (
-            <Badge tone="gold" dot>
+            <Badge tone="brand" dot>
               میز {toPersianDigits(order.tableNumber)}
             </Badge>
           ) : (
-            <Badge tone="gold" dot>
+            <Badge tone="brand" dot>
               بیرون‌بر
             </Badge>
           )}
@@ -134,13 +134,13 @@ export function TrackingView({ token }: { token: string }) {
           'mb-6 rounded-2xl border p-5',
           isCancelled
             ? 'border-critical/30 bg-critical/[0.08]'
-            : 'border-gold/30 bg-gold/[0.07]',
+            : 'border-brand/30 bg-brand/[0.07]',
         )}
       >
         <p
           className={cn(
             'text-base font-semibold',
-            isCancelled ? 'text-critical' : 'text-gold-bright',
+            isCancelled ? 'text-critical' : 'text-brand-bright',
           )}
         >
           {ORDER_STATUS_CUSTOMER_MESSAGE_FA[order.status]}
@@ -203,7 +203,7 @@ export function TrackingView({ token }: { token: string }) {
           <ul className="divide-y divide-line">
             {notificationsQuery.data.slice(0, 8).map((notification) => (
               <li key={notification.id} className="flex gap-3 px-5 py-3">
-                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-gold" />
+                <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-brand" />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-ink">{notification.title}</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-ink-muted">
@@ -234,7 +234,7 @@ function Timeline({ steps }: { steps: OrderTrackingDto['steps'] }) {
                 className={cn(
                   'flex size-8 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
                   step.isComplete && 'border-positive bg-positive text-ink-inverse',
-                  step.isCurrent && 'animate-pulse-ring border-gold bg-gold text-ink-inverse',
+                  step.isCurrent && 'animate-pulse-ring border-brand bg-brand text-ink-inverse',
                   !step.isComplete && !step.isCurrent && 'border-line bg-surface',
                 )}
               >
@@ -265,7 +265,7 @@ function Timeline({ steps }: { steps: OrderTrackingDto['steps'] }) {
                 className={cn(
                   'text-sm font-medium',
                   step.isCurrent
-                    ? 'text-gold'
+                    ? 'text-brand'
                     : step.isComplete
                       ? 'text-ink'
                       : 'text-ink-subtle',
@@ -335,7 +335,7 @@ function OrderItemsCard({ order }: { order: OrderTrackingDto }) {
         ) : null}
         <div className="flex items-center justify-between border-t border-line pt-3">
           <dt className="font-semibold text-ink">مبلغ قابل پرداخت</dt>
-          <dd className="text-lg font-bold text-gold">
+          <dd className="text-lg font-bold text-brand">
             {formatMoney(order.total, order.currency)}
           </dd>
         </div>

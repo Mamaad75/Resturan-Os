@@ -162,7 +162,7 @@ export function PurchaseForm({
         <div className="flex items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs text-ink-subtle">جمع</p>
-            <p className="truncate text-base font-bold text-gold">
+            <p className="truncate text-base font-bold text-brand">
               {formatMoney(total, 'IRT')}
             </p>
           </div>

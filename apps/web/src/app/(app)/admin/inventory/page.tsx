@@ -124,5 +124,5 @@ export default function InventoryPage() {
 }
 
 function Metric({ icon: Icon, label, value, critical = false }: { icon: typeof Boxes; label: string; value: string; critical?: boolean }) {
-  return <Card><CardBody className="flex items-center gap-3"><span className={`flex size-10 items-center justify-center rounded-xl ${critical ? 'bg-critical/10 text-critical' : 'bg-gold/10 text-gold'}`}><Icon className="size-5" /></span><div><p className="text-xs text-ink-muted">{label}</p><p className="font-bold text-ink">{value}</p></div></CardBody></Card>;
+  return <Card><CardBody className="flex items-center gap-3"><span className={`flex size-10 items-center justify-center rounded-xl ${critical ? 'bg-critical/10 text-critical' : 'bg-brand/10 text-brand'}`}><Icon className="size-5" /></span><div><p className="text-xs text-ink-muted">{label}</p><p className="font-bold text-ink">{value}</p></div></CardBody></Card>;
 }

@@ -67,7 +67,7 @@ export function WaiterCallButton({
       <button
         onClick={() => setOpen(true)}
         aria-label="صدا زدن گارسون"
-        className="flex items-center gap-1.5 rounded-full border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-ink-muted transition-colors hover:border-gold/40 hover:text-ink"
+        className="flex items-center gap-1.5 rounded-full border border-line bg-surface-raised px-3 py-2 text-xs font-medium text-ink-muted transition-colors hover:border-brand/40 hover:text-ink"
       >
         <BellRing className="size-3.5" />
         صدا زدن گارسون
@@ -92,14 +92,14 @@ export function WaiterCallButton({
                   'flex items-center gap-3 rounded-xl border p-4 text-start transition-colors',
                   isSent
                     ? 'border-positive/50 bg-positive/[0.08]'
-                    : 'border-line bg-surface-sunken hover:border-gold/40',
+                    : 'border-line bg-surface-sunken hover:border-brand/40',
                   sending !== null && !isSent && 'opacity-50',
                 )}
               >
                 <span
                   className={cn(
                     'flex size-9 shrink-0 items-center justify-center rounded-lg',
-                    isSent ? 'bg-positive/15 text-positive' : 'bg-surface-raised text-gold',
+                    isSent ? 'bg-positive/15 text-positive' : 'bg-surface-raised text-brand',
                   )}
                 >
                   {isSent ? <Check className="size-4" /> : <reason.icon className="size-4" />}

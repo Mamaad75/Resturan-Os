@@ -118,7 +118,7 @@ export function UsualOrderCard({
         {repeated ? 'سفارش همیشگی شما' : 'آخرین سفارش شما'}
       </h2>
 
-      <div className="rounded-[var(--menu-radius)] border border-gold/30 bg-gold/[0.06] p-4">
+      <div className="rounded-[var(--menu-radius)] border border-brand/30 bg-brand/[0.06] p-4">
         <ul className="space-y-1.5">
           {lines.map((line) => {
             const chosen = line.product.modifierGroups
@@ -157,7 +157,7 @@ export function UsualOrderCard({
             type="button"
             onClick={addAll}
             className={cn(
-              'flex items-center gap-2 rounded-xl bg-gold px-4 py-2.5',
+              'flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5',
               'text-sm font-semibold text-ink-inverse',
               'transition-transform active:scale-[0.98]',
             )}

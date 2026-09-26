@@ -438,7 +438,7 @@ function EventFormModal({
             type="color"
             dir="ltr"
             hint="خالی یعنی همان رنگ رستوران"
-            value={accentColor || '#C9A24B'}
+            value={accentColor || '#0D7666'}
             onChange={(e) => setAccentColor(e.target.value)}
             error={errors.accentColor}
           />
@@ -468,7 +468,7 @@ function EventFormModal({
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"
-              className="size-4 accent-gold"
+              className="size-4 accent-brand"
               checked={rsvpEnabled}
               onChange={(e) => setRsvpEnabled(e.target.checked)}
             />
@@ -477,7 +477,7 @@ function EventFormModal({
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"
-              className="size-4 accent-gold"
+              className="size-4 accent-brand"
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
             />

@@ -67,7 +67,7 @@ export function PwaDeviceCard() {
       <CardBody>
         <div className="flex flex-col gap-4 rounded-2xl border border-line bg-surface-sunken/45 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gold/12 text-gold">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand/12 text-brand">
               <Smartphone className="size-5" />
             </span>
 

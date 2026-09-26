@@ -32,7 +32,7 @@ export function StatCard({
         <span
           className={cn(
             'flex size-9 shrink-0 items-center justify-center rounded-xl',
-            accent ? 'bg-gold/12 text-gold' : 'bg-surface-raised text-ink-subtle',
+            accent ? 'bg-brand/12 text-brand' : 'bg-surface-raised text-ink-subtle',
           )}
         >
           <Icon className="size-4.5" />
@@ -42,7 +42,7 @@ export function StatCard({
       <p
         className={cn(
           'mt-3 text-2xl font-bold tabular-nums',
-          accent ? 'text-gold' : 'text-ink',
+          accent ? 'text-brand' : 'text-ink',
         )}
       >
         {value}

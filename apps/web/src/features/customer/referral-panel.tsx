@@ -77,9 +77,9 @@ export function ReferralPanel({
   }
 
   return (
-    <section className="rounded-2xl border border-gold/30 bg-gold/[0.06] p-5">
+    <section className="rounded-2xl border border-brand/30 bg-brand/[0.06] p-5">
       <h2 className="flex items-center gap-2 text-base font-bold text-ink">
-        <Gift className="size-4 text-gold" aria-hidden />
+        <Gift className="size-4 text-brand" aria-hidden />
         دوستت را دعوت کن
       </h2>
 
@@ -93,7 +93,7 @@ export function ReferralPanel({
         <button
           type="button"
           onClick={() => void copy()}
-          className="ltr-nums flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 bg-surface px-4 py-3 font-mono text-lg font-bold tracking-[0.2em] text-gold"
+          className="ltr-nums flex flex-1 items-center justify-center gap-2 rounded-xl border border-dashed border-brand/50 bg-surface px-4 py-3 font-mono text-lg font-bold tracking-[0.2em] text-brand"
           aria-label={`کپی کد دعوت ${code}`}
         >
           {code}
@@ -106,7 +106,7 @@ export function ReferralPanel({
         <button
           type="button"
           onClick={() => void share()}
-          className="flex items-center gap-2 rounded-xl bg-gold px-4 py-3 text-sm font-semibold text-ink-inverse"
+          className="flex items-center gap-2 rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-ink-inverse"
         >
           <Share2 className="size-4" aria-hidden />
           فرستادن

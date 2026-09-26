@@ -113,7 +113,7 @@ function PaymentGatewayCard() {
       <CardHeader
         title={
           <span className="flex items-center gap-2">
-            <CreditCard className="size-4 text-gold" />
+            <CreditCard className="size-4 text-brand" />
             درگاه پرداخت پلتفرم
           </span>
         }
@@ -320,7 +320,7 @@ function SmsServiceCard() {
       <CardHeader
         title={
           <span className="flex items-center gap-2">
-            <MessageSquare className="size-4 text-gold" />
+            <MessageSquare className="size-4 text-brand" />
             سرویس پیامک
           </span>
         }

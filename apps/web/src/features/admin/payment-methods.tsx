@@ -272,11 +272,11 @@ function GatewayChoice({
       className={cn(
         'rounded-xl border p-3 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         active
-          ? 'border-gold bg-gold/10'
+          ? 'border-brand bg-brand/10'
           : 'border-line hover:border-line-strong hover:bg-surface-raised',
       )}
     >
-      <span className={cn('text-sm font-medium', active ? 'text-gold' : 'text-ink')}>
+      <span className={cn('text-sm font-medium', active ? 'text-brand' : 'text-ink')}>
         {title}
       </span>
       <span className="mt-0.5 block text-xs text-ink-subtle">{hint}</span>

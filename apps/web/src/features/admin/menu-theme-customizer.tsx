@@ -385,13 +385,13 @@ export function MenuThemeCustomizer({
                       className={cn(
                         'rounded-xl border p-3 text-start transition-colors disabled:opacity-60',
                         selected
-                          ? 'border-gold/60 bg-gold/[0.06]'
+                          ? 'border-brand/60 bg-brand/[0.06]'
                           : 'border-line bg-surface hover:border-line-strong',
                       )}
                     >
                       <p className="flex items-center gap-1.5 text-sm font-semibold text-ink">
                         {spec.labelFa}
-                        {selected ? <Check className="size-3.5 text-gold" /> : null}
+                        {selected ? <Check className="size-3.5 text-brand" /> : null}
                       </p>
                       <p className="mt-0.5 text-xs leading-relaxed text-ink-subtle">
                         {spec.descriptionFa}
@@ -524,7 +524,7 @@ export function MenuThemeCustomizer({
                         setDirty(true);
                       }}
                       placeholder={'.menu-card {\n  letter-spacing: 0.01em;\n}'}
-                      className="w-full rounded-xl border border-line bg-surface-sunken p-3 font-mono text-xs text-ink outline-none focus:border-gold/50 disabled:opacity-60"
+                      className="w-full rounded-xl border border-line bg-surface-sunken p-3 font-mono text-xs text-ink outline-none focus:border-brand/50 disabled:opacity-60"
                     />
                   </div>
                 ) : null}
@@ -671,7 +671,7 @@ function ColorField({
             // the preview on every keystroke.
             if (/^#[0-9a-fA-F]{6}$/.test(next)) onChange(next);
           }}
-          className="h-10 w-full rounded-lg border border-line bg-surface-sunken px-3 font-mono text-xs text-ink outline-none focus:border-gold/50 disabled:opacity-60"
+          className="h-10 w-full rounded-lg border border-line bg-surface-sunken px-3 font-mono text-xs text-ink outline-none focus:border-brand/50 disabled:opacity-60"
         />
       </div>
     </div>
