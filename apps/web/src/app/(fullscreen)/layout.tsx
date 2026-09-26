@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
+import { PanelTheme } from '@/features/theme/panel-theme';
 
 /**
  * Full-screen surfaces (POS, kitchen display).
@@ -27,5 +28,12 @@ export default function FullscreenLayout({ children }: { children: React.ReactNo
     );
   }
 
-  return <div className="min-h-dvh bg-canvas">{children}</div>;
+  return (
+    <div className="min-h-dvh bg-canvas">
+      {/* The restaurant's own palette, here too: a till in the dining room is
+          the screen guests are most likely to see over the counter. */}
+      <PanelTheme />
+      {children}
+    </div>
+  );
 }

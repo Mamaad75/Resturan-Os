@@ -38,6 +38,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Button, Spinner } from '@/components/ui';
 import { useAuth } from '@/features/auth/auth-context';
 import { cn } from '@/lib/cn';
+import { PanelTheme } from '@/features/theme/panel-theme';
 import { ThemeToggle } from '@/features/theme/theme-toggle';
 import { restaurantService, subscriptionService } from '@/services';
 import { NotificationBell } from './notification-bell';
@@ -254,6 +255,9 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-dvh bg-canvas">
+      {/* The restaurant's own palette, applied to this panel. Renders nothing. */}
+      {signedIn ? <PanelTheme /> : null}
+
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 start-0 z-40 hidden w-64 flex-col border-e border-line bg-surface lg:flex">
         <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">

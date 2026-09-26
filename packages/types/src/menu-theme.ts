@@ -494,18 +494,18 @@ function shift(hex: string, amount: number): string {
  */
 const NEUTRALS: Record<ThemeMode, Omit<ThemeColors, 'primary' | 'secondary'>> = {
   dark: {
-    background: '#0b0b0d',
-    surface: '#131316',
-    text: '#f5f5f4',
-    textMuted: '#a1a1aa',
-    border: '#26262c',
+    background: '#141517',
+    surface: '#1c1e21',
+    text: '#f0f1ef',
+    textMuted: '#a4a6a3',
+    border: '#2d3034',
   },
   light: {
-    background: '#fafaf9',
+    background: '#fafaf7',
     surface: '#ffffff',
-    text: '#18181b',
-    textMuted: '#52525b',
-    border: '#e4e4e7',
+    text: '#1a1a18',
+    textMuted: '#5b5b56',
+    border: '#e5e4de',
   },
 };
 
@@ -520,32 +520,78 @@ const NEUTRALS: Record<ThemeMode, Omit<ThemeColors, 'primary' | 'secondary'>> = 
  * Returns the config untouched when it is already in the requested mode, so
  * the restaurant's own hand-picked palette is never second-guessed.
  */
+/*
+ * Accents carry price text, not just fills, so they need real separation from
+ * the background. A pale sand that reads well on charcoal is washed out on
+ * white at anything less than this.
+ */
+const MIN_ACCENT_GAP = 0.45;
+
+/**
+ * An accent nudged until it can be read on the given mode's background.
+ *
+ * Shared by the mode switch and by the palette builder, so a colour chosen in
+ * the customizer and the same colour after a guest flips to dark mode are
+ * treated by one rule rather than two that drift apart.
+ */
+export function readableAccent(hex: string, mode: ThemeMode): string {
+  const backgroundLum = luminance(NEUTRALS[mode].background);
+  if (Math.abs(luminance(hex) - backgroundLum) >= MIN_ACCENT_GAP) return hex;
+  return mode === 'light' ? shift(hex, -0.35) : shift(hex, 0.35);
+}
+
+/**
+ * A whole palette from one colour.
+ *
+ * The customizer's seven colour fields are the right tool for someone who
+ * knows what a surface token is, and the wrong first question for a café owner
+ * who knows their sign is green. This turns that one answer into a coherent
+ * palette: the fixed neutral ramp for the mode, the brand colour nudged until
+ * it is readable on it, and a deeper shade of the same hue for the secondary.
+ *
+ * The owner can still edit any of the seven afterwards - this writes values,
+ * it does not lock them.
+ */
+export function paletteFromBrand(brand: string, mode: ThemeMode): ThemeColors {
+  const primary = readableAccent(brand, mode);
+  return {
+    ...NEUTRALS[mode],
+    primary,
+    // A shade rather than a second hue: two unrelated accents is how a menu
+    // starts looking like a fairground.
+    secondary: shift(primary, mode === 'light' ? -0.25 : 0.25),
+  };
+}
+
+/**
+ * Brand colours offered as swatches.
+ *
+ * A short list of colours that are readable in both modes and that a
+ * restaurant plausibly already owns, because an empty colour picker is a
+ * worse question than five good answers.
+ */
+export const BRAND_SWATCHES: Array<{ hex: string; labelFa: string }> = [
+  { hex: '#0d7666', labelFa: 'سبز' },
+  { hex: '#b4460f', labelFa: 'نارنجی سوخته' },
+  { hex: '#7a5236', labelFa: 'قهوه‌ای' },
+  { hex: '#b91c3c', labelFa: 'قرمز' },
+  { hex: '#1d4ed8', labelFa: 'آبی' },
+  { hex: '#6d28d9', labelFa: 'بنفش' },
+  { hex: '#57534e', labelFa: 'خاکستری' },
+];
+
 export function applyColorMode(
   config: MenuThemeConfig,
   mode: ThemeMode,
 ): MenuThemeConfig {
   if (configMode(config) === mode) return config;
 
-  const neutrals = NEUTRALS[mode];
-  const backgroundLum = luminance(neutrals.background);
-
-  /*
-   * Accents carry price text, not just fills, so they need real separation
-   * from the background. The gold that reads well on charcoal is washed out
-   * on white at anything less than this.
-   */
-  const MIN_GAP = 0.45;
-  const readable = (hex: string) => {
-    if (Math.abs(luminance(hex) - backgroundLum) >= MIN_GAP) return hex;
-    return mode === 'light' ? shift(hex, -0.35) : shift(hex, 0.35);
-  };
-
   return {
     ...config,
     colors: {
-      ...neutrals,
-      primary: readable(config.colors.primary),
-      secondary: readable(config.colors.secondary),
+      ...NEUTRALS[mode],
+      primary: readableAccent(config.colors.primary, mode),
+      secondary: readableAccent(config.colors.secondary, mode),
     },
   };
 }
